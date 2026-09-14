@@ -357,9 +357,9 @@
     <h3 style="font-size:20px;margin-bottom:6px;" id="loginModalTitle">Iniciar sesión</h3>
     <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;" id="loginModalSubtitle">Ingresa con el correo y la contraseña de tu cuenta.</p>
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
-    <input id="loginEmail" type="email" autocomplete="off" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
+    <input id="loginEmail" type="email" autocomplete="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <div class="pwd-wrap"><input id="loginPassword" type="password" autocomplete="off" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
+    <div class="pwd-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
     <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
     <div id="loginCaptcha" style="margin-bottom:14px;"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>

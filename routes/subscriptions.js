@@ -20,7 +20,9 @@ router.post('/', requireAuth, asyncRoute(async (req, res) => {
     return res.status(404).json({ error: 'Plan no encontrado.' });
   }
 
-  const amount = cycle === 'anual' ? plan.price_annual : plan.price_monthly;
+  // price_annual es la tarifa mensual con descuento por pagar anual, no el total del año:
+  // el cobro real es esa tarifa multiplicada por los 12 meses.
+  const amount = cycle === 'anual' ? plan.price_annual * 12 : plan.price_monthly;
 
   const existing = await pool.query(
     `SELECT id FROM subscriptions WHERE association_id = $1 AND plan_id = $2 AND status = 'pendiente'

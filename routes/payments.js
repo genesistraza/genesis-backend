@@ -36,7 +36,9 @@ router.post('/create', requireAuth, asyncRoute(async (req, res) => {
     return res.status(403).json({ error: 'No tienes permiso sobre esta suscripción.' });
   }
 
-  const amount = sub.billing_cycle === 'anual' ? sub.price_annual : sub.price_monthly;
+  // price_annual es la tarifa mensual con descuento por pagar anual, no el total del año:
+  // el cobro real es esa tarifa multiplicada por los 12 meses.
+  const amount = sub.billing_cycle === 'anual' ? sub.price_annual * 12 : sub.price_monthly;
 
   const reference = `GT-${subscriptionId}-${Date.now()}`;
   const amountInCents = amount * 100;

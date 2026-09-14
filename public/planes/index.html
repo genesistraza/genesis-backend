@@ -56,7 +56,7 @@
       <div class="toggle-row">
         <div class="toggle">
           <button class="active" id="btnMensual" onclick="setBilling('mensual')">Mensual</button>
-          <button id="btnAnual" onclick="setBilling('anual')">Anual (2 meses gratis)</button>
+          <button id="btnAnual" onclick="setBilling('anual')">Anual (1 mes gratis)</button>
         </div>
       </div>
 
@@ -78,6 +78,7 @@
     <!-- PASO 2: crear cuenta / iniciar sesión -->
     <div id="panelStep2" style="display:none;">
       <div class="checkout-box">
+        <a href="#" onclick="goToStep(1);return false;" style="display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-weight:600;font-size:13.5px;margin-bottom:14px;">← Elegir otro plan</a>
         <p style="text-align:center;color:var(--ink-soft);margin-bottom:8px;">Plan seleccionado</p>
         <h3 style="text-align:center;margin-bottom:26px;" id="step2PlanName">—</h3>
 
@@ -87,8 +88,8 @@
         </div>
 
         <div id="authPanelLogin">
-          <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="off" placeholder="nombre@empresa.com"></div>
-          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" type="password" autocomplete="off" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+          <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="email" placeholder="nombre@empresa.com"></div>
+          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" type="password" autocomplete="current-password" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
           <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
           <div id="loginCaptcha2" style="margin-bottom:14px;"></div>
           <button class="btn btn-primary" style="width:100%;" onclick="submitLogin2()">Ingresar y continuar</button>
@@ -126,6 +127,7 @@
     <!-- PASO 3: pago -->
     <div id="panelStep3" style="display:none;">
       <div class="checkout-box" style="text-align:center;">
+        <a href="#" onclick="goToStep(1);return false;" style="display:inline-flex;align-items:center;gap:6px;color:var(--blue);font-weight:600;font-size:13.5px;margin-bottom:14px;">← Cambiar de plan</a>
         <h3>Finaliza tu compra</h3>
         <p style="color:var(--ink-soft);margin:12px 0 6px;">Plan: <strong id="step3PlanName" style="color:var(--orange);">—</strong></p>
         <p style="color:var(--ink-soft);font-size:14px;">Total a pagar: <strong id="step3Amount" style="color:var(--blue-deep);"></strong></p>
@@ -203,8 +205,13 @@
     selectedPlanId = planId;
     selectedPlanName = planName;
     selectedBillingCycle = document.getElementById('btnAnual').classList.contains('active') ? 'anual' : 'mensual';
-    selectedAmount = selectedBillingCycle === 'anual' ? (priceAnnual || priceMonthly) : priceMonthly;
-    document.getElementById('step2PlanName').textContent = planName + ' — ' + gtFormatCOP(selectedAmount) + '/' + (selectedBillingCycle === 'anual' ? 'año' : 'mes');
+    // price_annual es la tarifa MENSUAL con descuento por pagar anual, no el total del año:
+    // el total a cobrar es esa tarifa multiplicada por los 12 meses.
+    selectedAmount = selectedBillingCycle === 'anual' ? (priceAnnual ? priceAnnual * 12 : priceMonthly) : priceMonthly;
+    var label = selectedBillingCycle === 'anual'
+      ? gtFormatCOP(selectedAmount) + ' / año (equivale a ' + gtFormatCOP(priceAnnual || priceMonthly) + '/mes)'
+      : gtFormatCOP(selectedAmount) + '/mes';
+    document.getElementById('step2PlanName').textContent = planName + ' — ' + label;
     if(authToken){
       prepareStep3();
     } else {
@@ -377,6 +384,16 @@
         amountSpan.textContent = '$' + Number(plan.price_monthly).toLocaleString('es-CO');
         var small = document.createElement('small'); small.textContent = '/mes';
         priceDiv.appendChild(amountSpan); priceDiv.appendChild(small); div.appendChild(priceDiv);
+        if(plan.price_annual){
+          var savings = (Number(plan.price_monthly) - Number(plan.price_annual)) * 12;
+          if(savings > 0){
+            var saveNote = document.createElement('p');
+            saveNote.className = 'save-note';
+            saveNote.style.cssText = 'font-size:12.5px;color:var(--green);font-weight:600;margin:-6px 0 12px;';
+            saveNote.textContent = 'Ahorras ' + gtFormatCOP(savings) + '/año pagando anual';
+            div.appendChild(saveNote);
+          }
+        }
         var desc = document.createElement('p'); desc.className = 'desc'; desc.textContent = plan.description || ''; div.appendChild(desc);
         var ul = document.createElement('ul');
         (Array.isArray(plan.features) ? plan.features : []).forEach(function(f){ var li = document.createElement('li'); li.textContent = f; ul.appendChild(li); });

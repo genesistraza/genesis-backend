@@ -305,6 +305,13 @@ router.get('/me', requireAuth, asyncRoute(async (req, res) => {
       [user.association_id]
     );
     payments = paymentsResult.rows;
+
+    // Mis Rutas es una funcion paga: si no hay un plan activo, no se expone el link del mapa
+    // (así el dashboard cae en el estado de "Contratar" en vez de mostrar el mapa gratis).
+    const hasActiveSubscription = subscriptions.some((s) => s.status === 'activa');
+    if (association && !hasActiveSubscription) {
+      association = { ...association, routes_kml_url: null };
+    }
   }
 
   res.json({ user, association, subscriptions, payments });

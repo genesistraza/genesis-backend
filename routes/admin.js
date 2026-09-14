@@ -5,7 +5,7 @@ const pool = require('../db/pool');
 const cloudinary = require('../db/cloudinary');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
-const { getMassBalanceSummary, getRecicladores } = require('../db/massBalanceQueries');
+const { getMassBalanceSummary, getMassBalancePeriods, getRecicladores } = require('../db/massBalanceQueries');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -308,6 +308,57 @@ router.delete('/associations/:id/plan', asyncRoute(async (req, res) => {
   res.json({ message: 'Plan removido.' });
 }));
 
+// POST /admin/associations/:id/register-payment -> registra un pago recibido por fuera de la
+// pasarela (efectivo, transferencia manual, etc). Activa el plan con la fecha de pago indicada
+// (no la de hoy) para que el ciclo de cobro arranque desde el dia real en que pagaron, y deja
+// el pago guardado como aprobado para que aparezca en el historial y en el resumen de ingresos.
+router.post('/associations/:id/register-payment', asyncRoute(async (req, res) => {
+  const { planId, billingCycle, paidAt } = req.body;
+  const cycle = billingCycle === 'anual' ? 'anual' : 'mensual';
+  if (!planId || !paidAt) {
+    return res.status(400).json({ error: 'Debes indicar el plan y la fecha de pago.' });
+  }
+
+  const planResult = await pool.query('SELECT * FROM plans WHERE id = $1', [planId]);
+  const plan = planResult.rows[0];
+  if (!plan) {
+    return res.status(404).json({ error: 'Plan no encontrado.' });
+  }
+  // price_annual es la tarifa mensual con descuento por pagar anual, no el total del año:
+  // el monto que queda registrado es esa tarifa multiplicada por los 12 meses.
+  const amount = cycle === 'anual' ? plan.price_annual * 12 : plan.price_monthly;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE subscriptions SET status='cancelada' WHERE association_id = $1 AND status='activa'`,
+      [req.params.id]
+    );
+    const interval = cycle === 'anual' ? '365 days' : '30 days';
+    const subResult = await client.query(
+      `INSERT INTO subscriptions (association_id, plan_id, status, billing_cycle, next_due_date)
+       VALUES ($1,$2,'activa',$3, $4::date + $5::interval) RETURNING id`,
+      [req.params.id, planId, cycle, paidAt, interval]
+    );
+    const subscriptionId = subResult.rows[0].id;
+    await client.query(
+      `INSERT INTO payments (subscription_id, amount, status, payment_method, paid_at)
+       VALUES ($1,$2,'aprobado','Efectivo',$3::date)`,
+      [subscriptionId, amount, paidAt]
+    );
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await logActivity(req.user.id, 'pago_efectivo_registrado', { associationId: Number(req.params.id), planId, amount, paidAt }, req.ip);
+  res.json({ message: 'Pago registrado y plan activado.' });
+}));
+
 // DELETE /admin/payments/pending -> limpia solicitudes de pago y suscripciones que quedaron
 // pendientes y nunca se completaron (basura de intentos de compra abandonados). Solo 'pro'.
 router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, res) => {
@@ -377,10 +428,17 @@ router.post('/associations/:id/mass-balance', uploadExcel.single('file'), asyncR
   res.json({ message: 'Balance de masas actualizado.', filas: parsed.length });
 }));
 
-// GET /admin/associations/:id/mass-balance/summary -> resumen del balance de masas de una asociacion
+// GET /admin/associations/:id/mass-balance/summary -> resumen del balance de masas de una asociacion.
+// Acepta ?period=year|month|week&value=... para acotar a un periodo especifico.
 router.get('/associations/:id/mass-balance/summary', asyncRoute(async (req, res) => {
-  const summary = await getMassBalanceSummary(Number(req.params.id));
+  const summary = await getMassBalanceSummary(Number(req.params.id), req.query.period, req.query.value);
   res.json(summary);
+}));
+
+// GET /admin/associations/:id/mass-balance/periods -> años, meses y semanas con datos
+router.get('/associations/:id/mass-balance/periods', asyncRoute(async (req, res) => {
+  const periods = await getMassBalancePeriods(Number(req.params.id));
+  res.json(periods);
 }));
 
 // POST /admin/associations/:id/recicladores -> sube el Excel del listado de recicladores.
