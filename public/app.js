@@ -42,6 +42,13 @@ function gtFormatCOP(value){
   return '$' + Number(value || 0).toLocaleString('es-CO');
 }
 
+function gtToggleSidebar(){
+  var sidebar = document.getElementById('sidebar');
+  var backdrop = document.getElementById('sidebarBackdrop');
+  if(sidebar) sidebar.classList.toggle('open');
+  if(backdrop) backdrop.classList.toggle('open');
+}
+
 function gtFormatDate(value){
   if(!value) return '—';
   var d = new Date(value);

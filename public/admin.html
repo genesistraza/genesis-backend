@@ -18,6 +18,7 @@
 </div>
 
 <div class="app-shell">
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="gtToggleSidebar()"></div>
   <aside class="app-sidebar" id="sidebar">
     <div class="brand">
       <span class="brand-text">Genesis <span>Traza</span></span>
@@ -39,6 +40,7 @@
   </aside>
 
   <main class="app-main">
+    <button type="button" class="mobile-menu-btn" onclick="gtToggleSidebar()">☰</button>
     <!-- RESUMEN -->
     <section class="tab-panel" id="tab-resumen">
       <div class="app-topbar"><div><h1>Resumen</h1><p>Ingresos y actividad general de Genesis Traza.</p></div></div>
@@ -193,6 +195,8 @@
   }
 
   function showTab(name){
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebarBackdrop').classList.remove('open');
     document.querySelectorAll('.tab-panel').forEach(function(p){ p.style.display = 'none'; });
     document.querySelectorAll('.side-link[data-tab]').forEach(function(l){ l.classList.remove('active'); });
     document.getElementById('tab-' + name).style.display = 'block';
