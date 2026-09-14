@@ -63,11 +63,35 @@ router.post('/webhook', express.json(), asyncRoute(async (req, res) => {
   );
 
   if (status === 'aprobado') {
-    await pool.query(
-      `UPDATE subscriptions SET status='activa', next_due_date = NOW() + INTERVAL '30 days'
-       WHERE id = (SELECT subscription_id FROM payments WHERE wompi_transaction_id = $1)`,
-      [transaction.id]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const subRow = await client.query(
+        `SELECT s.id, s.association_id, s.billing_cycle FROM subscriptions s
+         JOIN payments pay ON pay.subscription_id = s.id
+         WHERE pay.wompi_transaction_id = $1`,
+        [transaction.id]
+      );
+      const sub = subRow.rows[0];
+      if (sub) {
+        // Una asociación solo puede tener un plan activo: se cancela cualquier otro antes de activar este.
+        await client.query(
+          `UPDATE subscriptions SET status='cancelada' WHERE association_id = $1 AND status='activa' AND id != $2`,
+          [sub.association_id, sub.id]
+        );
+        const interval = sub.billing_cycle === 'anual' ? '365 days' : '30 days';
+        await client.query(
+          `UPDATE subscriptions SET status='activa', next_due_date = NOW() + $2::interval WHERE id = $1`,
+          [sub.id, interval]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
 
     const detail = await pool.query(
       `SELECT a.name AS association_name, a.nit, p.name AS plan_name, pay.amount, u.full_name, u.email, u.phone

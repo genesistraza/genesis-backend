@@ -211,6 +211,66 @@ router.delete('/associations/:id', requireRole('pro'), asyncRoute(async (req, re
   res.json({ message: 'Asociación eliminada.' });
 }));
 
+// PUT /admin/associations/:id/plan -> corrige manualmente el plan activo de una asociación
+// (para arreglar errores: pago con el plan equivocado, ciclo equivocado, etc.). Cancela
+// cualquier suscripción activa anterior y activa la nueva de inmediato, sin pasar por Wompi.
+router.put('/associations/:id/plan', asyncRoute(async (req, res) => {
+  const { planId, billingCycle } = req.body;
+  const cycle = billingCycle === 'anual' ? 'anual' : 'mensual';
+  if (!planId) {
+    return res.status(400).json({ error: 'Debes indicar el plan.' });
+  }
+  const plan = await pool.query('SELECT id FROM plans WHERE id = $1', [planId]);
+  if (plan.rows.length === 0) {
+    return res.status(404).json({ error: 'Plan no encontrado.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE subscriptions SET status='cancelada' WHERE association_id = $1 AND status='activa'`,
+      [req.params.id]
+    );
+    const interval = cycle === 'anual' ? '365 days' : '30 days';
+    const inserted = await client.query(
+      `INSERT INTO subscriptions (association_id, plan_id, status, billing_cycle, next_due_date)
+       VALUES ($1,$2,'activa',$3, NOW() + $4::interval) RETURNING *`,
+      [req.params.id, planId, cycle, interval]
+    );
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'plan_corregido_manualmente', { associationId: Number(req.params.id), planId }, req.ip);
+    res.json(inserted.rows[0]);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}));
+
+// DELETE /admin/associations/:id/plan -> quita el plan activo de una asociación (la deja sin plan)
+router.delete('/associations/:id/plan', asyncRoute(async (req, res) => {
+  await pool.query(
+    `UPDATE subscriptions SET status='cancelada' WHERE association_id = $1 AND status='activa'`,
+    [req.params.id]
+  );
+  await logActivity(req.user.id, 'plan_removido_manualmente', { associationId: Number(req.params.id) }, req.ip);
+  res.json({ message: 'Plan removido.' });
+}));
+
+// DELETE /admin/payments/pending -> limpia solicitudes de pago y suscripciones que quedaron
+// pendientes y nunca se completaron (basura de intentos de compra abandonados). Solo 'pro'.
+router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, res) => {
+  const payments = await pool.query(`DELETE FROM payments WHERE status = 'pendiente' RETURNING id`);
+  const subs = await pool.query(`DELETE FROM subscriptions WHERE status = 'pendiente' RETURNING id`);
+  await logActivity(req.user.id, 'pagos_pendientes_limpiados', {
+    paymentsEliminados: payments.rows.length,
+    suscripcionesEliminadas: subs.rows.length
+  }, req.ip);
+  res.json({ paymentsEliminados: payments.rows.length, suscripcionesEliminadas: subs.rows.length });
+}));
+
 // POST /admin/associations/:id/send-reminder -> envía manualmente un correo de recordatorio de pago
 router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
   const { Resend } = require('resend');

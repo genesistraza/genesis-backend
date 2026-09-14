@@ -9,8 +9,17 @@
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  #routesMap{height:380px;border-radius:14px;margin-top:14px;z-index:1;}
-  .route-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+  #routesMap{height:420px;border-radius:14px;margin-top:14px;z-index:1;}
+  .routes-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;flex-wrap:wrap;}
+  .routes-check-all{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;white-space:nowrap;}
+  .routes-search{border:1px solid var(--border,#ddd);border-radius:8px;padding:8px 12px;font-size:13.5px;min-width:220px;flex:1;max-width:320px;}
+  .routes-list{max-height:340px;overflow-y:auto;margin-top:10px;border:1px solid var(--border,#eee);border-radius:10px;}
+  .routes-list-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border,#eee);cursor:pointer;font-size:13.5px;}
+  .routes-list-item:last-child{border-bottom:none;}
+  .routes-list-item:hover{background:var(--bg-soft,#f7f8fa);}
+  .routes-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
+  .routes-list-item .name{flex:1;}
+  .routes-list-empty{padding:14px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
 </style>
 </head>
 <body>
@@ -28,7 +37,8 @@
     <div class="brand">
       <span class="brand-text">Genesis <span>Traza</span></span>
     </div>
-    <div class="side-link active">Resumen de mi cuenta</div>
+    <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen de mi cuenta</div>
+    <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
     <a class="side-link" href="index.html#planes">Ver planes</a>
     <a class="side-link" href="index.html">Ir a la web</a>
     <div class="side-spacer"></div>
@@ -48,73 +58,93 @@
       </div>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Plan actual</div>
-        <div class="value" id="statPlan" style="font-size:20px;">—</div>
+    <section class="tab-panel" id="tab-resumen">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="label">Plan actual</div>
+          <div class="value" id="statPlan" style="font-size:20px;">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Estado</div>
+          <div class="value" id="statStatus" style="font-size:20px;">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Próximo vencimiento</div>
+          <div class="value" id="statDueDate" style="font-size:20px;">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="label">Total pagado</div>
+          <div class="value" id="statTotalPaid" style="font-size:20px;">—</div>
+        </div>
       </div>
-      <div class="stat-card">
-        <div class="label">Estado</div>
-        <div class="value" id="statStatus" style="font-size:20px;">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Próximo vencimiento</div>
-        <div class="value" id="statDueDate" style="font-size:20px;">—</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Total pagado</div>
-        <div class="value" id="statTotalPaid" style="font-size:20px;">—</div>
-      </div>
-    </div>
 
-    <div id="facturacionPanel" class="panel" style="display:none;text-align:center;">
-      <h2>Facturación electrónica</h2>
-      <p style="color:var(--ink-soft);margin:10px 0 18px;">Entra a tu sistema de facturación electrónica ante la DIAN.</p>
-      <a class="btn btn-primary" id="facturacionLink" href="#" target="_blank" rel="noopener">Entrar a facturación electrónica</a>
-    </div>
-
-    <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
-      <h2>Aún no tienes un plan activo</h2>
-      <p style="color:var(--ink-soft);margin-top:8px;">Elige un plan desde la landing para empezar.</p>
-      <a class="btn btn-primary" href="index.html#planes" style="margin-top:18px;">Ver planes</a>
-    </div>
-
-    <div id="renewalPanel" class="panel" style="display:none;">
-      <div class="panel-head">
-        <h2>Tu suscripción</h2>
+      <div id="facturacionPanel" class="panel" style="display:none;text-align:center;">
+        <h2>Facturación electrónica</h2>
+        <p style="color:var(--ink-soft);margin:10px 0 18px;">Entra a tu sistema de facturación electrónica ante la DIAN.</p>
+        <a class="btn btn-primary" id="facturacionLink" href="#" target="_blank" rel="noopener">Entrar a facturación electrónica</a>
       </div>
-      <p id="renewalMsg" style="color:var(--ink-soft);margin-bottom:16px;"></p>
-      <button class="btn btn-primary" id="renewBtn" onclick="renewSubscription()">Pagar ahora</button>
-      <p id="renewError" style="display:none;color:#C0392B;font-size:13px;margin-top:12px;"></p>
-    </div>
 
-    <div class="panel" id="paymentsPanel" style="display:none;">
-      <div class="panel-head">
-        <h2>Historial de pagos</h2>
+      <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
+        <h2>Aún no tienes un plan activo</h2>
+        <p style="color:var(--ink-soft);margin-top:8px;">Elige un plan desde la landing para empezar.</p>
+        <a class="btn btn-primary" href="index.html#planes" style="margin-top:18px;">Ver planes</a>
       </div>
-      <div class="table-scroll">
-        <table class="data-table">
-          <thead>
-            <tr><th>Fecha</th><th>Plan</th><th>Monto</th><th>Método</th><th>Estado</th></tr>
-          </thead>
-          <tbody id="paymentsTableBody"></tbody>
-        </table>
+
+      <div id="renewalPanel" class="panel" style="display:none;">
+        <div class="panel-head">
+          <h2>Tu plan</h2>
+        </div>
+        <p id="renewalMsg" style="color:var(--ink-soft);margin-bottom:16px;"></p>
+        <button class="btn btn-primary" id="renewBtn" onclick="renewSubscription()" style="display:none;">Continuar con el mismo plan</button>
+        <button class="btn btn-outline" id="changePlanBtn" onclick="openPlanPicker()">Cambiar de plan</button>
+        <p id="renewError" style="display:none;color:#C0392B;font-size:13px;margin-top:12px;"></p>
+
+        <div id="planPickerPanel" style="display:none;margin-top:20px;border-top:1px solid var(--border,#eee);padding-top:18px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+            <h3 style="margin:0;font-size:15px;">Elige tu nuevo plan</h3>
+            <div style="display:flex;gap:8px;">
+              <button type="button" class="btn btn-primary" id="cycleMensualBtn" onclick="setPlanPickerCycle('mensual')">Mensual</button>
+              <button type="button" class="btn btn-outline" id="cycleAnualBtn" onclick="setPlanPickerCycle('anual')">Anual</button>
+            </div>
+          </div>
+          <div id="planPickerGrid" class="plan-preview-grid"></div>
+          <p id="planPickerMsg" style="margin-top:10px;font-size:13px;"></p>
+        </div>
       </div>
-    </div>
 
-    <div class="panel" id="routesPanelData" style="display:none;">
-      <div class="panel-head"><h2>Mis Rutas</h2></div>
-      <p style="color:var(--ink-soft);font-size:14px;">Selecciona un reciclador para ver su ruta.</p>
-      <div class="route-tabs" id="routeTabs"></div>
-      <div id="routesMap"></div>
-      <p id="routeNotes" style="margin-top:12px;color:var(--ink-soft);font-size:14px;"></p>
-    </div>
+      <div class="panel" id="paymentsPanel" style="display:none;">
+        <div class="panel-head">
+          <h2>Historial de pagos</h2>
+        </div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>Fecha</th><th>Plan</th><th>Monto</th><th>Método</th><th>Estado</th></tr>
+            </thead>
+            <tbody id="paymentsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
 
-    <div class="panel" id="routesPanelEmpty" style="display:none;text-align:center;">
-      <h2>Mis Rutas</h2>
-      <p style="color:var(--ink-soft);margin:10px 0 18px;">Contrata este servicio y visualiza en un mapa real las rutas de recolección de cada reciclador de tu asociación.</p>
-      <a class="btn btn-primary" href="https://wa.me/573228753230?text=Hola%2C%20quiero%20contratar%20el%20servicio%20de%20Mis%20Rutas%20de%20Genesis%20Traza" target="_blank" rel="noopener">Contratar Mis Rutas</a>
-    </div>
+    <section class="tab-panel" id="tab-rutas" style="display:none;">
+      <div class="panel" id="routesPanelData" style="display:none;">
+        <div class="panel-head"><h2>Mis Rutas</h2></div>
+        <div id="routesMap"></div>
+        <div class="routes-toolbar">
+          <label class="routes-check-all"><input type="checkbox" id="routesToggleAll" checked> Ver todos</label>
+          <input type="text" id="routesSearch" class="routes-search" placeholder="Buscar reciclador…">
+        </div>
+        <div id="routesList" class="routes-list"></div>
+        <p id="routeNotes" style="margin-top:12px;color:var(--ink-soft);font-size:14px;"></p>
+      </div>
+
+      <div class="panel" id="routesPanelEmpty" style="display:none;text-align:center;">
+        <h2>Mis Rutas</h2>
+        <p style="color:var(--ink-soft);margin:10px 0 18px;">Contrata este servicio y visualiza en un mapa real las rutas de recolección de cada reciclador de tu asociación.</p>
+        <a class="btn btn-primary" href="https://wa.me/573228753230?text=Hola%2C%20quiero%20contratar%20el%20servicio%20de%20Mis%20Rutas%20de%20Genesis%20Traza" target="_blank" rel="noopener">Contratar Mis Rutas</a>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -133,6 +163,21 @@
     };
     var cls = map[status] || 'badge-gray';
     return '<span class="badge ' + cls + '">' + status + '</span>';
+  }
+
+  var gtRoutesKmlUrl = null;
+  var gtRoutesLoadedOnce = false;
+
+  function showTab(name){
+    document.querySelectorAll('.tab-panel').forEach(function(p){ p.style.display = 'none'; });
+    document.querySelectorAll('.side-link[data-tab]').forEach(function(l){ l.classList.remove('active'); });
+    document.getElementById('tab-' + name).style.display = 'block';
+    var link = document.querySelector('.side-link[data-tab="' + name + '"]');
+    if(link) link.classList.add('active');
+    if(name === 'rutas' && gtRoutesKmlUrl && !gtRoutesLoadedOnce){
+      gtRoutesLoadedOnce = true;
+      loadRoutesMap(gtRoutesKmlUrl);
+    }
   }
 
   function loadDashboard(){
@@ -173,12 +218,20 @@
         document.getElementById('statStatus').innerHTML = statusBadge(sub.status);
         document.getElementById('statDueDate').textContent = gtFormatDate(sub.next_due_date);
 
-        if(sub.status !== 'activa' || !sub.next_due_date){
-          document.getElementById('renewalPanel').style.display = 'block';
+        document.getElementById('renewalPanel').style.display = 'block';
+        var isActive = sub.status === 'activa' && sub.next_due_date;
+        var renewBtn = document.getElementById('renewBtn');
+
+        if(!isActive){
           var amount = sub.billing_cycle === 'anual' ? sub.price_annual : sub.price_monthly;
           document.getElementById('renewalMsg').textContent =
-            'Tu plan "' + sub.plan_name + '" está ' + sub.status + '. Monto a pagar: ' + gtFormatCOP(amount) + ' (' + sub.billing_cycle + ').';
+            'Tu plan "' + sub.plan_name + '" está ' + sub.status + '. Puedes continuar con el mismo plan (' + gtFormatCOP(amount) + ', ' + sub.billing_cycle + ') o elegir uno diferente.';
           window.gtPendingSubscription = { id: sub.id, amount: amount };
+          renewBtn.style.display = 'inline-block';
+        } else {
+          document.getElementById('renewalMsg').textContent =
+            'Tu plan "' + sub.plan_name + '" está activo hasta el ' + gtFormatDate(sub.next_due_date) + '. Si necesitas ajustarlo, puedes cambiarlo aquí.';
+          renewBtn.style.display = 'none';
         }
       } else {
         document.getElementById('noAssociationPanel').style.display = 'block';
@@ -203,7 +256,7 @@
 
       if(meData.association.routes_kml_url){
         document.getElementById('routesPanelData').style.display = 'block';
-        loadRoutesMap(meData.association.routes_kml_url);
+        gtRoutesKmlUrl = meData.association.routes_kml_url;
       } else {
         document.getElementById('routesPanelEmpty').style.display = 'block';
       }
@@ -211,6 +264,7 @@
   }
 
   var gtMap = null;
+  var gtRouteLayers = []; // { label, color, layer, bounds, visible }
   var GT_ROUTE_COLORS = ['#1E6FD6', '#F2941F', '#7AB72E', '#C0392B', '#8E44AD', '#0FB5A6', '#D4A017', '#E91E8C'];
 
   function loadRoutesMap(kmlUrl){
@@ -225,9 +279,8 @@
           attribution: '&copy; OpenStreetMap contributors'
         }).addTo(gtMap);
 
-        var tabsEl = document.getElementById('routeTabs');
-        tabsEl.innerHTML = '';
         var allBounds = null;
+        gtRouteLayers = [];
 
         // Si el KML no tiene carpetas, se trata como una sola capa con todo el archivo.
         var groups = folders.length > 0 ? folders : [kmlDom];
@@ -260,24 +313,171 @@
                 lyr.bindPopup(html);
               }
             }
-          }).addTo(gtMap);
+          });
 
           var bounds = layer.getBounds();
           if(bounds.isValid()){
             allBounds = allBounds ? allBounds.extend(bounds) : bounds;
           }
 
-          var btn = document.createElement('button');
-          btn.className = 'tab-btn';
-          btn.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + label;
-          btn.addEventListener('click', function(){ if(bounds.isValid()) gtMap.fitBounds(bounds); });
-          tabsEl.appendChild(btn);
+          layer.addTo(gtMap); // visible por defecto, se puede ocultar desde la lista de abajo
+          gtRouteLayers.push({ label: label, color: color, layer: layer, bounds: bounds, visible: true });
         });
 
         if(allBounds) gtMap.fitBounds(allBounds);
+        renderRoutesList();
       })
       .catch(function(){
         document.getElementById('routeNotes').textContent = 'No se pudo cargar el mapa de rutas.';
+      });
+  }
+
+  function renderRoutesList(filterText){
+    var listEl = document.getElementById('routesList');
+    if(!listEl) return;
+    listEl.innerHTML = '';
+    var q = (filterText || '').toLowerCase();
+    var shown = 0;
+
+    gtRouteLayers.forEach(function(entry, idx){
+      if(q && entry.label.toLowerCase().indexOf(q) === -1) return;
+      shown++;
+      var row = document.createElement('div');
+      row.className = 'routes-list-item';
+      row.innerHTML =
+        '<input type="checkbox"' + (entry.visible ? ' checked' : '') + '>' +
+        '<span class="routes-dot" style="background:' + entry.color + '"></span>' +
+        '<span class="name"></span>';
+      row.querySelector('.name').textContent = entry.label;
+      var checkbox = row.querySelector('input');
+      checkbox.addEventListener('click', function(e){
+        e.stopPropagation();
+        setRouteVisibility(idx, checkbox.checked);
+      });
+      row.addEventListener('click', function(){
+        if(entry.visible && entry.bounds && entry.bounds.isValid()) gtMap.fitBounds(entry.bounds);
+      });
+      listEl.appendChild(row);
+    });
+
+    if(shown === 0){
+      listEl.innerHTML = '<div class="routes-list-empty">No se encontraron recicladores con ese nombre.</div>';
+    }
+    syncRoutesToggleAll();
+  }
+
+  function setRouteVisibility(idx, visible){
+    var entry = gtRouteLayers[idx];
+    if(!entry) return;
+    entry.visible = visible;
+    if(visible){
+      if(!gtMap.hasLayer(entry.layer)) entry.layer.addTo(gtMap);
+    } else if(gtMap.hasLayer(entry.layer)){
+      gtMap.removeLayer(entry.layer);
+    }
+    syncRoutesToggleAll();
+  }
+
+  function syncRoutesToggleAll(){
+    var toggleAll = document.getElementById('routesToggleAll');
+    if(!toggleAll) return;
+    toggleAll.checked = gtRouteLayers.length > 0 && gtRouteLayers.every(function(e){ return e.visible; });
+  }
+
+  var gtRoutesToggleAllEl = document.getElementById('routesToggleAll');
+  if(gtRoutesToggleAllEl){
+    gtRoutesToggleAllEl.addEventListener('change', function(){
+      gtRouteLayers.forEach(function(entry, idx){ setRouteVisibility(idx, gtRoutesToggleAllEl.checked); });
+      renderRoutesList(document.getElementById('routesSearch').value);
+    });
+  }
+  var gtRoutesSearchEl = document.getElementById('routesSearch');
+  if(gtRoutesSearchEl){
+    gtRoutesSearchEl.addEventListener('input', function(){ renderRoutesList(gtRoutesSearchEl.value); });
+  }
+
+  var gtAllPlans = [];
+  var gtPlanPickerCycle = 'mensual';
+
+  function openPlanPicker(){
+    var panel = document.getElementById('planPickerPanel');
+    var willShow = panel.style.display === 'none';
+    panel.style.display = willShow ? 'block' : 'none';
+    if(willShow){
+      if(gtAllPlans.length === 0){
+        gtApiFetch('/plans').then(function(res){
+          if(res.ok) gtAllPlans = res.data;
+          renderPlanPicker();
+        });
+      } else {
+        renderPlanPicker();
+      }
+    }
+  }
+
+  function setPlanPickerCycle(cycle){
+    gtPlanPickerCycle = cycle;
+    document.getElementById('cycleMensualBtn').className = 'btn ' + (cycle === 'mensual' ? 'btn-primary' : 'btn-outline');
+    document.getElementById('cycleAnualBtn').className = 'btn ' + (cycle === 'anual' ? 'btn-primary' : 'btn-outline');
+    renderPlanPicker();
+  }
+
+  function renderPlanPicker(){
+    var grid = document.getElementById('planPickerGrid');
+    if(!grid) return;
+    grid.innerHTML = '';
+    gtAllPlans.forEach(function(plan){
+      var price = gtPlanPickerCycle === 'anual' ? plan.price_annual : plan.price_monthly;
+      var div = document.createElement('div');
+      div.className = 'plan';
+      div.innerHTML =
+        '<h3></h3>' +
+        '<div class="price"><span class="amount"></span><small>' + (gtPlanPickerCycle === 'anual' ? '/año' : '/mes') + '</small></div>' +
+        '<p class="desc"></p>' +
+        '<button type="button" class="btn btn-primary" style="width:100%;margin-top:10px;">Seleccionar</button>';
+      div.querySelector('h3').textContent = plan.name;
+      div.querySelector('.amount').textContent = '$' + Number(price || 0).toLocaleString('es-CO');
+      div.querySelector('.desc').textContent = plan.description || '';
+      div.querySelector('button').addEventListener('click', function(){ selectNewPlan(plan.id); });
+      grid.appendChild(div);
+    });
+  }
+
+  function selectNewPlan(planId){
+    var msgEl = document.getElementById('planPickerMsg');
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Preparando el pago…';
+    gtApiFetch('/subscriptions', { method: 'POST', body: JSON.stringify({ planId: planId, billingCycle: gtPlanPickerCycle }) })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar el cambio de plan.');
+        return gtApiFetch('/payments/create', {
+          method: 'POST',
+          body: JSON.stringify({ subscriptionId: res.data.subscriptionId, amount: res.data.amount })
+        });
+      })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar el pago.');
+        var checkout = new WidgetCheckout({
+          currency: res.data.currency,
+          amountInCents: res.data.amountInCents,
+          reference: res.data.reference,
+          publicKey: res.data.publicKey,
+          signature: { integrity: res.data.signature },
+          redirectUrl: window.location.href
+        });
+        checkout.open(function(result){
+          var transaction = result.transaction;
+          if(transaction && transaction.status === 'APPROVED'){
+            alert('Pago aprobado. Tu nuevo plan quedará activo en unos minutos.');
+            window.location.reload();
+          } else {
+            alert('El pago no se completó (estado: ' + (transaction ? transaction.status : 'desconocido') + ').');
+          }
+        });
+      })
+      .catch(function(err){
+        msgEl.style.color = '#C0392B';
+        msgEl.textContent = err.message;
       });
   }
 

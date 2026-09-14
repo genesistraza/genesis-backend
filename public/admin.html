@@ -52,6 +52,16 @@
         <div class="stat-card"><div class="label">Suscripciones activas</div><div class="value">—</div></div>
       </div>
       <p id="resumenAdminNote" class="panel" style="display:none;color:var(--ink-soft);">Los ingresos totales solo los ve el rol <strong>pro</strong>.</p>
+
+      <div class="panel" style="margin-top:20px;">
+        <div class="panel-head"><h2>Próximas fechas de pago</h2></div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Asociación</th><th>Plan</th><th>Vence</th><th>Estado</th></tr></thead>
+            <tbody id="upcomingDueTableBody"><tr><td class="empty-row" colspan="4">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </section>
 
     <!-- ASOCIACIONES -->
@@ -72,7 +82,11 @@
 
     <!-- PAGOS -->
     <section class="tab-panel" id="tab-pagos" style="display:none;">
-      <div class="app-topbar"><div><h1>Pagos</h1><p>Historial de pagos de todas las asociaciones.</p></div></div>
+      <div class="app-topbar">
+        <div><h1>Pagos</h1><p>Historial de pagos de todas las asociaciones.</p></div>
+        <button type="button" class="btn btn-outline pro-only" style="border-color:#C0392B;color:#C0392B;" id="clearPendingPaymentsBtn">Borrar solicitudes pendientes</button>
+      </div>
+      <p id="clearPendingPaymentsMsg" style="font-size:13px;margin:-8px 0 12px;"></p>
       <div class="panel">
         <div class="table-scroll">
           <table class="data-table">
@@ -268,14 +282,34 @@
   }
 
   function loadResumen(){
-    if(!isPro) return;
-    gtApiFetch('/admin/revenue-summary').then(function(res){
-      if(!res.ok) return;
-      var cards = document.querySelectorAll('#resumenStats .stat-card .value');
-      cards[0].textContent = gtFormatCOP(res.data.totalAprobado);
-      cards[1].textContent = gtFormatCOP(res.data.totalMesActual);
-      cards[2].textContent = res.data.pagosAprobados;
-      cards[3].textContent = res.data.suscripcionesActivas;
+    if(isPro){
+      gtApiFetch('/admin/revenue-summary').then(function(res){
+        if(!res.ok) return;
+        var cards = document.querySelectorAll('#resumenStats .stat-card .value');
+        cards[0].textContent = gtFormatCOP(res.data.totalAprobado);
+        cards[1].textContent = gtFormatCOP(res.data.totalMesActual);
+        cards[2].textContent = res.data.pagosAprobados;
+        cards[3].textContent = res.data.suscripcionesActivas;
+      });
+    }
+
+    gtApiFetch('/admin/associations').then(function(res){
+      var tbody = document.getElementById('upcomingDueTableBody');
+      if(!tbody) return;
+      if(!res.ok){ tbody.innerHTML = '<tr><td class="empty-row" colspan="4">No se pudo cargar.</td></tr>'; return; }
+      var upcoming = res.data
+        .filter(function(a){ return a.next_due_date; })
+        .sort(function(a, b){ return new Date(a.next_due_date) - new Date(b.next_due_date); })
+        .slice(0, 10);
+      if(upcoming.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="4">No hay fechas de pago próximas.</td></tr>'; return; }
+      tbody.innerHTML = '';
+      upcoming.forEach(function(a){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td></td><td></td><td>' + gtFormatDate(a.next_due_date) + '</td><td>' + statusBadge(a.subscription_status) + '</td>';
+        tr.children[0].textContent = a.name;
+        tr.children[1].textContent = a.plan_name || '—';
+        tbody.appendChild(tr);
+      });
     });
   }
 
@@ -423,10 +457,31 @@
       d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + p.status + '</li>'; });
       html += '</ul>';
 
+      var currentActive = d.subscriptions.find(function(s){ return s.status === 'activa'; });
+      html += '<h4 style="margin-top:16px;font-size:14px;">Corregir plan</h4>';
+      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Usa esto solo si hubo un error (pago con el plan equivocado, ciclo equivocado, etc). Activa el plan de inmediato, sin pasar por una nueva compra. Plan actual: <strong>' + (currentActive ? currentActive.plan_name : 'ninguno') + '</strong>.</p>';
+      html += '<div class="form-grid">';
+      html += '<div class="form-field"><label>Plan</label><select id="fixPlanSelect"><option value="">Cargando…</option></select></div>';
+      html += '<div class="form-field"><label>Ciclo</label><select id="fixPlanCycle"><option value="mensual">Mensual</option><option value="anual">Anual</option></select></div>';
+      html += '</div>';
+      html += '<button class="btn btn-primary" style="margin-top:10px;" onclick="fixAssociationPlan(' + d.association.id + ')">Activar este plan</button>';
+      if(currentActive) html += ' <button class="btn btn-outline" style="border-color:#C0392B;color:#C0392B;margin-top:10px;" onclick="removeAssociationPlan(' + d.association.id + ')">Quitar plan</button>';
+      html += '<p id="fixPlanMsg" style="margin-top:8px;font-size:13px;"></p>';
+
       html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:8px;" id="sendReminderBtn">Enviar recordatorio de pago</button>';
       html += '<p id="reminderMsg" style="margin-top:8px;font-size:13px;"></p>';
 
       body.innerHTML = html;
+
+      gtApiFetch('/plans').then(function(planRes){
+        var sel = document.getElementById('fixPlanSelect');
+        if(!sel) return;
+        if(!planRes.ok || planRes.data.length === 0){ sel.innerHTML = '<option value="">Sin planes disponibles</option>'; return; }
+        sel.innerHTML = planRes.data.map(function(p){
+          var selected = currentActive && currentActive.plan_name === p.name ? ' selected' : '';
+          return '<option value="' + p.id + '"' + selected + '>' + p.name + ' (' + p.category + ')</option>';
+        }).join('');
+      });
 
       document.getElementById('sendReminderBtn').addEventListener('click', function(){
         var msgEl = document.getElementById('reminderMsg');
@@ -457,6 +512,40 @@
         if(!res.ok){ throw new Error(res.data.error || 'No se pudo guardar.'); }
         msgEl.style.color = 'var(--green)';
         msgEl.textContent = 'Guardado.';
+        loadAsociaciones();
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  function fixAssociationPlan(associationId){
+    var msgEl = document.getElementById('fixPlanMsg');
+    var planId = document.getElementById('fixPlanSelect').value;
+    var billingCycle = document.getElementById('fixPlanCycle').value;
+    if(!planId){ msgEl.style.color = '#C0392B'; msgEl.textContent = 'Elige un plan.'; return; }
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Activando…';
+    gtApiFetch('/admin/associations/' + associationId + '/plan', { method: 'PUT', body: JSON.stringify({ planId: planId, billingCycle: billingCycle }) })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo activar el plan.'); }
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Plan activado.';
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+        loadAsociaciones();
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  function removeAssociationPlan(associationId){
+    if(!confirm('¿Quitar el plan activo de esta asociación?')) return;
+    var msgEl = document.getElementById('fixPlanMsg');
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Quitando…';
+    gtApiFetch('/admin/associations/' + associationId + '/plan', { method: 'DELETE' })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo quitar el plan.'); }
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Plan removido.';
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
         loadAsociaciones();
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
@@ -689,9 +778,26 @@
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
 
+  function clearPendingPayments(){
+    if(!confirm('¿Borrar todas las solicitudes de pago y suscripciones que quedaron pendientes (nunca se completaron)? Esto no afecta pagos aprobados ni planes activos.')) return;
+    var msgEl = document.getElementById('clearPendingPaymentsMsg');
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Borrando…';
+    gtApiFetch('/admin/payments/pending', { method: 'DELETE' })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo borrar.'); }
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Listo: ' + res.data.paymentsEliminados + ' pagos y ' + res.data.suscripcionesEliminadas + ' suscripciones pendientes eliminadas.';
+        loadPagos();
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
   if(session){
     initShell();
     loadResumen();
+    var clearBtn = document.getElementById('clearPendingPaymentsBtn');
+    if(clearBtn) clearBtn.addEventListener('click', clearPendingPayments);
   }
 </script>
 </body>

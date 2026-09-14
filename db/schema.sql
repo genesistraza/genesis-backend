@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS error_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Una asociación solo puede tener una suscripción activa a la vez. Al activar
+-- una nueva (pago aprobado o corrección manual del admin) la anterior se pasa
+-- a 'cancelada' antes de insertar/activar esta, así este índice nunca choca.
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_one_active_per_association_idx ON subscriptions (association_id) WHERE status = 'activa';
+
 -- Evita duplicar los planes semilla si la migración se corre más de una vez.
 -- Es parcial (solo entre planes activos) porque ya existen filas duplicadas
 -- desactivadas de una migración anterior que no tenía esta restricción.
