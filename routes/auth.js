@@ -13,12 +13,24 @@ function generateCode() {
   return String(Math.floor(100000 + Math.random() * 900000)); // código de 6 dígitos
 }
 
+async function verifyRecaptcha(token) {
+  if (!token) return false;
+  const params = new URLSearchParams({ secret: process.env.RECAPTCHA_SECRET_KEY, response: token });
+  const r = await fetch('https://www.google.com/recaptcha/api/siteverify', { method: 'POST', body: params });
+  const data = await r.json();
+  return !!data.success;
+}
+
 // POST /auth/register  -> crea usuario + asociación, envía código por correo
 router.post('/register', asyncRoute(async (req, res) => {
-  const { fullName, email, phone, password, associationName, nit, recyclerCount } = req.body;
+  const { fullName, email, phone, password, associationName, nit, recyclerCount, recaptchaToken } = req.body;
 
   if (!fullName || !email || !password || !associationName || !nit || !phone || !recyclerCount) {
     return res.status(400).json({ error: 'Faltan campos obligatorios del formulario.' });
+  }
+
+  if (!(await verifyRecaptcha(recaptchaToken))) {
+    return res.status(400).json({ error: 'Confirma que no eres un robot.' });
   }
 
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
@@ -100,14 +112,29 @@ router.post('/verify', asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'Código incorrecto o vencido.' });
   }
   await pool.query('UPDATE verification_codes SET used = true WHERE id = $1', [result.rows[0].id]);
-  await pool.query('UPDATE users SET is_verified = true WHERE id = $1', [userId]);
+  const userResult = await pool.query(
+    'UPDATE users SET is_verified = true WHERE id = $1 RETURNING id, role, association_id, full_name',
+    [userId]
+  );
+  const user = userResult.rows[0];
   await logActivity(userId, 'correo_verificado', {});
-  res.json({ message: 'Correo verificado. Ya puedes iniciar sesión.' });
+
+  const token = jwt.sign(
+    { id: user.id, role: user.role, associationId: user.association_id },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
+  res.json({ message: 'Correo verificado.', token, role: user.role, fullName: user.full_name });
 }));
 
 // POST /auth/login
 router.post('/login', asyncRoute(async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, recaptchaToken } = req.body;
+
+  if (!(await verifyRecaptcha(recaptchaToken))) {
+    return res.status(400).json({ error: 'Confirma que no eres un robot.' });
+  }
+
   const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
   const user = result.rows[0];
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {

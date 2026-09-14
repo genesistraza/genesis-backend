@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://www.google.com/recaptcha/api.js?onload=gtRecaptchaOnload&render=explicit" async defer></script>
 </head>
 <body>
 
@@ -324,6 +325,7 @@
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
     <div class="pwd-wrap"><input id="loginPassword" type="password" autocomplete="off" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
     <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
+    <div id="loginCaptcha" style="margin-bottom:14px;"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>
     <p id="loginRegisterHint" style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
   </div>
@@ -349,6 +351,7 @@
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
     <div class="pwd-wrap"><input id="regPassword" type="password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
     <p id="registerError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+    <div id="registerCaptcha" style="margin-bottom:14px;"></div>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitRegister()">Crear cuenta</button>
     <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿Ya tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeRegisterModal();openLoginModal();return false;">Inicia sesión</a></p>
   </div>
@@ -379,6 +382,13 @@
   var pendingVerifyPassword = null;
 
   var loginIntent = 'panel';
+
+  var gtLoginCaptchaId = null;
+  var gtRegisterCaptchaId = null;
+  function gtRecaptchaOnload(){
+    gtLoginCaptchaId = grecaptcha.render('loginCaptcha', { sitekey: '6LfXoLotAAAAAAKJWja-affzZr9lMiM66E53FrrJ' });
+    gtRegisterCaptchaId = grecaptcha.render('registerCaptcha', { sitekey: '6LfXoLotAAAAAAKJWja-affzZr9lMiM66E53FrrJ' });
+  }
 
   function gtTogglePwd(btn){
     var input = btn.previousElementSibling;
@@ -444,11 +454,17 @@
     var email = document.getElementById('loginEmail').value.trim().toLowerCase();
     var pass = document.getElementById('loginPassword').value;
     var errorEl = document.getElementById('loginError');
+    var recaptchaToken = (typeof grecaptcha !== 'undefined' && gtLoginCaptchaId !== null) ? grecaptcha.getResponse(gtLoginCaptchaId) : '';
     errorEl.style.display = 'none';
+    if(!recaptchaToken){
+      errorEl.textContent = 'Confirma que no eres un robot.';
+      errorEl.style.display = 'block';
+      return;
+    }
     fetch(API_BASE + '/auth/login', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ email: email, password: pass })
+      body: JSON.stringify({ email: email, password: pass, recaptchaToken: recaptchaToken })
     })
       .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
       .then(function(res){
@@ -469,6 +485,7 @@
       .catch(function(err){
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
+        if(typeof grecaptcha !== 'undefined' && gtLoginCaptchaId !== null) grecaptcha.reset(gtLoginCaptchaId);
       });
   }
 
@@ -501,8 +518,15 @@
     var errorEl = document.getElementById('registerError');
     errorEl.style.display = 'none';
 
+    var recaptchaToken = (typeof grecaptcha !== 'undefined' && gtRegisterCaptchaId !== null) ? grecaptcha.getResponse(gtRegisterCaptchaId) : '';
+
     if(!fullName || !associationName || !nit || !phone || !recyclerCount || !email || !password){
       errorEl.textContent = 'Todos los campos son obligatorios.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if(!recaptchaToken){
+      errorEl.textContent = 'Confirma que no eres un robot.';
       errorEl.style.display = 'block';
       return;
     }
@@ -517,7 +541,8 @@
         recyclerCount: Number(recyclerCount),
         email: email,
         phone: phone,
-        password: password
+        password: password,
+        recaptchaToken: recaptchaToken
       })
     })
       .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
@@ -530,6 +555,7 @@
         openVerifyModal();
       })
       .catch(function(err){
+        if(typeof grecaptcha !== 'undefined' && gtRegisterCaptchaId !== null) grecaptcha.reset(gtRegisterCaptchaId);
         errorEl.textContent = err.message;
         errorEl.style.display = 'block';
       });
@@ -566,15 +592,6 @@
       .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
       .then(function(res){
         if(!res.ok) throw new Error(res.data.error || 'Código incorrecto o vencido.');
-        return fetch(API_BASE + '/auth/login', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ email: pendingVerifyEmail, password: pendingVerifyPassword })
-        });
-      })
-      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
-      .then(function(res){
-        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar sesión automáticamente.');
         authToken = res.data.token;
         authUser = { role: res.data.role, fullName: res.data.fullName };
         localStorage.setItem('gt_token', authToken);

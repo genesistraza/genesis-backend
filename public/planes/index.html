@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+<script src="https://www.google.com/recaptcha/api.js?onload=gtRecaptchaOnload&render=explicit" async defer></script>
 </head>
 <body>
 
@@ -89,6 +90,7 @@
           <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="off" placeholder="nombre@empresa.com"></div>
           <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" type="password" autocomplete="off" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
           <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+          <div id="loginCaptcha2" style="margin-bottom:14px;"></div>
           <button class="btn btn-primary" style="width:100%;" onclick="submitLogin2()">Ingresar y continuar</button>
         </div>
 
@@ -103,6 +105,7 @@
           </div>
           <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="regPassword2" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
           <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+          <div id="registerCaptcha2" style="margin-bottom:14px;"></div>
           <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitRegister2()">Crear cuenta y continuar</button>
         </div>
 
@@ -149,6 +152,13 @@
   var authUser = { role: localStorage.getItem('gt_role'), fullName: localStorage.getItem('gt_fullName') };
   var selectedPlanId = null, selectedPlanName = null, selectedAmount = null, selectedBillingCycle = 'mensual';
   var pendingVerifyUserId = null, pendingVerifyEmail = null, pendingVerifyPassword = null;
+
+  var gtLoginCaptchaId = null;
+  var gtRegisterCaptchaId = null;
+  function gtRecaptchaOnload(){
+    gtLoginCaptchaId = grecaptcha.render('loginCaptcha2', { sitekey: '6LfXoLotAAAAAAKJWja-affzZr9lMiM66E53FrrJ' });
+    gtRegisterCaptchaId = grecaptcha.render('registerCaptcha2', { sitekey: '6LfXoLotAAAAAAKJWja-affzZr9lMiM66E53FrrJ' });
+  }
 
   function gtTogglePwd(btn){
     var input = btn.previousElementSibling;
@@ -212,8 +222,10 @@
     var email = document.getElementById('loginEmail2').value.trim().toLowerCase();
     var pass = document.getElementById('loginPassword2').value;
     var errorEl = document.getElementById('loginError2');
+    var recaptchaToken = (typeof grecaptcha !== 'undefined' && gtLoginCaptchaId !== null) ? grecaptcha.getResponse(gtLoginCaptchaId) : '';
     errorEl.style.display = 'none';
-    fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email:email, password:pass }) })
+    if(!recaptchaToken){ errorEl.textContent = 'Confirma que no eres un robot.'; errorEl.style.display = 'block'; return; }
+    fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email:email, password:pass, recaptchaToken:recaptchaToken }) })
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
         if(!res.ok) throw new Error(res.data.error || 'Correo o contraseña incorrectos.');
@@ -223,7 +235,10 @@
         updateAuthUI();
         prepareStep3();
       })
-      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+      .catch(function(err){
+        if(typeof grecaptcha !== 'undefined' && gtLoginCaptchaId !== null) grecaptcha.reset(gtLoginCaptchaId);
+        errorEl.textContent = err.message; errorEl.style.display = 'block';
+      });
   }
 
   function submitRegister2(){
@@ -235,14 +250,16 @@
     var phone = document.getElementById('regPhone2').value.trim();
     var password = document.getElementById('regPassword2').value;
     var errorEl = document.getElementById('registerError2');
+    var recaptchaToken = (typeof grecaptcha !== 'undefined' && gtRegisterCaptchaId !== null) ? grecaptcha.getResponse(gtRegisterCaptchaId) : '';
     errorEl.style.display = 'none';
     if(!fullName || !associationName || !nit || !phone || !recyclerCount || !email || !password){
       errorEl.textContent = 'Todos los campos son obligatorios.'; errorEl.style.display = 'block'; return;
     }
+    if(!recaptchaToken){ errorEl.textContent = 'Confirma que no eres un robot.'; errorEl.style.display = 'block'; return; }
     fetch(API_BASE + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
       fullName: fullName, associationName: associationName,
       nit: nit, recyclerCount: Number(recyclerCount),
-      email: email, phone: phone, password: password
+      email: email, phone: phone, password: password, recaptchaToken: recaptchaToken
     })})
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
@@ -253,7 +270,10 @@
         document.getElementById('authPanelRegister').style.display = 'none';
         document.getElementById('verifyPanel2').style.display = 'block';
       })
-      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+      .catch(function(err){
+        if(typeof grecaptcha !== 'undefined' && gtRegisterCaptchaId !== null) grecaptcha.reset(gtRegisterCaptchaId);
+        errorEl.textContent = err.message; errorEl.style.display = 'block';
+      });
   }
 
   function resendCode2(){
@@ -269,11 +289,6 @@
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
         if(!res.ok) throw new Error(res.data.error || 'Código incorrecto o vencido.');
-        return fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: pendingVerifyEmail, password: pendingVerifyPassword }) });
-      })
-      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
-      .then(function(res){
-        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar sesión.');
         authToken = res.data.token;
         authUser = { role: res.data.role, fullName: res.data.fullName };
         localStorage.setItem('gt_token', authToken); localStorage.setItem('gt_role', authUser.role); localStorage.setItem('gt_fullName', authUser.fullName);
