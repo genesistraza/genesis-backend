@@ -55,7 +55,10 @@
 
     <!-- ASOCIACIONES -->
     <section class="tab-panel" id="tab-asociaciones" style="display:none;">
-      <div class="app-topbar"><div><h1>Asociaciones</h1><p>Estado de pago de cada asociación registrada.</p></div></div>
+      <div class="app-topbar">
+        <div><h1>Asociaciones</h1><p>Estado de pago de cada asociación registrada.</p></div>
+        <button class="btn btn-primary" onclick="openNewAssociationModal()">+ Nueva asociación</button>
+      </div>
       <div class="panel">
         <div class="table-scroll">
           <table class="data-table">
@@ -169,6 +172,30 @@
     <div class="form-field" style="margin-top:14px;"><label><input type="checkbox" id="planFeatured" style="width:auto;margin-right:8px;">Destacado ("Más elegido")</label></div>
     <button class="btn btn-primary" style="margin-top:16px;" onclick="savePlan()">Guardar</button>
     <p id="planModalError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+  </div>
+</div>
+
+<!-- Modal: nueva asociación -->
+<div class="modal-overlay" id="newAssociationModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeNewAssociationModal()">&times;</button>
+    <h3>Nueva asociación</h3>
+    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí solo registras el link para que el cliente entre.</p>
+    <div class="form-grid" style="margin-top:18px;">
+      <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
+      <div class="form-field"><label>NIT (opcional)</label><input id="newAssocNit"></div>
+      <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
+      <div class="form-field"><label>Link de facturación (opcional)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
+    </div>
+    <h4 style="margin-top:20px;font-size:14px;">Usuario de contacto (opcional, para que puedan iniciar sesión)</h4>
+    <div class="form-grid" style="margin-top:10px;">
+      <div class="form-field"><label>Nombre completo</label><input id="newAssocContactName"></div>
+      <div class="form-field"><label>Correo</label><input id="newAssocContactEmail" type="email"></div>
+      <div class="form-field"><label>Celular</label><input id="newAssocContactPhone"></div>
+      <div class="form-field"><label>Contraseña</label><input id="newAssocContactPassword" type="password"></div>
+    </div>
+    <button class="btn btn-primary" style="margin-top:18px;" onclick="createAssociation()">Crear asociación</button>
+    <p id="newAssociationError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
   </div>
 </div>
 
@@ -413,6 +440,43 @@
   function deactivatePlan(id){
     if(!confirm('¿Desactivar este plan? Ya no se mostrará en la landing.')) return;
     gtApiFetch('/plans/' + id, { method: 'DELETE' }).then(function(){ loadPlanes(); });
+  }
+
+  // ---- Nueva asociación ----
+  function openNewAssociationModal(){
+    ['newAssocName','newAssocNit','newAssocRecyclerCount','newAssocFacturacionUrl',
+     'newAssocContactName','newAssocContactEmail','newAssocContactPhone','newAssocContactPassword']
+      .forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('newAssociationError').style.display = 'none';
+    document.getElementById('newAssociationModalOverlay').classList.add('open');
+  }
+  function closeNewAssociationModal(){ document.getElementById('newAssociationModalOverlay').classList.remove('open'); }
+
+  function createAssociation(){
+    var body = {
+      name: document.getElementById('newAssocName').value.trim(),
+      nit: document.getElementById('newAssocNit').value.trim() || undefined,
+      recyclerCount: Number(document.getElementById('newAssocRecyclerCount').value) || undefined,
+      facturacionUrl: document.getElementById('newAssocFacturacionUrl').value.trim() || undefined,
+      contactFullName: document.getElementById('newAssocContactName').value.trim() || undefined,
+      contactEmail: document.getElementById('newAssocContactEmail').value.trim().toLowerCase() || undefined,
+      contactPhone: document.getElementById('newAssocContactPhone').value.trim() || undefined,
+      contactPassword: document.getElementById('newAssocContactPassword').value || undefined
+    };
+    var errorEl = document.getElementById('newAssociationError');
+    errorEl.style.display = 'none';
+    if(!body.name){
+      errorEl.textContent = 'El nombre de la asociación es obligatorio.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    gtApiFetch('/admin/associations', { method: 'POST', body: JSON.stringify(body) })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo crear la asociación.'); }
+        closeNewAssociationModal();
+        loadAsociaciones();
+      })
+      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
   }
 
   // ---- Sub-admins ----

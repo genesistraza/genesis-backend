@@ -8,6 +8,40 @@ const router = express.Router();
 // 'pro' ve y controla todo. 'admin' (sub-jefes) es operativo: ve datos pero no configuración global.
 router.use(requireAuth, requireRole('pro', 'admin'));
 
+// POST /admin/associations -> crear una asociación nueva (y opcionalmente su primer usuario).
+// Disponible para 'pro' y 'admin' (a diferencia de otras acciones de configuración).
+router.post('/associations', asyncRoute(async (req, res) => {
+  const { name, nit, recyclerCount, facturacionUrl, contactFullName, contactEmail, contactPhone, contactPassword } = req.body;
+  if (!name) {
+    return res.status(400).json({ error: 'El nombre de la asociación es obligatorio.' });
+  }
+
+  const assocResult = await pool.query(
+    `INSERT INTO associations (name, nit, recycler_count, facturacion_url) VALUES ($1,$2,$3,$4) RETURNING *`,
+    [name, nit || null, recyclerCount || 0, facturacionUrl || null]
+  );
+  const association = assocResult.rows[0];
+
+  let user = null;
+  if (contactFullName && contactEmail && contactPassword) {
+    const bcrypt = require('bcryptjs');
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [contactEmail.toLowerCase()]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    }
+    const passwordHash = await bcrypt.hash(contactPassword, 10);
+    const userResult = await pool.query(
+      `INSERT INTO users (association_id, full_name, email, phone, password_hash, role, is_verified)
+       VALUES ($1,$2,$3,$4,$5,'operativo',true) RETURNING id, full_name, email, role`,
+      [association.id, contactFullName, contactEmail.toLowerCase(), contactPhone || null, passwordHash]
+    );
+    user = userResult.rows[0];
+  }
+
+  await logActivity(req.user.id, 'asociacion_creada', { associationId: association.id }, req.ip);
+  res.json({ association, user });
+}));
+
 // GET /admin/associations -> lista de asociaciones con su estado de pago
 router.get('/associations', asyncRoute(async (req, res) => {
   const result = await pool.query(`
