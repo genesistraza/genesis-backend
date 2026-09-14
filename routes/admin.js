@@ -126,7 +126,15 @@ router.put('/associations/:id', requireRole('pro'), asyncRoute(async (req, res) 
 
 // DELETE /admin/associations/:id -> elimina una asociación por completo (solo 'pro')
 // Cascada: borra sus suscripciones y pagos; a los usuarios ligados les deja association_id en null.
+// Nunca se permite borrar una asociación que tenga un usuario 'pro' (protección explícita).
 router.delete('/associations/:id', requireRole('pro'), asyncRoute(async (req, res) => {
+  const proUser = await pool.query(
+    "SELECT id FROM users WHERE association_id = $1 AND role = 'pro'",
+    [req.params.id]
+  );
+  if (proUser.rows.length > 0) {
+    return res.status(403).json({ error: 'No se puede eliminar la asociación de una cuenta pro.' });
+  }
   const result = await pool.query('DELETE FROM associations WHERE id = $1 RETURNING id, name', [req.params.id]);
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Asociación no encontrada.' });
