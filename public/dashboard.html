@@ -242,7 +242,24 @@
 
           var layer = L.geoJSON(geojson, {
             style: { color: color, weight: 4 },
-            pointToLayer: function(feature, latlng){ return L.circleMarker(latlng, { radius: 6, color: color, fillColor: color, fillOpacity: 1 }); }
+            pointToLayer: function(feature, latlng){ return L.circleMarker(latlng, { radius: 6, color: color, fillColor: color, fillOpacity: 1 }); },
+            onEachFeature: function(feature, lyr){
+              var p = feature.properties || {};
+              var rows = [
+                ['Nombre', p.nombre],
+                ['N° documento', p.numero_documento],
+                ['Dirección inicio', p.direccion_inicio],
+                ['Dirección fin', p.direccion_fin],
+                ['Días de operación', p.dias_operacion],
+                ['Tipo de vehículo', p.tipo_vehiculo],
+                ['Placa', p.placa]
+              ].filter(function(r){ return r[1]; });
+              if(rows.length){
+                var html = '<strong>' + (feature.properties.name || label) + '</strong><br>' +
+                  rows.map(function(r){ return '<strong>' + r[0] + ':</strong> ' + r[1]; }).join('<br>');
+                lyr.bindPopup(html);
+              }
+            }
           }).addTo(gtMap);
 
           var bounds = layer.getBounds();
