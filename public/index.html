@@ -368,12 +368,12 @@
     <h3 style="font-size:20px;margin-bottom:6px;" id="loginModalTitle">Iniciar sesión</h3>
     <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;" id="loginModalSubtitle">Ingresa con el correo y la contraseña de tu cuenta.</p>
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
-    <input id="loginEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
+    <input id="loginEmail" type="email" autocomplete="off" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <input id="loginPassword" type="password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <input id="loginPassword" type="password" autocomplete="off" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
     <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>
-    <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
+    <p id="loginRegisterHint" style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
   </div>
 </div>
 
@@ -472,6 +472,7 @@
     };
     document.getElementById('loginModalTitle').textContent = titles[loginIntent] || 'Iniciar sesión';
     document.getElementById('loginModalSubtitle').textContent = subtitles[loginIntent] || subtitles.cuenta;
+    document.getElementById('loginRegisterHint').style.display = (loginIntent === 'panel') ? 'none' : 'block';
     document.getElementById('loginModalOverlay').style.display = 'flex';
     document.getElementById('loginError').style.display = 'none';
   }
