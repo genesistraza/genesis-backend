@@ -347,6 +347,22 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 @media (prefers-reduced-motion: reduce){ .wa-float{animation:none;} }
 @media(max-width:480px){ .wa-float{right:16px;bottom:16px;width:52px;height:52px;} .wa-float svg{width:26px;height:26px;} }
 
+.social-float{position:fixed;right:22px;z-index:119;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 20px rgba(0,0,0,.25);transition:transform .18s ease,box-shadow .18s ease;}
+.social-float:hover{transform:scale(1.08);box-shadow:0 10px 24px rgba(0,0,0,.32);}
+.social-float svg{width:22px;height:22px;}
+.social-yt{background:#FF0000;bottom:92px;}
+.social-tt{background:#010101;bottom:152px;}
+.social-ig{background:radial-gradient(circle at 30% 110%,#fdf497 0%,#fdf497 5%,#fd5949 45%,#d6249f 60%,#285AEB 90%);bottom:212px;}
+.social-fb{background:#1877F2;bottom:272px;}
+@media(max-width:480px){
+  .social-float{right:16px;width:42px;height:42px;}
+  .social-float svg{width:19px;height:19px;}
+  .social-yt{bottom:78px;}
+  .social-tt{bottom:130px;}
+  .social-ig{bottom:182px;}
+  .social-fb{bottom:234px;}
+}
+
 .cookie-banner{position:fixed;left:18px;bottom:18px;max-width:380px;background:var(--blue-deep);color:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 16px 36px rgba(10,51,105,.35);z-index:150;}
 .cookie-banner p{font-size:13px;color:#CFE0F5;margin:0 0 12px;line-height:1.55;}
 .cookie-banner a{color:#fff;text-decoration:underline;}
