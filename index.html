@@ -213,10 +213,14 @@
         </button>
         <div class="dropdown-menu">
           <a href="https://genesis-traza.com" target="_blank" rel="noopener">Genesis Traza (Trazabilidad)<span class="sub">Reporte SUI, Superservicios y Contraloría</span></a>
-          <a href="#" onclick="openLoginModal();return false;">Facturación electrónica<span class="sub">Portal de facturación ante la DIAN</span></a>
           <div class="divider"></div>
-          <a href="#" onclick="openAdminModal();return false;">Administrador<span class="sub">Acceso interno de control total</span></a>
+          <a href="#" onclick="openLoginModal();return false;">Iniciar sesión<span class="sub">Facturación electrónica y panel de administración</span></a>
+          <a href="#" onclick="openRegisterModal();return false;">Crear cuenta<span class="sub">Registra tu asociación</span></a>
         </div>
+      </div>
+      <div id="userBadge" style="display:none;align-items:center;gap:12px;">
+        <span style="font-size:14px;font-weight:600;color:var(--ink);" id="userBadgeName"></span>
+        <a href="#" class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);padding:9px 16px;" onclick="logout();return false;">Salir</a>
       </div>
       <a class="btn btn-dark" href="#contacto">Solicitar demo</a>
     </div>
@@ -381,123 +385,19 @@
     <!-- TRAZABILIDAD -->
     <div class="plan-tab-panel active" id="tab-trazabilidad">
       <p style="text-align:center;color:var(--ink-soft);font-size:14px;margin-bottom:26px;">El precio depende del número de recicladores censados en tu asociación.</p>
-      <div class="plans-grid">
-        <div class="plan">
-          <h3>Hasta 20 recicladores</h3>
-          <div class="price"><span class="amount" data-m="150000" data-a="125000">$150.000</span><small>/mes por asociación</small></div>
-          <p class="desc">Para asociaciones pequeñas que necesitan estar al día con el SUI.</p>
-          <ul>
-            <li>Cargue al SUI</li>
-            <li>Balance de masas y caracterización</li>
-            <li>1 usuario administrador</li>
-            <li>Soporte por correo</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Trazabilidad · Hasta 20 recicladores', this)">Empezar</a>
-        </div>
-        <div class="plan featured">
-          <span class="plan-badge">Más elegido</span>
-          <h3>21 a 60 recicladores</h3>
-          <div class="price"><span class="amount" data-m="280000" data-a="235000">$280.000</span><small>/mes por asociación</small></div>
-          <p class="desc">Cumplimiento normativo integral para asociaciones en crecimiento.</p>
-          <ul>
-            <li>SUI, Contraloría y Superservicios</li>
-            <li>Balance de masas, caracterización y vehículos</li>
-            <li>Hasta 5 usuarios</li>
-            <li>Acompañamiento mensual</li>
-          </ul>
-          <a class="btn btn-primary" href="#pago" onclick="selectPlan('Trazabilidad · 21 a 60 recicladores', this)">Empezar</a>
-        </div>
-        <div class="plan">
-          <h3>Más de 60 recicladores</h3>
-          <div class="price"><span class="amount" data-m="400000" data-a="335000">$400.000</span><small>/mes por asociación</small></div>
-          <p class="desc">Para asociaciones grandes con operación de alto volumen.</p>
-          <ul>
-            <li>Todo lo de 21 a 60 recicladores</li>
-            <li>Usuarios ilimitados</li>
-            <li>Asesor dedicado</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Trazabilidad · Más de 60 recicladores', this)">Empezar</a>
-        </div>
-      </div>
+      <div class="plans-grid" id="grid-trazabilidad"></div>
     </div>
 
     <!-- FACTURACION -->
     <div class="plan-tab-panel" id="tab-facturacion" style="display:none;">
       <p style="text-align:center;color:var(--ink-soft);font-size:14px;margin-bottom:26px;">Prueba gratis 30 días con 10 documentos incluidos, sin tarjeta de crédito.</p>
-      <div class="plans-grid">
-        <div class="plan">
-          <h3>Básico</h3>
-          <div class="price"><span class="amount" data-m="25000" data-a="21000">$25.000</span><small>/mes</small></div>
-          <p class="desc">Para empezar a facturar electrónicamente ante la DIAN.</p>
-          <ul>
-            <li>80 documentos electrónicos/mes</li>
-            <li>1 usuario</li>
-            <li>Soporte por correo</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Facturación · Básico', this)">Empezar</a>
-        </div>
-        <div class="plan featured">
-          <span class="plan-badge">Más elegido</span>
-          <h3>Profesional</h3>
-          <div class="price"><span class="amount" data-m="45000" data-a="38000">$45.000</span><small>/mes</small></div>
-          <p class="desc">Más del doble de documentos que planes equivalentes del mercado.</p>
-          <ul>
-            <li>300 documentos electrónicos/mes</li>
-            <li>Hasta 3 usuarios</li>
-            <li>Soporte por WhatsApp</li>
-          </ul>
-          <a class="btn btn-primary" href="#pago" onclick="selectPlan('Facturación · Profesional', this)">Empezar</a>
-        </div>
-        <div class="plan">
-          <h3>Documentación ilimitada</h3>
-          <div class="price"><span class="amount" data-m="89000" data-a="75000">$89.000</span><small>/mes</small></div>
-          <p class="desc">Factura sin preocuparte por límites de documentos.</p>
-          <ul>
-            <li>Documentos electrónicos ilimitados</li>
-            <li>Usuarios ilimitados</li>
-            <li>Soporte prioritario</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Facturación · Documentación ilimitada', this)">Empezar</a>
-        </div>
-      </div>
+      <div class="plans-grid" id="grid-facturacion"></div>
     </div>
 
     <!-- COMBO -->
     <div class="plan-tab-panel" id="tab-combo" style="display:none;">
       <p style="text-align:center;color:var(--ink-soft);font-size:14px;margin-bottom:26px;">Trazabilidad + facturación en un solo pago, con descuento frente a contratarlos por separado.</p>
-      <div class="plans-grid">
-        <div class="plan">
-          <h3>Combo Inicial</h3>
-          <div class="price"><span class="amount" data-m="160000" data-a="135000">$160.000</span><small>/mes</small></div>
-          <p class="desc">Trazabilidad hasta 20 recicladores + facturación Básico. <strong style="color:var(--green);">Ahorras $15.000/mes.</strong></p>
-          <ul>
-            <li>Todo el plan Trazabilidad Hasta 20</li>
-            <li>80 documentos electrónicos/mes</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Combo Inicial', this)">Empezar</a>
-        </div>
-        <div class="plan featured">
-          <span class="plan-badge">Mejor ahorro</span>
-          <h3>Combo Crecimiento</h3>
-          <div class="price"><span class="amount" data-m="295000" data-a="248000">$295.000</span><small>/mes</small></div>
-          <p class="desc">Trazabilidad 21-60 recicladores + facturación Profesional. <strong style="color:var(--green);">Ahorras $30.000/mes.</strong></p>
-          <ul>
-            <li>Todo el plan Trazabilidad 21-60</li>
-            <li>300 documentos electrónicos/mes</li>
-          </ul>
-          <a class="btn btn-primary" href="#pago" onclick="selectPlan('Combo Crecimiento', this)">Empezar</a>
-        </div>
-        <div class="plan">
-          <h3>Combo Total</h3>
-          <div class="price"><span class="amount" data-m="440000" data-a="370000">$440.000</span><small>/mes</small></div>
-          <p class="desc">Trazabilidad +60 recicladores + facturación ilimitada. <strong style="color:var(--green);">Ahorras $49.000/mes.</strong></p>
-          <ul>
-            <li>Todo el plan Trazabilidad +60</li>
-            <li>Documentos electrónicos ilimitados</li>
-          </ul>
-          <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#pago" onclick="selectPlan('Combo Total', this)">Empezar</a>
-        </div>
-      </div>
+      <div class="plans-grid" id="grid-combo"></div>
     </div>
   </div>
 </section>
@@ -506,8 +406,14 @@
   <div class="wrap">
     <div class="pago-box">
       <h3>Finaliza tu registro</h3>
-      <p>Plan seleccionado: <span class="plan-name" id="pagoPlanName">ninguno todavía</span><br>Escríbenos por WhatsApp para activar tu plan y coordinar el pago.</p>
-      <a class="btn btn-primary" id="pagoWhatsappBtn" href="#" target="_blank" rel="noopener">Continuar por WhatsApp</a>
+      <p>Plan seleccionado: <span class="plan-name" id="pagoPlanName">ninguno todavía</span></p>
+      <p id="pagoLoggedOutMsg" style="display:none;">Inicia sesión o crea una cuenta para continuar con el pago.</p>
+      <div id="pagoLoggedOutActions" style="display:none;justify-content:center;gap:12px;">
+        <a class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);" href="#" onclick="openLoginModal();return false;">Iniciar sesión</a>
+        <a class="btn btn-primary" href="#" onclick="openRegisterModal();return false;">Crear cuenta</a>
+      </div>
+      <a class="btn btn-primary" id="pagoPayBtn" href="#" style="display:none;" onclick="startPayment();return false;">Pagar con Wompi</a>
+      <p id="pagoError" style="display:none;color:#C0392B;font-size:13px;margin-top:14px;"></p>
     </div>
   </div>
 </section>
@@ -610,41 +516,76 @@
 <div id="loginModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,32,54,.55);z-index:100;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:14px;padding:34px 32px;width:100%;max-width:380px;position:relative;">
     <button onclick="closeLoginModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
-    <h3 style="font-size:20px;margin-bottom:6px;">Facturación electrónica</h3>
-    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Ingresa con el correo y la contraseña de tu asociación.</p>
+    <h3 style="font-size:20px;margin-bottom:6px;">Iniciar sesión</h3>
+    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Ingresa con el correo y la contraseña de tu cuenta.</p>
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
     <input id="loginEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
     <input id="loginPassword" type="password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
     <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>
+    <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
   </div>
 </div>
 
-<div id="adminModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,32,54,.55);z-index:100;align-items:center;justify-content:center;">
-  <div style="background:#fff;border-radius:14px;padding:34px 32px;width:100%;max-width:380px;position:relative;">
-    <button onclick="closeAdminModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
-    <h3 style="font-size:20px;margin-bottom:6px;">Acceso administrador</h3>
-    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Control total: usuarios, planes, pagos y configuración.</p>
+<div id="registerModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,32,54,.55);z-index:100;align-items:center;justify-content:center;overflow-y:auto;padding:30px 12px;">
+  <div style="background:#fff;border-radius:14px;padding:34px 32px;width:100%;max-width:420px;position:relative;margin:auto;">
+    <button onclick="closeRegisterModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
+    <h3 style="font-size:20px;margin-bottom:6px;">Crear cuenta</h3>
+    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Registra tu asociación para acceder a Genesis Traza.</p>
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre completo</label>
+    <input id="regFullName" type="text" placeholder="Tu nombre completo" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre de la asociación</label>
+    <input id="regAssociationName" type="text" placeholder="Nombre de tu asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">NIT (opcional)</label>
+    <input id="regNit" type="text" placeholder="NIT de la asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);"># de recicladores (opcional)</label>
+    <input id="regRecyclerCount" type="number" min="0" placeholder="Ej: 25" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
-    <input id="adminEmail" type="email" placeholder="admin@facturargenesis.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
+    <input id="regEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Celular (opcional)</label>
+    <input id="regPhone" type="tel" placeholder="300 000 0000" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <input id="adminPassword" type="password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
-    <p id="adminError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
-    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitAdminLogin()">Ingresar</button>
+    <input id="regPassword" type="password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <p id="registerError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitRegister()">Crear cuenta</button>
+    <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿Ya tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeRegisterModal();openLoginModal();return false;">Inicia sesión</a></p>
+  </div>
+</div>
+
+<div id="verifyModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,32,54,.55);z-index:100;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:34px 32px;width:100%;max-width:380px;position:relative;">
+    <button onclick="closeVerifyModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
+    <h3 style="font-size:20px;margin-bottom:6px;">Verifica tu correo</h3>
+    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Enviamos un código de 6 dígitos a <strong id="verifyEmailLabel"></strong>.</p>
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Código</label>
+    <input id="verifyCode" type="text" maxlength="6" placeholder="123456" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;letter-spacing:3px;">
+    <p id="verifyError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitVerify()">Verificar</button>
+    <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No llegó? <a href="#" style="color:var(--blue);font-weight:600;" onclick="resendVerificationCode();return false;">Reenviar código</a></p>
   </div>
 </div>
 
 <script>
-  var CLIENT_ACCESS = [
-    { email: "asoambientalgroup@gmail.com", password: "Asoambiental2025*", url: "https://group.facturargenesis.com" },
-    { email: "finanzaseinversionespg@gmail.com", password: "Finanzas2025", url: "https://finanzas.facturargenesis.com" },
-    { email: "admin@facturargenesis.com", password: "rwLFwOYK2m", url: "https://facturargenesis.com" },
-    { email: "admin@gmail.com", password: "gf4BdhOa2h", url: "https://api.facturargenesis.com" },
-    { email: "asoretrixesp@gmail.com", password: "Asoretrip2025", url: "https://asoretrix.facturargenesis.com" },
-    { email: "genesistraza@gmail.com", password: "Genesis2026", url: "https://traza.facturargenesis.com" },
-    { email: "orang7015@gmail.com", password: "Orang2025", url: "https://orang.facturargenesis.com" }
-  ];
+  var API_BASE = 'https://genesis-backend-production-edc7.up.railway.app';
+  var authToken = localStorage.getItem('gt_token');
+  var authUser = {
+    role: localStorage.getItem('gt_role'),
+    fullName: localStorage.getItem('gt_fullName')
+  };
+  var pendingVerifyUserId = null;
+  var pendingVerifyEmail = null;
+  var pendingVerifyPassword = null;
+
+  function updateAuthUI(){
+    var loggedIn = !!authToken;
+    document.getElementById('loginDropdown').style.display = loggedIn ? 'none' : 'block';
+    document.getElementById('userBadge').style.display = loggedIn ? 'flex' : 'none';
+    if(loggedIn){
+      document.getElementById('userBadgeName').textContent = 'Hola, ' + authUser.fullName + ' (' + authUser.role + ')';
+    }
+    if(typeof updatePagoAuthState === 'function') updatePagoAuthState();
+  }
 
   function openLoginModal(){
     document.getElementById('loginDropdown').classList.remove('open');
@@ -654,16 +595,152 @@
   function closeLoginModal(){
     document.getElementById('loginModalOverlay').style.display = 'none';
   }
+
   function submitLogin(){
     var email = document.getElementById('loginEmail').value.trim().toLowerCase();
     var pass = document.getElementById('loginPassword').value;
-    var match = CLIENT_ACCESS.find(function(c){ return c.email.toLowerCase() === email && c.password === pass; });
-    if(match){
-      window.location.href = match.url;
-    } else {
-      document.getElementById('loginError').style.display = 'block';
-    }
+    var errorEl = document.getElementById('loginError');
+    errorEl.style.display = 'none';
+    fetch(API_BASE + '/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email: email, password: pass })
+    })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'Correo o contraseña incorrectos.');
+        authToken = res.data.token;
+        authUser = { role: res.data.role, fullName: res.data.fullName };
+        localStorage.setItem('gt_token', authToken);
+        localStorage.setItem('gt_role', authUser.role);
+        localStorage.setItem('gt_fullName', authUser.fullName);
+        updateAuthUI();
+        closeLoginModal();
+      })
+      .catch(function(err){
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      });
   }
+
+  function logout(){
+    authToken = null;
+    authUser = { role: null, fullName: null };
+    localStorage.removeItem('gt_token');
+    localStorage.removeItem('gt_role');
+    localStorage.removeItem('gt_fullName');
+    updateAuthUI();
+  }
+
+  function openRegisterModal(){
+    document.getElementById('loginDropdown').classList.remove('open');
+    document.getElementById('registerModalOverlay').style.display = 'flex';
+    document.getElementById('registerError').style.display = 'none';
+  }
+  function closeRegisterModal(){
+    document.getElementById('registerModalOverlay').style.display = 'none';
+  }
+
+  function submitRegister(){
+    var fullName = document.getElementById('regFullName').value.trim();
+    var associationName = document.getElementById('regAssociationName').value.trim();
+    var nit = document.getElementById('regNit').value.trim();
+    var recyclerCount = document.getElementById('regRecyclerCount').value;
+    var email = document.getElementById('regEmail').value.trim().toLowerCase();
+    var phone = document.getElementById('regPhone').value.trim();
+    var password = document.getElementById('regPassword').value;
+    var errorEl = document.getElementById('registerError');
+    errorEl.style.display = 'none';
+
+    if(!fullName || !associationName || !email || !password){
+      errorEl.textContent = 'Completa los campos obligatorios: nombre, asociación, correo y contraseña.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    fetch(API_BASE + '/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        fullName: fullName,
+        associationName: associationName,
+        nit: nit || undefined,
+        recyclerCount: recyclerCount ? Number(recyclerCount) : undefined,
+        email: email,
+        phone: phone || undefined,
+        password: password
+      })
+    })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo crear la cuenta.');
+        pendingVerifyUserId = res.data.userId;
+        pendingVerifyEmail = email;
+        pendingVerifyPassword = password;
+        closeRegisterModal();
+        openVerifyModal();
+      })
+      .catch(function(err){
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      });
+  }
+
+  function openVerifyModal(){
+    document.getElementById('verifyEmailLabel').textContent = pendingVerifyEmail || '';
+    document.getElementById('verifyError').style.display = 'none';
+    document.getElementById('verifyCode').value = '';
+    document.getElementById('verifyModalOverlay').style.display = 'flex';
+  }
+  function closeVerifyModal(){
+    document.getElementById('verifyModalOverlay').style.display = 'none';
+  }
+
+  function resendVerificationCode(){
+    if(!pendingVerifyEmail) return;
+    fetch(API_BASE + '/auth/resend-code', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ email: pendingVerifyEmail })
+    });
+  }
+
+  function submitVerify(){
+    var code = document.getElementById('verifyCode').value.trim();
+    var errorEl = document.getElementById('verifyError');
+    errorEl.style.display = 'none';
+    fetch(API_BASE + '/auth/verify', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ userId: pendingVerifyUserId, code: code })
+    })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'Código incorrecto o vencido.');
+        return fetch(API_BASE + '/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ email: pendingVerifyEmail, password: pendingVerifyPassword })
+        });
+      })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar sesión automáticamente.');
+        authToken = res.data.token;
+        authUser = { role: res.data.role, fullName: res.data.fullName };
+        localStorage.setItem('gt_token', authToken);
+        localStorage.setItem('gt_role', authUser.role);
+        localStorage.setItem('gt_fullName', authUser.fullName);
+        updateAuthUI();
+        closeVerifyModal();
+      })
+      .catch(function(err){
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      });
+  }
+
+  updateAuthUI();
 </script>
 
 <script>
@@ -703,36 +780,144 @@
     document.getElementById('tab-' + name).style.display = 'block';
   }
 
-  function selectPlan(planName, linkEl){
+  var selectedPlanId = null;
+  var selectedBillingCycle = 'mensual';
+
+  function selectPlan(planName, linkEl, planId){
+    selectedPlanId = planId;
+    selectedBillingCycle = document.getElementById('btnAnual').classList.contains('active') ? 'anual' : 'mensual';
     var priceEl = linkEl.closest('.plan').querySelector('.amount');
     var priceText = priceEl ? priceEl.textContent : '';
     document.getElementById('pagoPlanName').textContent = planName + (priceText ? ' (' + priceText + '/mes)' : '');
-    var msg = encodeURIComponent('Hola, quiero activar el plan "' + planName + '"' + (priceText ? ' (' + priceText + '/mes)' : '') + ' de Genesis Traza.');
-    document.getElementById('pagoWhatsappBtn').href = 'https://wa.me/573228753230?text=' + msg;
+    document.getElementById('pagoError').style.display = 'none';
+    updatePagoAuthState();
   }
 
-  var ADMIN_ACCESS = [
-    { email: "admin@facturargenesis.com", password: "rwLFwOYK2m" }
-  ];
-  function openAdminModal(){
-    document.getElementById('loginDropdown').classList.remove('open');
-    document.getElementById('adminModalOverlay').style.display = 'flex';
-    document.getElementById('adminError').style.display = 'none';
+  function updatePagoAuthState(){
+    var loggedIn = !!authToken;
+    var loggedOutMsg = document.getElementById('pagoLoggedOutMsg');
+    var loggedOutActions = document.getElementById('pagoLoggedOutActions');
+    var payBtn = document.getElementById('pagoPayBtn');
+    if(!loggedOutMsg || !loggedOutActions || !payBtn) return;
+    loggedOutMsg.style.display = loggedIn ? 'none' : 'block';
+    loggedOutActions.style.display = loggedIn ? 'none' : 'flex';
+    payBtn.style.display = (loggedIn && selectedPlanId) ? 'inline-flex' : 'none';
   }
-  function closeAdminModal(){
-    document.getElementById('adminModalOverlay').style.display = 'none';
+
+  function startPayment(){
+    if(!authToken || !selectedPlanId) return;
+    var errorEl = document.getElementById('pagoError');
+    errorEl.style.display = 'none';
+    fetch(API_BASE + '/subscriptions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken},
+      body: JSON.stringify({ planId: selectedPlanId, billingCycle: selectedBillingCycle })
+    })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar la suscripción.');
+        return fetch(API_BASE + '/payments/create', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken},
+          body: JSON.stringify({ subscriptionId: res.data.subscriptionId, amount: res.data.amount })
+        });
+      })
+      .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar el pago.');
+        var checkout = new WidgetCheckout({
+          currency: res.data.currency,
+          amountInCents: res.data.amountInCents,
+          reference: res.data.reference,
+          publicKey: res.data.publicKey,
+          signature: { integrity: res.data.signature },
+          redirectUrl: window.location.origin + window.location.pathname
+        });
+        checkout.open(function(result){
+          var transaction = result.transaction;
+          if(transaction && transaction.status === 'APPROVED'){
+            alert('Pago aprobado. En unos minutos tu plan quedará activo.');
+          } else {
+            alert('El pago no se completó (estado: ' + (transaction ? transaction.status : 'desconocido') + ').');
+          }
+        });
+      })
+      .catch(function(err){
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+      });
   }
-  function submitAdminLogin(){
-    var email = document.getElementById('adminEmail').value.trim().toLowerCase();
-    var pass = document.getElementById('adminPassword').value;
-    var match = ADMIN_ACCESS.find(function(c){ return c.email.toLowerCase() === email && c.password === pass; });
-    if(match){
-      window.location.href = 'https://facturargenesis.com';
-    } else {
-      document.getElementById('adminError').style.display = 'block';
-    }
+
+  function renderPlans(plans){
+    var byCategory = { trazabilidad: [], facturacion: [], combo: [] };
+    plans.forEach(function(p){ if(byCategory[p.category]) byCategory[p.category].push(p); });
+    Object.keys(byCategory).forEach(function(cat){
+      var container = document.getElementById('grid-' + cat);
+      if(!container) return;
+      container.innerHTML = '';
+      byCategory[cat].forEach(function(plan){
+        var div = document.createElement('div');
+        div.className = 'plan' + (plan.is_featured ? ' featured' : '');
+        if(plan.is_featured){
+          var badge = document.createElement('span');
+          badge.className = 'plan-badge';
+          badge.textContent = 'Más elegido';
+          div.appendChild(badge);
+        }
+        var h3 = document.createElement('h3');
+        h3.textContent = plan.name;
+        div.appendChild(h3);
+
+        var priceDiv = document.createElement('div');
+        priceDiv.className = 'price';
+        var amountSpan = document.createElement('span');
+        amountSpan.className = 'amount';
+        amountSpan.setAttribute('data-m', plan.price_monthly);
+        amountSpan.setAttribute('data-a', plan.price_annual || plan.price_monthly);
+        amountSpan.textContent = '$' + Number(plan.price_monthly).toLocaleString('es-CO');
+        var small = document.createElement('small');
+        small.textContent = '/mes';
+        priceDiv.appendChild(amountSpan);
+        priceDiv.appendChild(small);
+        div.appendChild(priceDiv);
+
+        var desc = document.createElement('p');
+        desc.className = 'desc';
+        desc.textContent = plan.description || '';
+        div.appendChild(desc);
+
+        var ul = document.createElement('ul');
+        (Array.isArray(plan.features) ? plan.features : []).forEach(function(f){
+          var li = document.createElement('li');
+          li.textContent = f;
+          ul.appendChild(li);
+        });
+        div.appendChild(ul);
+
+        var link = document.createElement('a');
+        link.className = plan.is_featured ? 'btn btn-primary' : 'btn btn-outline';
+        if(!plan.is_featured){ link.style.borderColor = 'var(--blue-deep)'; link.style.color = 'var(--blue-deep)'; }
+        link.href = '#pago';
+        link.textContent = 'Empezar';
+        link.addEventListener('click', function(e){
+          e.preventDefault();
+          selectPlan(plan.name, link, plan.id);
+        });
+        div.appendChild(link);
+
+        container.appendChild(div);
+      });
+    });
+    setBilling(document.getElementById('btnAnual').classList.contains('active') ? 'anual' : 'mensual');
   }
+
+  fetch(API_BASE + '/plans')
+    .then(function(r){ return r.json(); })
+    .then(renderPlans)
+    .catch(function(err){ console.error('No se pudieron cargar los planes:', err); });
 </script>
+
+<script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
 
 </body>
 </html>
