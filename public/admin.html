@@ -260,12 +260,17 @@
           '<td></td><td></td><td></td><td></td>' +
           '<td>' + statusBadge(a.subscription_status) + '</td>' +
           '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
-          '<td><button type="button" class="cell-action">Ver detalle</button></td>';
+          '<td><button type="button" class="cell-action" style="margin-right:12px;">Ver detalle</button>' +
+          (isPro ? '<button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button>' : '') + '</td>';
         tr.children[0].textContent = a.name;
         tr.children[1].textContent = a.nit || '—';
         tr.children[2].textContent = a.recycler_count || 0;
         tr.children[3].textContent = a.plan_name || '—';
-        tr.querySelector('.cell-action').addEventListener('click', function(){ openClientModal(a.id, a.name); });
+        var actionBtns = tr.children[6].querySelectorAll('.cell-action');
+        actionBtns[0].addEventListener('click', function(){ openClientModal(a.id, a.name); });
+        if(isPro){
+          actionBtns[1].addEventListener('click', function(){ deleteAssociation(a.id, a.name); });
+        }
         tbody.appendChild(tr);
       });
     });
@@ -440,6 +445,16 @@
   function deactivatePlan(id){
     if(!confirm('¿Desactivar este plan? Ya no se mostrará en la landing.')) return;
     gtApiFetch('/plans/' + id, { method: 'DELETE' }).then(function(){ loadPlanes(); });
+  }
+
+  function deleteAssociation(id, name){
+    if(!confirm('¿Eliminar "' + name + '"? Esto borra también sus suscripciones y pagos. No se puede deshacer.')) return;
+    gtApiFetch('/admin/associations/' + id, { method: 'DELETE' })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo eliminar.'); }
+        loadAsociaciones();
+      })
+      .catch(function(err){ alert(err.message); });
   }
 
   // ---- Nueva asociación ----
