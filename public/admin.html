@@ -229,7 +229,7 @@
           '<td></td><td></td><td></td><td></td>' +
           '<td>' + statusBadge(a.subscription_status) + '</td>' +
           '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
-          '<td><span class="cell-action">Ver detalle</span></td>';
+          '<td><button type="button" class="cell-action">Ver detalle</button></td>';
         tr.children[0].textContent = a.name;
         tr.children[1].textContent = a.nit || '—';
         tr.children[2].textContent = a.recycler_count || 0;
@@ -273,7 +273,7 @@
           '<td>' + gtFormatCOP(p.price_monthly) + '</td>' +
           '<td>' + (p.is_featured ? '⭐' : '—') + '</td>' +
           '<td>' + (p.active ? statusBadge('activa') : statusBadge('cancelada')) + '</td>' +
-          '<td><span class="cell-action" style="margin-right:12px;">Editar</span><span class="cell-action">' + (p.active ? 'Desactivar' : '') + '</span></td>';
+          '<td><button type="button" class="cell-action" style="margin-right:12px;">Editar</button>' + (p.active ? '<button type="button" class="cell-action">Desactivar</button>' : '') + '</td>';
         tr.children[0].textContent = p.name;
         tr.children[1].textContent = p.category;
         var actions = tr.children[5].querySelectorAll('.cell-action');
