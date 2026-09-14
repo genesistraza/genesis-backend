@@ -88,30 +88,34 @@
         </div>
 
         <div id="authPanelLogin">
-          <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="email" placeholder="nombre@empresa.com"></div>
-          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" type="password" autocomplete="current-password" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
-          <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
-          <div id="loginCaptcha2" style="margin-bottom:14px;"></div>
-          <button class="btn btn-primary" style="width:100%;" onclick="submitLogin2()">Ingresar y continuar</button>
+          <form id="loginForm2" onsubmit="submitLogin2();return false;">
+            <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" name="email" type="email" autocomplete="email" placeholder="nombre@empresa.com"></div>
+            <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" name="password" type="password" autocomplete="current-password" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+            <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+            <div id="loginCaptcha2" style="margin-bottom:14px;"></div>
+            <button class="btn btn-primary" type="submit" style="width:100%;">Ingresar y continuar</button>
+          </form>
         </div>
 
         <div id="authPanelRegister" style="display:none;">
-          <div class="form-grid">
-            <div class="form-field"><label>Nombre completo</label><input id="regFullName2"></div>
-            <div class="form-field"><label>Nombre de la asociación</label><input id="regAssociationName2"></div>
-            <div class="form-field"><label>NIT</label><input id="regNit2"></div>
-            <div class="form-field"><label># de recicladores</label><input id="regRecyclerCount2" type="number" min="0"></div>
-            <div class="form-field"><label>Correo</label><input id="regEmail2" type="email"></div>
-            <div class="form-field"><label>Celular</label><input id="regPhone2" type="tel"></div>
-          </div>
-          <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="regPassword2" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
-          <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
-            <input id="regAcceptTerms2" type="checkbox" style="margin-top:2px;">
-            <span>He leído y acepto los <a href="/terminos/" target="_blank" style="color:var(--blue);font-weight:600;">Términos y Condiciones</a> y la <a href="/privacidad/" target="_blank" style="color:var(--blue);font-weight:600;">Política de tratamiento de datos</a>.</span>
-          </label>
-          <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
-          <div id="registerCaptcha2" style="margin-bottom:14px;"></div>
-          <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitRegister2()">Crear cuenta y continuar</button>
+          <form id="registerForm2" onsubmit="submitRegister2();return false;">
+            <div class="form-grid">
+              <div class="form-field"><label>Nombre completo</label><input id="regFullName2" name="name" autocomplete="name"></div>
+              <div class="form-field"><label>Nombre de la asociación</label><input id="regAssociationName2"></div>
+              <div class="form-field"><label>NIT</label><input id="regNit2"></div>
+              <div class="form-field"><label># de recicladores</label><input id="regRecyclerCount2" type="number" min="0"></div>
+              <div class="form-field"><label>Correo</label><input id="regEmail2" name="email" type="email" autocomplete="email"></div>
+              <div class="form-field"><label>Celular</label><input id="regPhone2" type="tel" autocomplete="tel"></div>
+            </div>
+            <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="regPassword2" name="password" type="password" autocomplete="new-password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
+              <input id="regAcceptTerms2" type="checkbox" style="margin-top:2px;">
+              <span>He leído y acepto los <a href="/terminos/" target="_blank" style="color:var(--blue);font-weight:600;">Términos y Condiciones</a> y la <a href="/privacidad/" target="_blank" style="color:var(--blue);font-weight:600;">Política de tratamiento de datos</a>.</span>
+            </label>
+            <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+            <div id="registerCaptcha2" style="margin-bottom:14px;"></div>
+            <button class="btn btn-primary" type="submit" style="width:100%;margin-top:16px;">Crear cuenta y continuar</button>
+          </form>
         </div>
 
         <div id="verifyPanel2" style="display:none;">

@@ -356,13 +356,15 @@
     <button onclick="closeLoginModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
     <h3 style="font-size:20px;margin-bottom:6px;" id="loginModalTitle">Iniciar sesión</h3>
     <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;" id="loginModalSubtitle">Ingresa con el correo y la contraseña de tu cuenta.</p>
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
-    <input id="loginEmail" type="email" autocomplete="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <div class="pwd-wrap"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
-    <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
-    <div id="loginCaptcha" style="margin-bottom:14px;"></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>
+    <form id="loginForm" onsubmit="submitLogin();return false;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
+      <input id="loginEmail" name="email" type="email" autocomplete="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
+      <div class="pwd-wrap"><input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
+      <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
+      <div id="loginCaptcha" style="margin-bottom:14px;"></div>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px;">Ingresar</button>
+    </form>
     <p id="loginRegisterHint" style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
   </div>
 </div>
@@ -384,27 +386,29 @@
     <button onclick="closeRegisterModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
     <h3 style="font-size:20px;margin-bottom:6px;">Crear cuenta</h3>
     <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Registra tu asociación para acceder a Genesis Traza.</p>
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre completo</label>
-    <input id="regFullName" type="text" placeholder="Tu nombre completo" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre de la asociación</label>
-    <input id="regAssociationName" type="text" placeholder="Nombre de tu asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">NIT</label>
-    <input id="regNit" type="text" placeholder="NIT de la asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);"># de recicladores</label>
-    <input id="regRecyclerCount" type="number" min="0" placeholder="Ej: 25" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
-    <input id="regEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Celular</label>
-    <input id="regPhone" type="tel" placeholder="300 000 0000" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <div class="pwd-wrap"><input id="regPassword" type="password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
-    <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;cursor:pointer;">
-      <input id="regAcceptTerms" type="checkbox" style="margin-top:2px;">
-      <span>He leído y acepto los <a href="/terminos/" target="_blank" style="color:var(--blue);font-weight:600;">Términos y Condiciones</a> y la <a href="/privacidad/" target="_blank" style="color:var(--blue);font-weight:600;">Política de tratamiento de datos</a>.</span>
-    </label>
-    <p id="registerError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
-    <div id="registerCaptcha" style="margin-bottom:14px;"></div>
-    <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitRegister()">Crear cuenta</button>
+    <form id="registerForm" onsubmit="submitRegister();return false;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre completo</label>
+      <input id="regFullName" name="name" type="text" autocomplete="name" placeholder="Tu nombre completo" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre de la asociación</label>
+      <input id="regAssociationName" type="text" placeholder="Nombre de tu asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">NIT</label>
+      <input id="regNit" type="text" placeholder="NIT de la asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);"># de recicladores</label>
+      <input id="regRecyclerCount" type="number" min="0" placeholder="Ej: 25" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
+      <input id="regEmail" name="email" type="email" autocomplete="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Celular</label>
+      <input id="regPhone" type="tel" autocomplete="tel" placeholder="300 000 0000" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+      <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
+      <div class="pwd-wrap"><input id="regPassword" name="password" type="password" autocomplete="new-password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
+      <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin-bottom:14px;cursor:pointer;">
+        <input id="regAcceptTerms" type="checkbox" style="margin-top:2px;">
+        <span>He leído y acepto los <a href="/terminos/" target="_blank" style="color:var(--blue);font-weight:600;">Términos y Condiciones</a> y la <a href="/privacidad/" target="_blank" style="color:var(--blue);font-weight:600;">Política de tratamiento de datos</a>.</span>
+      </label>
+      <p id="registerError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+      <div id="registerCaptcha" style="margin-bottom:14px;"></div>
+      <button class="btn btn-primary" type="submit" style="width:100%;margin-top:10px;">Crear cuenta</button>
+    </form>
     <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿Ya tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeRegisterModal();openLoginModal();return false;">Inicia sesión</a></p>
   </div>
 </div>
