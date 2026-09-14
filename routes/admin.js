@@ -5,7 +5,7 @@ const pool = require('../db/pool');
 const cloudinary = require('../db/cloudinary');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
-const { getMassBalanceSummary, getMassBalancePeriods, getRecicladores } = require('../db/massBalanceQueries');
+const { getMassBalanceSummary, getMassBalancePeriods, getRecicladoresConPagoMes } = require('../db/massBalanceQueries');
 const { buildPaymentReminderEmail } = require('../utils/emailTemplate');
 
 const router = express.Router();
@@ -497,10 +497,11 @@ router.post('/associations/:id/recicladores', uploadExcel.single('file'), asyncR
   res.json({ message: 'Listado de recicladores actualizado.', filas: parsed.length });
 }));
 
-// GET /admin/associations/:id/recicladores -> listado de recicladores de una asociacion
+// GET /admin/associations/:id/recicladores -> recicladores de una asociacion con toneladas y pago
+// del mes (?month=YYYY-MM; por defecto el mes calendario actual)
 router.get('/associations/:id/recicladores', asyncRoute(async (req, res) => {
-  const recicladores = await getRecicladores(Number(req.params.id));
-  res.json(recicladores);
+  const data = await getRecicladoresConPagoMes(Number(req.params.id), req.query.month);
+  res.json(data);
 }));
 
 // POST /admin/associations/:id/send-reminder -> envía manualmente un correo de recordatorio de pago

@@ -204,10 +204,13 @@
       </div>
       <div class="panel" id="recicladoresContent" style="display:none;">
         <div class="panel-head"><h2>Recicladores</h2></div>
-        <input type="text" id="recicladoresSearch" placeholder="Buscar por nombre, documento o placa…" style="width:100%;max-width:320px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
+          <input type="text" id="recicladoresSearch" placeholder="Buscar por nombre o cédula…" style="flex:1;min-width:180px;max-width:320px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;">
+          <select id="recicladoresMonthSelect" class="period-value-select" onchange="onRecicladoresMonthChange()" style="max-width:220px;"></select>
+        </div>
         <div class="table-scroll">
           <table class="data-table">
-            <thead><tr><th>Nombre</th><th>Documento</th><th>Estado</th><th>Vehículo</th><th>Placa</th><th>Teléfono</th></tr></thead>
+            <thead><tr><th>Nombre</th><th>Cédula</th><th>Toneladas del mes</th><th>Pago del mes</th></tr></thead>
             <tbody id="recicladoresTableBody"></tbody>
           </table>
         </div>
@@ -752,38 +755,42 @@
   }
 
   var gtAllRecicladores = [];
+  var gtRecicladoresMonth = null;
   function renderRecicladoresTable(filterText){
     var tbody = document.getElementById('recicladoresTableBody');
     var q = (filterText || '').toLowerCase();
     var filtered = gtAllRecicladores.filter(function(r){
       if(!q) return true;
       return (r.nombre_completo || '').toLowerCase().indexOf(q) !== -1 ||
-        (r.documento_numero || '').toLowerCase().indexOf(q) !== -1 ||
-        (r.placa || '').toLowerCase().indexOf(q) !== -1;
+        (r.documento_numero || '').toLowerCase().indexOf(q) !== -1;
     });
     tbody.innerHTML = '';
     if(filtered.length === 0){
-      tbody.innerHTML = '<tr><td class="empty-row" colspan="6">No se encontraron recicladores.</td></tr>';
+      tbody.innerHTML = '<tr><td class="empty-row" colspan="4">No se encontraron recicladores.</td></tr>';
       return;
     }
     filtered.forEach(function(r){
       var tr = document.createElement('tr');
-      tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td><td></td>';
+      tr.innerHTML = '<td></td><td></td><td></td><td></td>';
       tr.children[0].textContent = r.nombre_completo;
       tr.children[1].textContent = r.documento_numero;
-      tr.children[2].innerHTML = '<span class="badge ' + (r.estado === 'Activo' ? 'badge-green' : 'badge-gray') + '">' + r.estado + '</span>';
-      tr.children[3].textContent = r.tipo_vehiculo || '—';
-      tr.children[4].textContent = r.placa || '—';
-      tr.children[5].textContent = r.telefono || '—';
+      tr.children[2].textContent = Number(r.toneladas_mes || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' t';
+      tr.children[3].textContent = gtFormatCOP(r.pago_mes);
       tbody.appendChild(tr);
     });
   }
 
-  function loadRecicladores(){
-    gtApiFetch('/recicladores').then(function(res){
+  function onRecicladoresMonthChange(){
+    gtRecicladoresMonth = document.getElementById('recicladoresMonthSelect').value;
+    fetchAndRenderRecicladores();
+  }
+
+  function fetchAndRenderRecicladores(){
+    var qs = gtRecicladoresMonth ? ('?month=' + encodeURIComponent(gtRecicladoresMonth)) : '';
+    gtApiFetch('/recicladores' + qs).then(function(res){
       var emptyEl = document.getElementById('recicladoresEmpty');
       var contentEl = document.getElementById('recicladoresContent');
-      if(!res.ok || !res.data.length){
+      if(!res.ok || !res.data.recicladores || !res.data.recicladores.length){
         document.getElementById('recicladoresEmptyMsg').textContent = res.status === 402
           ? 'Necesitas un plan activo para ver los recicladores. Contáctanos para contratarlo.'
           : 'Todavía no hay un listado de recicladores cargado para tu asociación.';
@@ -793,11 +800,45 @@
       }
       emptyEl.style.display = 'none';
       contentEl.style.display = 'block';
-      gtAllRecicladores = res.data;
-      renderRecicladoresTable('');
-      var searchEl = document.getElementById('recicladoresSearch');
-      searchEl.addEventListener('input', function(){ renderRecicladoresTable(searchEl.value); });
+      gtAllRecicladores = res.data.recicladores;
+      renderRecicladoresTable(document.getElementById('recicladoresSearch').value);
     }).catch(function(){ document.getElementById('recicladoresEmpty').style.display = 'block'; });
+  }
+
+  function loadRecicladores(){
+    var monthSel = document.getElementById('recicladoresMonthSelect');
+    var afterPeriods = function(){
+      if(gtBalancePeriods && gtBalancePeriods.months && gtBalancePeriods.months.length){
+        monthSel.innerHTML = '';
+        gtBalancePeriods.months.forEach(function(m){
+          var opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = gtMonthLabelFull(m);
+          monthSel.appendChild(opt);
+        });
+        if(!gtRecicladoresMonth || gtBalancePeriods.months.indexOf(gtRecicladoresMonth) === -1){
+          gtRecicladoresMonth = gtBalancePeriods.months[0];
+        }
+        monthSel.value = gtRecicladoresMonth;
+        monthSel.style.display = '';
+      } else {
+        monthSel.style.display = 'none';
+      }
+      fetchAndRenderRecicladores();
+    };
+    if(gtBalancePeriods){
+      afterPeriods();
+    } else {
+      gtApiFetch('/mass-balance/periods').then(function(res){
+        if(res.ok) gtBalancePeriods = res.data;
+        afterPeriods();
+      }).catch(afterPeriods);
+    }
+    var searchEl = document.getElementById('recicladoresSearch');
+    if(!searchEl.dataset.bound){
+      searchEl.dataset.bound = '1';
+      searchEl.addEventListener('input', function(){ renderRecicladoresTable(searchEl.value); });
+    }
   }
 
   if(session) loadDashboard();

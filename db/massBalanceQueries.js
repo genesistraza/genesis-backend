@@ -103,14 +103,27 @@ async function getMassBalancePeriods(associationId) {
   };
 }
 
-async function getRecicladores(associationId) {
+// Recicladores de la asociacion con lo que gano cada uno en un mes puntual: toneladas
+// aprovechadas (no cuenta el rechazo) y el pago correspondiente, sumando sus entradas de
+// balance de masas de ese mes. Si no se pasa "month" usa el mes calendario actual.
+async function getRecicladoresConPagoMes(associationId, month) {
+  const targetMonth = month || new Date().toISOString().slice(0, 7);
   const result = await pool.query(
-    `SELECT id, documento_numero, nombre_completo, estado, direccion, telefono, tipo_vehiculo, placa,
-            fecha_exp_documento, fecha_nacimiento
-     FROM recicladores WHERE association_id = $1 ORDER BY nombre_completo`,
-    [associationId]
+    `SELECT r.id, r.documento_numero, r.nombre_completo,
+            COALESCE(m.toneladas, 0) AS toneladas_mes,
+            COALESCE(m.valor_total, 0) AS pago_mes
+     FROM recicladores r
+     LEFT JOIN (
+       SELECT reciclador_documento, SUM(toneladas) AS toneladas, SUM(valor_total) AS valor_total
+       FROM mass_balance_entries
+       WHERE association_id = $1 AND to_char(fecha, 'YYYY-MM') = $2
+       GROUP BY reciclador_documento
+     ) m ON m.reciclador_documento = r.documento_numero
+     WHERE r.association_id = $1
+     ORDER BY r.nombre_completo`,
+    [associationId, targetMonth]
   );
-  return result.rows;
+  return { month: targetMonth, recicladores: result.rows };
 }
 
-module.exports = { getMassBalanceSummary, getMassBalancePeriods, getRecicladores };
+module.exports = { getMassBalanceSummary, getMassBalancePeriods, getRecicladoresConPagoMes };

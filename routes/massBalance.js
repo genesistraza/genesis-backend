@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireAuth, requireActiveSubscription } = require('../middleware/auth');
 const { asyncRoute } = require('../middleware/logger');
-const { getMassBalanceSummary, getMassBalancePeriods, getRecicladores } = require('../db/massBalanceQueries');
+const { getMassBalanceSummary, getMassBalancePeriods, getRecicladoresConPagoMes } = require('../db/massBalanceQueries');
 
 const router = express.Router();
 
@@ -19,10 +19,11 @@ router.get('/mass-balance/periods', requireAuth, requireActiveSubscription, asyn
   res.json(periods);
 }));
 
-// GET /recicladores -> recicladores de la asociacion del usuario logueado (requiere plan activo)
+// GET /recicladores -> recicladores de la asociacion del usuario logueado, con toneladas y pago
+// del mes (?month=YYYY-MM; por defecto el mes calendario actual). Requiere plan activo.
 router.get('/recicladores', requireAuth, requireActiveSubscription, asyncRoute(async (req, res) => {
-  const recicladores = await getRecicladores(req.user.associationId);
-  res.json(recicladores);
+  const data = await getRecicladoresConPagoMes(req.user.associationId, req.query.month);
+  res.json(data);
 }));
 
 module.exports = router;
