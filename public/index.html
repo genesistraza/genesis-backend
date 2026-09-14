@@ -47,8 +47,9 @@
         </button>
         <div class="dropdown-menu">
           <a href="https://genesis-traza.com" target="_blank" rel="noopener">Genesis Traza (Trazabilidad)<span class="sub">Reporte SUI, Superservicios y Contraloría</span></a>
+          <a href="#" onclick="openLoginModal('facturacion');return false;">Facturación electrónica<span class="sub">Te lleva directo a tu sistema</span></a>
           <div class="divider"></div>
-          <a href="#" onclick="openLoginModal();return false;">Iniciar sesión<span class="sub">Facturación electrónica y panel de administración</span></a>
+          <a href="#" onclick="openLoginModal('panel');return false;">Panel de administración<span class="sub">Para roles pro y admin</span></a>
           <a href="#" onclick="openRegisterModal();return false;">Crear cuenta<span class="sub">Registra tu asociación</span></a>
         </div>
       </div>
@@ -363,8 +364,8 @@
 <div id="loginModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(11,32,54,.55);z-index:100;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:14px;padding:34px 32px;width:100%;max-width:380px;position:relative;">
     <button onclick="closeLoginModal()" aria-label="Cerrar" style="position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);">&times;</button>
-    <h3 style="font-size:20px;margin-bottom:6px;">Iniciar sesión</h3>
-    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;">Ingresa con el correo y la contraseña de tu cuenta.</p>
+    <h3 style="font-size:20px;margin-bottom:6px;" id="loginModalTitle">Iniciar sesión</h3>
+    <p style="color:var(--ink-soft);font-size:14px;margin-bottom:22px;" id="loginModalSubtitle">Ingresa con el correo y la contraseña de tu cuenta.</p>
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
     <input id="loginEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
@@ -424,10 +425,27 @@
   var pendingVerifyEmail = null;
   var pendingVerifyPassword = null;
 
+  var loginIntent = 'panel';
+
   function redirectToPanel(role){
     setTimeout(function(){
       window.location.href = (role === 'pro' || role === 'admin') ? 'admin.html' : 'dashboard.html';
     }, 300);
+  }
+
+  function redirectToFacturacion(){
+    fetch(API_BASE + '/auth/me', { headers: { 'Authorization': 'Bearer ' + authToken } })
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(data.association && data.association.facturacion_url){
+          window.location.href = data.association.facturacion_url;
+        } else {
+          alert('Tu asociación todavía no tiene un sistema de facturación electrónica registrado. Contacta al administrador de Genesis Traza.');
+        }
+      })
+      .catch(function(){
+        alert('No se pudo verificar tu acceso a facturación electrónica. Intenta de nuevo.');
+      });
   }
 
   function updateAuthUI(){
@@ -442,8 +460,13 @@
     if(typeof updatePagoAuthState === 'function') updatePagoAuthState();
   }
 
-  function openLoginModal(){
+  function openLoginModal(intent){
+    loginIntent = intent || 'panel';
     document.getElementById('loginDropdown').classList.remove('open');
+    document.getElementById('loginModalTitle').textContent = loginIntent === 'facturacion' ? 'Facturación electrónica' : 'Iniciar sesión';
+    document.getElementById('loginModalSubtitle').textContent = loginIntent === 'facturacion'
+      ? 'Ingresa con el correo y la contraseña de tu asociación.'
+      : 'Ingresa con el correo y la contraseña de tu cuenta.';
     document.getElementById('loginModalOverlay').style.display = 'flex';
     document.getElementById('loginError').style.display = 'none';
   }
@@ -471,7 +494,11 @@
         localStorage.setItem('gt_fullName', authUser.fullName);
         updateAuthUI();
         closeLoginModal();
-        redirectToPanel(authUser.role);
+        if(loginIntent === 'facturacion'){
+          redirectToFacturacion();
+        } else {
+          redirectToPanel(authUser.role);
+        }
       })
       .catch(function(err){
         errorEl.textContent = err.message;
