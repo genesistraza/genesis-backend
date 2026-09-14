@@ -104,13 +104,22 @@ router.post('/associations', asyncRoute(async (req, res) => {
   res.json({ association, user });
 }));
 
-// GET /admin/associations -> lista de asociaciones con su estado de pago
+// GET /admin/associations -> lista de asociaciones con su estado de pago.
+// Una asociacion puede acumular varias filas en "subscriptions" con el tiempo (intentos de
+// compra abandonados, planes cancelados, etc). El LATERAL JOIN se queda con una sola por
+// asociacion: la activa si existe, si no la mas reciente. Sin esto, el LEFT JOIN normal
+// devolvia una fila por cada suscripcion y la asociacion se veia "duplicada" en la tabla.
 router.get('/associations', asyncRoute(async (req, res) => {
   const result = await pool.query(`
     SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url,
            s.status AS subscription_status, s.next_due_date, p.name AS plan_name
     FROM associations a
-    LEFT JOIN subscriptions s ON s.association_id = a.id
+    LEFT JOIN LATERAL (
+      SELECT * FROM subscriptions s2
+      WHERE s2.association_id = a.id
+      ORDER BY (s2.status = 'activa') DESC, s2.created_at DESC
+      LIMIT 1
+    ) s ON true
     LEFT JOIN plans p ON p.id = s.plan_id
     ORDER BY a.created_at DESC
   `);
