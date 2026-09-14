@@ -376,6 +376,15 @@
       html += '<button class="btn btn-primary" style="margin-top:12px;" onclick="saveAssociationEdits(' + d.association.id + ')">Guardar cambios</button>';
       html += '<p id="clientEditMsg" style="margin-top:8px;font-size:13px;"></p>';
 
+      html += '<h4 style="margin-top:20px;font-size:14px;">Documentos legales</h4>';
+      html += '<div class="form-grid" style="margin-top:10px;">';
+      html += '<div class="form-field"><label>RUT' + (d.association.rut_url ? ' — <a href="' + d.association.rut_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docRut" type="file" accept=".pdf,image/*"></div>';
+      html += '<div class="form-field"><label>Cámara de Comercio' + (d.association.camara_comercio_url ? ' — <a href="' + d.association.camara_comercio_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCamara" type="file" accept=".pdf,image/*"></div>';
+      html += '<div class="form-field"><label>Cédula representante legal' + (d.association.representante_cedula_url ? ' — <a href="' + d.association.representante_cedula_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCedula" type="file" accept=".pdf,image/*"></div>';
+      html += '</div>';
+      html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:12px;" onclick="uploadAssociationDocuments(' + d.association.id + ')">Subir documentos</button>';
+      html += '<p id="docUploadMsg" style="margin-top:8px;font-size:13px;"></p>';
+
       html += '<h4 style="margin-top:16px;font-size:14px;">Usuarios</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.users.forEach(function(u){ html += '<li>' + u.full_name + ' — ' + u.email + ' (' + u.role + (u.is_verified ? '' : ', sin verificar') + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
@@ -480,6 +489,38 @@
         loadAsociaciones();
       })
       .catch(function(err){ alert(err.message); });
+  }
+
+  function uploadAssociationDocuments(associationId){
+    var msgEl = document.getElementById('docUploadMsg');
+    var rut = document.getElementById('docRut').files[0];
+    var camara = document.getElementById('docCamara').files[0];
+    var cedula = document.getElementById('docCedula').files[0];
+    if(!rut && !camara && !cedula){
+      msgEl.style.color = '#C0392B';
+      msgEl.textContent = 'Selecciona al menos un archivo.';
+      return;
+    }
+    var formData = new FormData();
+    if(rut) formData.append('rut', rut);
+    if(camara) formData.append('camaraComercio', camara);
+    if(cedula) formData.append('representanteCedula', cedula);
+
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Subiendo…';
+    fetch(API_BASE + '/admin/associations/' + associationId + '/documents', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gtGetToken() },
+      body: formData
+    })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo subir.');
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Documentos subidos correctamente.';
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
 
   // ---- Nueva asociación ----

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genesis News | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<style>
+  .news-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:22px;}
+  .news-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:26px;transition:transform .16s ease,box-shadow .16s ease;}
+  .news-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);}
+  .news-card .source{font-size:12px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.4px;}
+  .news-card h3{font-size:17px;margin:10px 0 8px;line-height:1.35;}
+  .news-card .date{font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;}
+  .news-card p{color:var(--ink-soft);font-size:14px;}
+  .news-card a.read-more{display:inline-block;margin-top:14px;color:var(--blue-deep);font-weight:600;font-size:13.5px;}
+  @media(max-width:720px){ .news-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div id="gtPageLoader">
+  <div class="gt-loader-mark"><div class="gt-spinner"></div><span>Cargando noticias…</span></div>
+</div>
+
+<header class="nav">
+  <nav class="wrap">
+    <a class="brand" href="/"><span class="brand-text">Genesis <span>Traza</span></span></a>
+    <div class="nav-links">
+      <a href="/">Inicio</a>
+      <a href="/planes/">Planes</a>
+    </div>
+  </nav>
+</header>
+
+<section style="padding:56px 0 100px;">
+  <div class="wrap">
+    <div class="section-head reveal visible" style="text-align:center;margin-left:auto;margin-right:auto;">
+      <span class="kicker">Genesis News</span>
+      <h2>Noticias de reciclaje y economía circular</h2>
+      <p>Actualizado automáticamente con las novedades más recientes del sector en Colombia.</p>
+    </div>
+    <div class="news-grid" id="newsGrid">
+      <div class="news-card"><div class="skeleton" style="height:16px;width:40%;margin-bottom:14px;"></div><div class="skeleton" style="height:22px;margin-bottom:10px;"></div><div class="skeleton" style="height:14px;width:100%;"></div></div>
+      <div class="news-card"><div class="skeleton" style="height:16px;width:40%;margin-bottom:14px;"></div><div class="skeleton" style="height:22px;margin-bottom:10px;"></div><div class="skeleton" style="height:14px;width:100%;"></div></div>
+    </div>
+    <p id="newsEmpty" style="display:none;text-align:center;color:var(--ink-soft);margin-top:20px;">Todavía no hay noticias cargadas. Vuelve en unas horas.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-bottom">
+      <span>© 2026 Genesis Traza. Todos los derechos reservados.</span>
+      <a href="/">Volver al inicio</a>
+    </div>
+  </div>
+</footer>
+
+<a class="wa-float" href="https://wa.me/573228753230?text=Hola%2C%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20Genesis%20Traza" target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.86 9.86 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.44 9.9-9.9 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm0 1.67c2.2 0 4.26.86 5.82 2.42a8.2 8.2 0 0 1 2.41 5.81c0 4.54-3.7 8.23-8.23 8.23a8.2 8.2 0 0 1-4.19-1.15l-.3-.18-3.12.82.83-3.04-.2-.31a8.18 8.18 0 0 1-1.25-4.37c0-4.53 3.7-8.23 8.23-8.23Zm-4.52 4.6c-.16 0-.42.06-.64.3-.22.24-.85.83-.85 2.03s.87 2.35.99 2.52c.12.16 1.7 2.7 4.19 3.68 2.07.82 2.49.66 2.94.62.45-.04 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.55.12-.16.24-.63.79-.77.95-.14.16-.28.18-.52.06-.24-.12-1.02-.38-1.94-1.2-.72-.64-1.2-1.43-1.34-1.67-.14-.24-.02-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.55-1.35-.76-1.84-.2-.48-.4-.42-.55-.42h-.47Z"/></svg>
+</a>
+
+<script>
+  var API_BASE = 'https://genesis-backend-production-edc7.up.railway.app';
+
+  function formatDate(v){
+    if(!v) return '';
+    return new Date(v).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  fetch(API_BASE + '/news')
+    .then(function(r){ return r.json(); })
+    .then(function(articles){
+      var grid = document.getElementById('newsGrid');
+      grid.innerHTML = '';
+      if(!articles.length){
+        document.getElementById('newsEmpty').style.display = 'block';
+        return;
+      }
+      articles.forEach(function(a){
+        var card = document.createElement('div');
+        card.className = 'news-card';
+        var source = document.createElement('div'); source.className = 'source'; source.textContent = a.source || 'Genesis News';
+        var h3 = document.createElement('h3'); h3.textContent = a.title;
+        var date = document.createElement('div'); date.className = 'date'; date.textContent = formatDate(a.published_at);
+        var p = document.createElement('p'); p.textContent = a.summary || '';
+        var link = document.createElement('a'); link.className = 'read-more'; link.href = a.link; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'Leer más →';
+        card.appendChild(source); card.appendChild(h3); card.appendChild(date); card.appendChild(p); card.appendChild(link);
+        grid.appendChild(card);
+      });
+    })
+    .catch(function(){ document.getElementById('newsEmpty').style.display = 'block'; });
+
+  window.addEventListener('load', function(){
+    var loader = document.getElementById('gtPageLoader');
+    if(loader) setTimeout(function(){ loader.classList.add('hidden'); }, 200);
+  });
+</script>
+</body>
+</html>

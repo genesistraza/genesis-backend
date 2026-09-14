@@ -1,9 +1,22 @@
 const express = require('express');
+const multer = require('multer');
 const pool = require('../db/pool');
+const cloudinary = require('../db/cloudinary');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function uploadToCloudinary(fileBuffer, folder) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream({ folder, resource_type: 'auto' }, (err, result) => {
+      if (err) return reject(err);
+      resolve(result.secure_url);
+    });
+    stream.end(fileBuffer);
+  });
+}
 
 // 'pro' ve y controla todo. 'admin' (sub-jefes) es operativo: ve datos pero no configuración global.
 router.use(requireAuth, requireRole('pro', 'admin'));
@@ -123,6 +136,36 @@ router.put('/associations/:id', asyncRoute(async (req, res) => {
   await logActivity(req.user.id, 'asociacion_editada', { associationId: Number(req.params.id) }, req.ip);
   res.json(result.rows[0]);
 }));
+
+// POST /admin/associations/:id/documents -> sube RUT, Cámara de Comercio y/o cédula del
+// representante legal a Cloudinary y guarda los links en la asociación.
+router.post('/associations/:id/documents',
+  upload.fields([{ name: 'rut', maxCount: 1 }, { name: 'camaraComercio', maxCount: 1 }, { name: 'representanteCedula', maxCount: 1 }]),
+  asyncRoute(async (req, res) => {
+    const folder = `genesis-traza/associations/${req.params.id}`;
+    const updates = {};
+
+    if (req.files?.rut?.[0]) updates.rut_url = await uploadToCloudinary(req.files.rut[0].buffer, folder);
+    if (req.files?.camaraComercio?.[0]) updates.camara_comercio_url = await uploadToCloudinary(req.files.camaraComercio[0].buffer, folder);
+    if (req.files?.representanteCedula?.[0]) updates.representante_cedula_url = await uploadToCloudinary(req.files.representanteCedula[0].buffer, folder);
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No se recibió ningún archivo.' });
+    }
+
+    const result = await pool.query(
+      `UPDATE associations SET
+         rut_url = COALESCE($1, rut_url),
+         camara_comercio_url = COALESCE($2, camara_comercio_url),
+         representante_cedula_url = COALESCE($3, representante_cedula_url)
+       WHERE id = $4 RETURNING *`,
+      [updates.rut_url || null, updates.camara_comercio_url || null, updates.representante_cedula_url || null, req.params.id]
+    );
+
+    await logActivity(req.user.id, 'documentos_asociacion_subidos', { associationId: Number(req.params.id), campos: Object.keys(updates) }, req.ip);
+    res.json(result.rows[0]);
+  })
+);
 
 // DELETE /admin/associations/:id -> elimina una asociación por completo (solo 'pro')
 // Cascada: borra sus suscripciones y pagos; a los usuarios ligados les deja association_id en null.

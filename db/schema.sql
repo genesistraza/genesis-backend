@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS associations (
 
 -- Por si la tabla ya existia de una version anterior sin esta columna
 ALTER TABLE associations ADD COLUMN IF NOT EXISTS facturacion_url TEXT;
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS rut_url TEXT;
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS camara_comercio_url TEXT;
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS representante_cedula_url TEXT;
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -75,6 +78,17 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   action VARCHAR(150) NOT NULL,
   details JSONB DEFAULT '{}',
   ip_address VARCHAR(45),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS news_articles (
+  id SERIAL PRIMARY KEY,
+  title VARCHAR(300) NOT NULL,
+  summary TEXT,
+  link TEXT NOT NULL UNIQUE,
+  image_url TEXT,
+  source VARCHAR(150),
+  published_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
