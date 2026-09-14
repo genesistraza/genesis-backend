@@ -87,6 +87,11 @@ CREATE TABLE IF NOT EXISTS error_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Evita duplicar los planes semilla si la migración se corre más de una vez.
+-- Es parcial (solo entre planes activos) porque ya existen filas duplicadas
+-- desactivadas de una migración anterior que no tenía esta restricción.
+CREATE UNIQUE INDEX IF NOT EXISTS plans_category_name_active_idx ON plans (category, name) WHERE active;
+
 -- Semilla inicial de planes (coinciden con la landing)
 INSERT INTO plans (category, name, price_monthly, price_annual, description, features, is_featured) VALUES
 ('trazabilidad','Hasta 20 recicladores',150000,125000,'Para asociaciones pequeñas que necesitan estar al día con el SUI.','["Cargue al SUI","Balance de masas y caracterización","1 usuario administrador","Soporte por correo"]',false),
@@ -98,4 +103,4 @@ INSERT INTO plans (category, name, price_monthly, price_annual, description, fea
 ('combo','Combo Inicial',160000,135000,'Trazabilidad hasta 20 recicladores + facturación Básico.','["Todo Trazabilidad Hasta 20","80 documentos/mes"]',false),
 ('combo','Combo Crecimiento',295000,248000,'Trazabilidad 21-60 recicladores + facturación Profesional.','["Todo Trazabilidad 21-60","300 documentos/mes"]',true),
 ('combo','Combo Total',440000,370000,'Trazabilidad +60 recicladores + facturación ilimitada.','["Todo Trazabilidad +60","Documentos ilimitados"]',false)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (category, name) WHERE active DO NOTHING;
