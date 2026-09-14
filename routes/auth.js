@@ -17,7 +17,7 @@ function generateCode() {
 router.post('/register', asyncRoute(async (req, res) => {
   const { fullName, email, phone, password, associationName, nit, recyclerCount } = req.body;
 
-  if (!fullName || !email || !password || !associationName) {
+  if (!fullName || !email || !password || !associationName || !nit || !phone || !recyclerCount) {
     return res.status(400).json({ error: 'Faltan campos obligatorios del formulario.' });
   }
 

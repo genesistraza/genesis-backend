@@ -12,13 +12,13 @@ router.use(requireAuth, requireRole('pro', 'admin'));
 // Disponible para 'pro' y 'admin' (a diferencia de otras acciones de configuración).
 router.post('/associations', asyncRoute(async (req, res) => {
   const { name, nit, recyclerCount, facturacionUrl, contactFullName, contactEmail, contactPhone, contactPassword } = req.body;
-  if (!name) {
-    return res.status(400).json({ error: 'El nombre de la asociación es obligatorio.' });
+  if (!name || !nit || !recyclerCount) {
+    return res.status(400).json({ error: 'Nombre, NIT y número de recicladores son obligatorios.' });
   }
 
   const assocResult = await pool.query(
     `INSERT INTO associations (name, nit, recycler_count, facturacion_url) VALUES ($1,$2,$3,$4) RETURNING *`,
-    [name, nit || null, recyclerCount || 0, facturacionUrl || null]
+    [name, nit, recyclerCount, facturacionUrl || null]
   );
   const association = assocResult.rows[0];
 
@@ -106,7 +106,7 @@ router.get('/associations/:id', asyncRoute(async (req, res) => {
 }));
 
 // PUT /admin/associations/:id -> editar datos de una asociación, incluyendo su link único de facturación (solo 'pro')
-router.put('/associations/:id', requireRole('pro'), asyncRoute(async (req, res) => {
+router.put('/associations/:id', asyncRoute(async (req, res) => {
   const { name, nit, recyclerCount, facturacionUrl } = req.body;
   const result = await pool.query(
     `UPDATE associations SET

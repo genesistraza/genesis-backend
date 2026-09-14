@@ -297,6 +297,10 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 .badge-gray{background:#EEF1F5;color:var(--ink-soft);}
 
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.pwd-wrap{position:relative;}
+.pwd-wrap input{padding-right:42px !important;}
+.pwd-toggle{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:17px;padding:6px 8px;color:var(--ink-soft);line-height:1;}
+.pwd-toggle:hover{color:var(--ink);}
 .form-field label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);}
 .form-field input,.form-field select,.form-field textarea{width:100%;padding:11px 13px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;transition:border-color .15s ease,box-shadow .15s ease;}
 .form-field input:focus,.form-field select:focus,.form-field textarea:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,111,214,.14);}

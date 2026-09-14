@@ -30,7 +30,7 @@
     <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Sub-administradores</div>
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
     <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
-    <a class="side-link" href="index.html">Ver landing</a>
+    <a class="side-link" href="index.html">Ir a la web</a>
     <div class="side-spacer"></div>
     <div class="side-user">
       <div class="name" id="sideUserName">—</div>
@@ -104,7 +104,7 @@
       <div class="panel" style="max-width:520px;">
         <div class="form-field" style="margin-bottom:14px;"><label>Nombre completo</label><input id="subFullName"></div>
         <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="subEmail" type="email"></div>
-        <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><input id="subPassword" type="password"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="subPassword" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
         <div class="form-field" style="margin-bottom:14px;"><label>ID de asociación</label><input id="subAssociationId" type="number" placeholder="Ver en la pestaña Asociaciones"></div>
         <div class="form-field" style="margin-bottom:14px;">
           <label>Rol</label>
@@ -183,7 +183,7 @@
     <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí solo registras el link para que el cliente entre.</p>
     <div class="form-grid" style="margin-top:18px;">
       <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
-      <div class="form-field"><label>NIT (opcional)</label><input id="newAssocNit"></div>
+      <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
       <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
       <div class="form-field"><label>Link de facturación (opcional)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
     </div>
@@ -192,7 +192,7 @@
       <div class="form-field"><label>Nombre completo</label><input id="newAssocContactName"></div>
       <div class="form-field"><label>Correo</label><input id="newAssocContactEmail" type="email"></div>
       <div class="form-field"><label>Celular</label><input id="newAssocContactPhone"></div>
-      <div class="form-field"><label>Contraseña</label><input id="newAssocContactPassword" type="password"></div>
+      <div class="form-field"><label>Contraseña</label><div class="pwd-wrap"><input id="newAssocContactPassword" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
     </div>
     <button class="btn btn-primary" style="margin-top:18px;" onclick="createAssociation()">Crear asociación</button>
     <p id="newAssociationError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
@@ -364,7 +364,18 @@
       var body = document.getElementById('clientModalBody');
       if(!res.ok){ body.textContent = res.data.error || 'No se pudo cargar.'; return; }
       var d = res.data;
-      var html = '<p><strong>NIT:</strong> ' + (d.association.nit || '—') + ' · <strong>Recicladores:</strong> ' + (d.association.recycler_count || 0) + '</p>';
+      var esc = function(v){ return (v || '').toString().replace(/"/g, '&quot;'); };
+      var html = '';
+      html += '<h4 style="margin-top:4px;font-size:14px;">Datos de la asociación</h4>';
+      html += '<div class="form-grid" style="margin-top:10px;">';
+      html += '<div class="form-field"><label>Nombre</label><input id="editAssocName" value="' + esc(d.association.name) + '"></div>';
+      html += '<div class="form-field"><label>NIT</label><input id="editAssocNit" value="' + esc(d.association.nit) + '"></div>';
+      html += '<div class="form-field"><label># de recicladores</label><input id="editAssocRecyclerCount" type="number" min="0" value="' + esc(d.association.recycler_count) + '"></div>';
+      html += '<div class="form-field"><label>Link de facturación</label><input id="editAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' + esc(d.association.facturacion_url) + '"></div>';
+      html += '</div>';
+      html += '<button class="btn btn-primary" style="margin-top:12px;" onclick="saveAssociationEdits(' + d.association.id + ')">Guardar cambios</button>';
+      html += '<p id="clientEditMsg" style="margin-top:8px;font-size:13px;"></p>';
+
       html += '<h4 style="margin-top:16px;font-size:14px;">Usuarios</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.users.forEach(function(u){ html += '<li>' + u.full_name + ' — ' + u.email + ' (' + u.role + (u.is_verified ? '' : ', sin verificar') + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
@@ -375,14 +386,6 @@
 
       html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:8px;" id="sendReminderBtn">Enviar recordatorio de pago</button>';
       html += '<p id="reminderMsg" style="margin-top:8px;font-size:13px;"></p>';
-
-      if(isPro){
-        html += '<h4 style="margin-top:16px;font-size:14px;">Link único de facturación electrónica</h4>';
-        html += '<div class="form-field"><input id="clientFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' +
-          (d.association.facturacion_url || '').replace(/"/g, '&quot;') + '"></div>';
-        html += '<button class="btn btn-primary" style="margin-top:10px;" onclick="saveFacturacionUrl(' + d.association.id + ')">Guardar link</button>';
-        html += '<p id="clientEditMsg" style="margin-top:8px;font-size:13px;"></p>';
-      }
 
       body.innerHTML = html;
 
@@ -402,14 +405,20 @@
   }
   function closeClientModal(){ document.getElementById('clientModalOverlay').classList.remove('open'); }
 
-  function saveFacturacionUrl(associationId){
-    var url = document.getElementById('clientFacturacionUrl').value.trim();
+  function saveAssociationEdits(associationId){
     var msgEl = document.getElementById('clientEditMsg');
-    gtApiFetch('/admin/associations/' + associationId, { method: 'PUT', body: JSON.stringify({ facturacionUrl: url }) })
+    var body = {
+      name: document.getElementById('editAssocName').value.trim(),
+      nit: document.getElementById('editAssocNit').value.trim(),
+      recyclerCount: Number(document.getElementById('editAssocRecyclerCount').value) || undefined,
+      facturacionUrl: document.getElementById('editAssocFacturacionUrl').value.trim()
+    };
+    gtApiFetch('/admin/associations/' + associationId, { method: 'PUT', body: JSON.stringify(body) })
       .then(function(res){
         if(!res.ok){ throw new Error(res.data.error || 'No se pudo guardar.'); }
         msgEl.style.color = 'var(--green)';
         msgEl.textContent = 'Guardado.';
+        loadAsociaciones();
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
@@ -486,7 +495,7 @@
   function createAssociation(){
     var body = {
       name: document.getElementById('newAssocName').value.trim(),
-      nit: document.getElementById('newAssocNit').value.trim() || undefined,
+      nit: document.getElementById('newAssocNit').value.trim(),
       recyclerCount: Number(document.getElementById('newAssocRecyclerCount').value) || undefined,
       facturacionUrl: document.getElementById('newAssocFacturacionUrl').value.trim() || undefined,
       contactFullName: document.getElementById('newAssocContactName').value.trim() || undefined,
@@ -496,8 +505,8 @@
     };
     var errorEl = document.getElementById('newAssociationError');
     errorEl.style.display = 'none';
-    if(!body.name){
-      errorEl.textContent = 'El nombre de la asociación es obligatorio.';
+    if(!body.name || !body.nit || !body.recyclerCount){
+      errorEl.textContent = 'Nombre, NIT y número de recicladores son obligatorios.';
       errorEl.style.display = 'block';
       return;
     }

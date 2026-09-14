@@ -1,10 +1,16 @@
 const express = require('express');
 const crypto = require('crypto');
+const { Resend } = require('resend');
 const pool = require('../db/pool');
 const { requireAuth } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 
 const router = express.Router();
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+function gtFormatCOP(value) {
+  return '$' + Number(value || 0).toLocaleString('es-CO');
+}
 
 // POST /payments/create -> genera los datos para abrir el widget de Wompi en el frontend
 router.post('/create', requireAuth, asyncRoute(async (req, res) => {
@@ -62,6 +68,35 @@ router.post('/webhook', express.json(), asyncRoute(async (req, res) => {
        WHERE id = (SELECT subscription_id FROM payments WHERE wompi_transaction_id = $1)`,
       [transaction.id]
     );
+
+    const detail = await pool.query(
+      `SELECT a.name AS association_name, a.nit, p.name AS plan_name, pay.amount, u.full_name, u.email, u.phone
+       FROM payments pay
+       JOIN subscriptions s ON s.id = pay.subscription_id
+       JOIN associations a ON a.id = s.association_id
+       JOIN plans p ON p.id = s.plan_id
+       LEFT JOIN users u ON u.association_id = a.id AND u.role = 'operativo'
+       WHERE pay.wompi_transaction_id = $1
+       LIMIT 1`,
+      [transaction.id]
+    );
+    const d = detail.rows[0];
+    if (d) {
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
+        to: 'genesistraza@gmail.com',
+        subject: `Nuevo pago aprobado: ${d.association_name} - ${gtFormatCOP(d.amount)}`,
+        html: `<p>Se aprobó un pago en Genesis Traza.</p>
+               <ul>
+                 <li><strong>Asociación:</strong> ${d.association_name} (NIT: ${d.nit || '—'})</li>
+                 <li><strong>Plan:</strong> ${d.plan_name}</li>
+                 <li><strong>Monto:</strong> ${gtFormatCOP(d.amount)}</li>
+                 <li><strong>Contacto:</strong> ${d.full_name || '—'} — ${d.email || '—'} — ${d.phone || '—'}</li>
+                 <li><strong>Método:</strong> ${transaction.payment_method_type}</li>
+                 <li><strong>ID de transacción:</strong> ${transaction.id}</li>
+               </ul>`
+      });
+    }
   }
 
   await logActivity(null, 'webhook_wompi', { status, transactionId: transaction.id });

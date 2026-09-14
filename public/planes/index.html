@@ -87,7 +87,7 @@
 
         <div id="authPanelLogin">
           <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="off" placeholder="nombre@empresa.com"></div>
-          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><input id="loginPassword2" type="password" autocomplete="off" placeholder="Tu contraseña"></div>
+          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="loginPassword2" type="password" autocomplete="off" placeholder="Tu contraseña"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
           <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
           <button class="btn btn-primary" style="width:100%;" onclick="submitLogin2()">Ingresar y continuar</button>
         </div>
@@ -96,12 +96,12 @@
           <div class="form-grid">
             <div class="form-field"><label>Nombre completo</label><input id="regFullName2"></div>
             <div class="form-field"><label>Nombre de la asociación</label><input id="regAssociationName2"></div>
-            <div class="form-field"><label>NIT (opcional)</label><input id="regNit2"></div>
-            <div class="form-field"><label># de recicladores (opcional)</label><input id="regRecyclerCount2" type="number" min="0"></div>
+            <div class="form-field"><label>NIT</label><input id="regNit2"></div>
+            <div class="form-field"><label># de recicladores</label><input id="regRecyclerCount2" type="number" min="0"></div>
             <div class="form-field"><label>Correo</label><input id="regEmail2" type="email"></div>
-            <div class="form-field"><label>Celular (opcional)</label><input id="regPhone2" type="tel"></div>
+            <div class="form-field"><label>Celular</label><input id="regPhone2" type="tel"></div>
           </div>
-          <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><input id="regPassword2" type="password"></div>
+          <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="regPassword2" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
           <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
           <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitRegister2()">Crear cuenta y continuar</button>
         </div>
@@ -149,6 +149,14 @@
   var authUser = { role: localStorage.getItem('gt_role'), fullName: localStorage.getItem('gt_fullName') };
   var selectedPlanId = null, selectedPlanName = null, selectedAmount = null, selectedBillingCycle = 'mensual';
   var pendingVerifyUserId = null, pendingVerifyEmail = null, pendingVerifyPassword = null;
+
+  function gtTogglePwd(btn){
+    var input = btn.previousElementSibling;
+    if(!input) return;
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+  }
 
   function logout(){
     localStorage.removeItem('gt_token'); localStorage.removeItem('gt_role'); localStorage.removeItem('gt_fullName');
@@ -221,18 +229,20 @@
   function submitRegister2(){
     var fullName = document.getElementById('regFullName2').value.trim();
     var associationName = document.getElementById('regAssociationName2').value.trim();
+    var nit = document.getElementById('regNit2').value.trim();
+    var recyclerCount = document.getElementById('regRecyclerCount2').value;
     var email = document.getElementById('regEmail2').value.trim().toLowerCase();
+    var phone = document.getElementById('regPhone2').value.trim();
     var password = document.getElementById('regPassword2').value;
     var errorEl = document.getElementById('registerError2');
     errorEl.style.display = 'none';
-    if(!fullName || !associationName || !email || !password){
-      errorEl.textContent = 'Completa nombre, asociación, correo y contraseña.'; errorEl.style.display = 'block'; return;
+    if(!fullName || !associationName || !nit || !phone || !recyclerCount || !email || !password){
+      errorEl.textContent = 'Todos los campos son obligatorios.'; errorEl.style.display = 'block'; return;
     }
     fetch(API_BASE + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
       fullName: fullName, associationName: associationName,
-      nit: document.getElementById('regNit2').value.trim() || undefined,
-      recyclerCount: Number(document.getElementById('regRecyclerCount2').value) || undefined,
-      email: email, phone: document.getElementById('regPhone2').value.trim() || undefined, password: password
+      nit: nit, recyclerCount: Number(recyclerCount),
+      email: email, phone: phone, password: password
     })})
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){

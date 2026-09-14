@@ -321,7 +321,7 @@
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
     <input id="loginEmail" type="email" autocomplete="off" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:16px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <input id="loginPassword" type="password" autocomplete="off" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <div class="pwd-wrap"><input id="loginPassword" type="password" autocomplete="off" placeholder="Tu contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
     <p id="loginError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;">Correo o contraseña incorrectos.</p>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitLogin()">Ingresar</button>
     <p id="loginRegisterHint" style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿No tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeLoginModal();openRegisterModal();return false;">Regístrate</a></p>
@@ -337,16 +337,16 @@
     <input id="regFullName" type="text" placeholder="Tu nombre completo" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Nombre de la asociación</label>
     <input id="regAssociationName" type="text" placeholder="Nombre de tu asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">NIT (opcional)</label>
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">NIT</label>
     <input id="regNit" type="text" placeholder="NIT de la asociación" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);"># de recicladores (opcional)</label>
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);"># de recicladores</label>
     <input id="regRecyclerCount" type="number" min="0" placeholder="Ej: 25" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Correo</label>
     <input id="regEmail" type="email" placeholder="nombre@empresa.com" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
-    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Celular (opcional)</label>
+    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Celular</label>
     <input id="regPhone" type="tel" placeholder="300 000 0000" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
     <label style="display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--ink);">Contraseña</label>
-    <input id="regPassword" type="password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;">
+    <div class="pwd-wrap"><input id="regPassword" type="password" placeholder="Crea una contraseña" style="width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:8px;"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)" style="margin-bottom:8px;">👁</button></div>
     <p id="registerError" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
     <button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="submitRegister()">Crear cuenta</button>
     <p style="text-align:center;font-size:13px;margin-top:16px;color:var(--ink-soft);">¿Ya tienes cuenta? <a href="#" style="color:var(--blue);font-weight:600;" onclick="closeRegisterModal();openLoginModal();return false;">Inicia sesión</a></p>
@@ -378,6 +378,14 @@
   var pendingVerifyPassword = null;
 
   var loginIntent = 'panel';
+
+  function gtTogglePwd(btn){
+    var input = btn.previousElementSibling;
+    if(!input) return;
+    var show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+  }
 
   function redirectToPanel(role){
     setTimeout(function(){
@@ -492,8 +500,8 @@
     var errorEl = document.getElementById('registerError');
     errorEl.style.display = 'none';
 
-    if(!fullName || !associationName || !email || !password){
-      errorEl.textContent = 'Completa los campos obligatorios: nombre, asociación, correo y contraseña.';
+    if(!fullName || !associationName || !nit || !phone || !recyclerCount || !email || !password){
+      errorEl.textContent = 'Todos los campos son obligatorios.';
       errorEl.style.display = 'block';
       return;
     }
@@ -504,10 +512,10 @@
       body: JSON.stringify({
         fullName: fullName,
         associationName: associationName,
-        nit: nit || undefined,
-        recyclerCount: recyclerCount ? Number(recyclerCount) : undefined,
+        nit: nit,
+        recyclerCount: Number(recyclerCount),
         email: email,
-        phone: phone || undefined,
+        phone: phone,
         password: password
       })
     })

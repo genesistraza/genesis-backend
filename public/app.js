@@ -42,6 +42,14 @@ function gtFormatCOP(value){
   return '$' + Number(value || 0).toLocaleString('es-CO');
 }
 
+function gtTogglePwd(btn){
+  var input = btn.previousElementSibling;
+  if(!input) return;
+  var show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? '🙈' : '👁';
+}
+
 function gtToggleSidebar(){
   var sidebar = document.getElementById('sidebar');
   var backdrop = document.getElementById('sidebarBackdrop');
