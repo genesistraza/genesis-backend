@@ -47,6 +47,7 @@
         </button>
         <div class="dropdown-menu">
           <a href="https://genesis-traza.com" target="_blank" rel="noopener">Genesis Traza (Trazabilidad)<span class="sub">Reporte SUI, Superservicios y Contraloría</span></a>
+          <a href="#" onclick="openLoginModal('cuenta');return false;">Mi cuenta<span class="sub">Ver tu plan, pagos y datos de tu asociación</span></a>
           <a href="#" onclick="openLoginModal('facturacion');return false;">Facturación electrónica<span class="sub">Te lleva directo a tu sistema</span></a>
           <div class="divider"></div>
           <a href="#" onclick="openLoginModal('panel');return false;">Panel de administración<span class="sub">Para roles pro y admin</span></a>
@@ -461,12 +462,16 @@
   }
 
   function openLoginModal(intent){
-    loginIntent = intent || 'panel';
+    loginIntent = intent || 'cuenta';
     document.getElementById('loginDropdown').classList.remove('open');
-    document.getElementById('loginModalTitle').textContent = loginIntent === 'facturacion' ? 'Facturación electrónica' : 'Iniciar sesión';
-    document.getElementById('loginModalSubtitle').textContent = loginIntent === 'facturacion'
-      ? 'Ingresa con el correo y la contraseña de tu asociación.'
-      : 'Ingresa con el correo y la contraseña de tu cuenta.';
+    var titles = { facturacion: 'Facturación electrónica', panel: 'Panel de administración', cuenta: 'Mi cuenta' };
+    var subtitles = {
+      facturacion: 'Ingresa con el correo y la contraseña de tu asociación.',
+      panel: 'Ingresa con tu correo y contraseña de administrador.',
+      cuenta: 'Ingresa con el correo y la contraseña de tu cuenta.'
+    };
+    document.getElementById('loginModalTitle').textContent = titles[loginIntent] || 'Iniciar sesión';
+    document.getElementById('loginModalSubtitle').textContent = subtitles[loginIntent] || subtitles.cuenta;
     document.getElementById('loginModalOverlay').style.display = 'flex';
     document.getElementById('loginError').style.display = 'none';
   }
