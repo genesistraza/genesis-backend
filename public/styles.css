@@ -318,5 +318,12 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 .modal-close{position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);width:32px;height:32px;border-radius:50%;transition:background .15s ease;}
 .modal-close:hover{background:var(--blue-light);}
 
+.wa-float{position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(37,211,102,.45);z-index:120;transition:transform .18s ease,box-shadow .18s ease;animation:waPulse 2.6s ease infinite;}
+.wa-float svg{width:30px;height:30px;}
+.wa-float:hover{transform:scale(1.08);box-shadow:0 14px 32px rgba(37,211,102,.55);}
+@keyframes waPulse{ 0%,100%{box-shadow:0 10px 26px rgba(37,211,102,.45);} 50%{box-shadow:0 10px 26px rgba(37,211,102,.45),0 0 0 8px rgba(37,211,102,.16);} }
+@media (prefers-reduced-motion: reduce){ .wa-float{animation:none;} }
+@media(max-width:480px){ .wa-float{right:16px;bottom:16px;width:52px;height:52px;} .wa-float svg{width:26px;height:26px;} }
+
 .pill-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
 .spinner-inline{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid rgba(10,51,105,.2);border-top-color:var(--blue-deep);animation:gtSpin .7s linear infinite;vertical-align:middle;}
