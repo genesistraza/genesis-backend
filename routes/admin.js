@@ -71,6 +71,25 @@ router.get('/associations/:id', asyncRoute(async (req, res) => {
   });
 }));
 
+// PUT /admin/associations/:id -> editar datos de una asociación, incluyendo su link único de facturación (solo 'pro')
+router.put('/associations/:id', requireRole('pro'), asyncRoute(async (req, res) => {
+  const { name, nit, recyclerCount, facturacionUrl } = req.body;
+  const result = await pool.query(
+    `UPDATE associations SET
+       name = COALESCE($1, name),
+       nit = COALESCE($2, nit),
+       recycler_count = COALESCE($3, recycler_count),
+       facturacion_url = $4
+     WHERE id = $5 RETURNING *`,
+    [name, nit, recyclerCount, facturacionUrl || null, req.params.id]
+  );
+  if (result.rows.length === 0) {
+    return res.status(404).json({ error: 'Asociación no encontrada.' });
+  }
+  await logActivity(req.user.id, 'asociacion_editada', { associationId: Number(req.params.id) }, req.ip);
+  res.json(result.rows[0]);
+}));
+
 // GET /admin/revenue-summary -> ingresos totales, del mes, y suscripciones activas (solo 'pro')
 router.get('/revenue-summary', requireRole('pro'), asyncRoute(async (req, res) => {
   const totals = await pool.query(`

@@ -340,10 +340,31 @@
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Pagos recientes</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + p.status + '</li>'; });
       html += '</ul>';
+
+      if(isPro){
+        html += '<h4 style="margin-top:16px;font-size:14px;">Link único de facturación electrónica</h4>';
+        html += '<div class="form-field"><input id="clientFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' +
+          (d.association.facturacion_url || '').replace(/"/g, '&quot;') + '"></div>';
+        html += '<button class="btn btn-primary" style="margin-top:10px;" onclick="saveFacturacionUrl(' + d.association.id + ')">Guardar link</button>';
+        html += '<p id="clientEditMsg" style="margin-top:8px;font-size:13px;"></p>';
+      }
+
       body.innerHTML = html;
     });
   }
   function closeClientModal(){ document.getElementById('clientModalOverlay').classList.remove('open'); }
+
+  function saveFacturacionUrl(associationId){
+    var url = document.getElementById('clientFacturacionUrl').value.trim();
+    var msgEl = document.getElementById('clientEditMsg');
+    gtApiFetch('/admin/associations/' + associationId, { method: 'PUT', body: JSON.stringify({ facturacionUrl: url }) })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo guardar.'); }
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Guardado.';
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
 
   // ---- Modal planes ----
   function openPlanModal(plan){

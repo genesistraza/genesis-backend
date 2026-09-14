@@ -70,6 +70,12 @@
       </div>
     </div>
 
+    <div id="facturacionPanel" class="panel" style="display:none;text-align:center;">
+      <h2>Facturación electrónica</h2>
+      <p style="color:var(--ink-soft);margin:10px 0 18px;">Entra a tu sistema de facturación electrónica ante la DIAN.</p>
+      <a class="btn btn-primary" id="facturacionLink" href="#" target="_blank" rel="noopener">Entrar a facturación electrónica</a>
+    </div>
+
     <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
       <h2>Aún no tienes un plan activo</h2>
       <p style="color:var(--ink-soft);margin-top:8px;">Elige un plan desde la landing para empezar.</p>
@@ -138,6 +144,11 @@
       }
 
       document.getElementById('topAssociation').textContent = 'Asociación: ' + meData.association.name;
+
+      if(meData.association.facturacion_url){
+        document.getElementById('facturacionPanel').style.display = 'block';
+        document.getElementById('facturacionLink').href = meData.association.facturacion_url;
+      }
 
       var sub = meData.subscriptions && meData.subscriptions[0];
       var totalPaid = (meData.payments || []).filter(function(p){ return p.status === 'aprobado'; })

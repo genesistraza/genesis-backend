@@ -6,8 +6,12 @@ CREATE TABLE IF NOT EXISTS associations (
   name VARCHAR(150) NOT NULL,
   nit VARCHAR(30),
   recycler_count INT DEFAULT 0,
+  facturacion_url TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Por si la tabla ya existia de una version anterior sin esta columna
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS facturacion_url TEXT;
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
