@@ -1,14 +1,11 @@
 const cron = require('node-cron');
 const { Resend } = require('resend');
 const pool = require('../db/pool');
+const { buildPaymentReminderEmail } = require('../utils/emailTemplate');
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-function formatDate(d) {
-  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-async function sendReminderBatch(dateCondition, subject, buildHtml) {
+async function sendReminderBatch(dateCondition, subject, extraNoteFor) {
   const rows = await pool.query(`
     SELECT s.id, a.name AS association_name, u.email, u.full_name, p.name AS plan_name, s.next_due_date
     FROM subscriptions s
@@ -23,7 +20,13 @@ async function sendReminderBatch(dateCondition, subject, buildHtml) {
       from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
       to: row.email,
       subject,
-      html: buildHtml(row)
+      html: buildPaymentReminderEmail({
+        fullName: row.full_name,
+        associationName: row.association_name,
+        planName: row.plan_name,
+        nextDueDate: row.next_due_date,
+        extraNote: extraNoteFor(row)
+      })
     });
   }
   return rows.rows.length;
@@ -37,17 +40,13 @@ function startPaymentReminders() {
     const sent5Days = await sendReminderBatch(
       `s.next_due_date::date = (NOW() + INTERVAL '5 days')::date`,
       'Tu pago con Genesis Traza vence en 5 días',
-      (row) => `<p>Hola ${row.full_name},</p>
-                <p>El plan <strong>${row.plan_name}</strong> de <strong>${row.association_name}</strong> vence el ${formatDate(row.next_due_date)} (en 5 días).</p>
-                <p>Ingresa a tu cuenta para renovar y evitar la suspensión del servicio.</p>`
+      () => 'Te escribimos para recordarte que tu plan vence en 5 días.'
     );
 
     const sentToday = await sendReminderBatch(
       `s.next_due_date::date = NOW()::date`,
       'Tu pago con Genesis Traza vence hoy',
-      (row) => `<p>Hola ${row.full_name},</p>
-                <p>El plan <strong>${row.plan_name}</strong> de <strong>${row.association_name}</strong> vence hoy, ${formatDate(row.next_due_date)}.</p>
-                <p>Ingresa a tu cuenta y renueva hoy mismo para no perder el acceso al servicio.</p>`
+      () => 'Te escribimos para recordarte que tu plan vence hoy. Renueva hoy mismo para no perder el acceso al servicio.'
     );
 
     // Marca como vencidas las suscripciones que ya pasaron su fecha (despues de mandar el recordatorio del dia)

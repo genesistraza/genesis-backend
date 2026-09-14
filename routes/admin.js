@@ -6,6 +6,7 @@ const cloudinary = require('../db/cloudinary');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 const { getMassBalanceSummary, getMassBalancePeriods, getRecicladores } = require('../db/massBalanceQueries');
+const { buildPaymentReminderEmail } = require('../utils/emailTemplate');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -511,10 +512,14 @@ router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
     `SELECT u.email, u.full_name, a.name AS association_name, p.name AS plan_name, s.next_due_date, s.status
      FROM associations a
      LEFT JOIN users u ON u.association_id = a.id AND u.role = 'operativo'
-     LEFT JOIN subscriptions s ON s.association_id = a.id
+     LEFT JOIN LATERAL (
+       SELECT * FROM subscriptions s2
+       WHERE s2.association_id = a.id
+       ORDER BY (s2.status = 'activa') DESC, s2.created_at DESC
+       LIMIT 1
+     ) s ON true
      LEFT JOIN plans p ON p.id = s.plan_id
-     WHERE a.id = $1
-     ORDER BY s.created_at DESC LIMIT 1`,
+     WHERE a.id = $1`,
     [req.params.id]
   );
   const row = target.rows[0];
@@ -526,9 +531,13 @@ router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
     from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
     to: row.email,
     subject: 'Recordatorio de pago - Genesis Traza',
-    html: `<p>Hola ${row.full_name},</p>
-           <p>Te escribimos para recordarte tu pago${row.plan_name ? ' del plan <strong>' + row.plan_name + '</strong>' : ''} de <strong>${row.association_name}</strong>${row.next_due_date ? ' con vencimiento el ' + row.next_due_date : ''}.</p>
-           <p>Ingresa a tu cuenta en Genesis Traza para ponerte al día y evitar la suspensión del servicio.</p>`
+    html: buildPaymentReminderEmail({
+      fullName: row.full_name,
+      associationName: row.association_name,
+      planName: row.plan_name,
+      nextDueDate: row.next_due_date,
+      extraNote: 'Te escribimos para recordarte tu pago.'
+    })
   });
 
   await logActivity(req.user.id, 'recordatorio_manual_enviado', { associationId: Number(req.params.id), email: row.email }, req.ip);

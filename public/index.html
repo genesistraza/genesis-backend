@@ -713,6 +713,12 @@
   }
 
   updateAuthUI();
+
+  // Los correos (recordatorios de pago, etc.) enlazan aqui con ?login=1 para abrir
+  // el modal de inicio de sesion de una vez, en lugar de dejar al cliente buscarlo.
+  if(new URLSearchParams(window.location.search).get('login') === '1' && !authToken){
+    openLoginModal('cuenta');
+  }
 </script>
 
 <script>
