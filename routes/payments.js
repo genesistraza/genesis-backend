@@ -130,9 +130,11 @@ router.post('/webhook', express.json(), asyncRoute(async (req, res) => {
     );
     const d = detail.rows[0];
     if (d) {
+      const settings = await pool.query('SELECT email FROM notification_settings WHERE id = 1');
+      const notifyEmail = settings.rows[0]?.email || 'genesistraza@gmail.com';
       await resend.emails.send({
         from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
-        to: 'genesistraza@gmail.com',
+        to: notifyEmail,
         subject: `Nuevo pago aprobado: ${d.association_name} - ${gtFormatCOP(d.amount)}`,
         html: `<p>Se aprobó un pago en Genesis Traza.</p>
                <ul>

@@ -140,6 +140,19 @@ CREATE TABLE IF NOT EXISTS mass_balance_entries (
 );
 CREATE INDEX IF NOT EXISTS mass_balance_association_fecha_idx ON mass_balance_entries (association_id, fecha);
 
+-- Fila unica con el correo y telefono a donde llegan las notificaciones de pago
+-- (hoy por correo, mas adelante tambien por WhatsApp). Se edita desde el panel, en vez
+-- de quedar fijo en el codigo.
+CREATE TABLE IF NOT EXISTS notification_settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  email VARCHAR(150),
+  phone VARCHAR(30),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  CHECK (id = 1)
+);
+INSERT INTO notification_settings (id, email, phone) VALUES (1, 'genesistraza@gmail.com', '3228753230')
+ON CONFLICT (id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS news_articles (
   id SERIAL PRIMARY KEY,
   title VARCHAR(300) NOT NULL,

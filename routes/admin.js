@@ -598,4 +598,26 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   res.json(result.rows[0]);
 }));
 
+// GET /admin/notification-settings -> correo y telefono a donde llegan las notificaciones de pago
+router.get('/notification-settings', requireRole('pro'), asyncRoute(async (req, res) => {
+  const result = await pool.query('SELECT email, phone FROM notification_settings WHERE id = 1');
+  res.json(result.rows[0] || { email: null, phone: null });
+}));
+
+// PUT /admin/notification-settings -> actualiza el correo y/o telefono de notificaciones (solo 'pro')
+router.put('/notification-settings', requireRole('pro'), asyncRoute(async (req, res) => {
+  const { email, phone } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'El correo de notificaciones es obligatorio.' });
+  }
+  const result = await pool.query(
+    `INSERT INTO notification_settings (id, email, phone, updated_at) VALUES (1, $1, $2, NOW())
+     ON CONFLICT (id) DO UPDATE SET email = $1, phone = $2, updated_at = NOW()
+     RETURNING email, phone`,
+    [email, phone || null]
+  );
+  await logActivity(req.user.id, 'notificaciones_configuradas', { email, phone }, req.ip);
+  res.json(result.rows[0]);
+}));
+
 module.exports = router;
