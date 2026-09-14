@@ -57,6 +57,35 @@ router.post('/register', asyncRoute(async (req, res) => {
   res.json({ message: 'Cuenta creada. Revisa tu correo para el código de verificación.', userId });
 }));
 
+// POST /auth/resend-code -> genera un nuevo código de verificación y lo reenvía por correo
+router.post('/resend-code', asyncRoute(async (req, res) => {
+  const { email } = req.body;
+  const userResult = await pool.query(
+    'SELECT id, full_name FROM users WHERE email = $1 AND is_verified = false',
+    [(email || '').toLowerCase()]
+  );
+  const user = userResult.rows[0];
+  if (!user) {
+    return res.status(404).json({ error: 'No hay una cuenta pendiente de verificación con ese correo.' });
+  }
+
+  const code = generateCode();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await pool.query(
+    'INSERT INTO verification_codes (user_id, code, expires_at) VALUES ($1,$2,$3)',
+    [user.id, code, expiresAt]
+  );
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesis-traza.com>',
+    to: email,
+    subject: 'Tu nuevo código de verificación - Genesis Traza',
+    html: `<p>Hola ${user.full_name},</p><p>Tu código de verificación es:</p><h2 style="letter-spacing:4px;">${code}</h2><p>Vence en 15 minutos.</p>`
+  });
+
+  res.json({ message: 'Código reenviado. Revisa tu correo.', userId: user.id });
+}));
+
 // POST /auth/verify  -> confirma el código de 6 dígitos
 router.post('/verify', asyncRoute(async (req, res) => {
   const { userId, code } = req.body;
