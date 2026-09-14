@@ -68,6 +68,18 @@ router.get('/associations', asyncRoute(async (req, res) => {
   res.json(result.rows);
 }));
 
+// GET /admin/routes -> todas las rutas de todas las asociaciones (para la pestaña Rutas)
+router.get('/routes', asyncRoute(async (req, res) => {
+  const result = await pool.query(`
+    SELECT r.id, r.reciclador_name, r.kml_url, r.notes, r.created_at,
+           a.id AS association_id, a.name AS association_name
+    FROM association_routes r
+    JOIN associations a ON a.id = r.association_id
+    ORDER BY a.name, r.reciclador_name
+  `);
+  res.json(result.rows);
+}));
+
 // GET /admin/payments -> quién pagó y quién no
 router.get('/payments', asyncRoute(async (req, res) => {
   const result = await pool.query(`
