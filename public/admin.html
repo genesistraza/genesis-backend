@@ -233,6 +233,15 @@
 
         <p id="twoFAActionMsg" style="margin-top:12px;font-size:13px;"></p>
       </div>
+
+      <div class="panel pro-only" style="max-width:520px;margin-top:20px;">
+        <div class="panel-head"><h2>Notificaciones de pago</h2></div>
+        <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:16px;">A dónde te avisamos cada vez que se aprueba un pago. Por ahora solo por correo; el número de WhatsApp queda listo para cuando activemos ese aviso también por ahí.</p>
+        <div class="form-field"><label>Correo de notificaciones</label><input id="notifyEmailInput" type="email" placeholder="genesistraza@gmail.com"></div>
+        <div class="form-field" style="margin-top:14px;"><label>Teléfono (WhatsApp)</label><input id="notifyPhoneInput" type="tel" placeholder="3228753230"></div>
+        <button class="btn btn-primary" style="margin-top:14px;" onclick="saveNotificationSettings()">Guardar</button>
+        <p id="notifySettingsMsg" style="margin-top:10px;font-size:13px;"></p>
+      </div>
     </section>
 
     <!-- PLANES -->
@@ -300,9 +309,26 @@
 <div class="modal-overlay" id="clientModalOverlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeClientModal()">&times;</button>
-    <h3 id="clientModalTitle">Cliente</h3>
-    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">Esta consulta queda registrada en los logs de actividad.</p>
-    <div id="clientModalBody" style="margin-top:18px;">Cargando…</div>
+    <div class="modal-scroll">
+      <h3 id="clientModalTitle">Cliente</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">Esta consulta queda registrada en los logs de actividad.</p>
+      <div id="clientModalBody" style="margin-top:18px;">Cargando…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: confirmacion al cerrar el detalle de cliente con cambios sin guardar -->
+<div class="modal-overlay" id="unsavedConfirmOverlay" style="z-index:300;">
+  <div class="modal-box" style="max-width:380px;">
+    <div class="modal-scroll" style="padding:26px 24px;">
+      <h3 style="font-size:16px;">Cambios sin guardar</h3>
+      <p style="color:var(--ink-soft);font-size:13.5px;margin-top:8px;">Editaste los datos de la asociación y no los has guardado. ¿Qué deseas hacer?</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" onclick="gtConfirmSaveAndCloseClientModal()">Guardar y cerrar</button>
+        <button class="btn btn-outline" style="border-color:#C0392B;color:#C0392B;" onclick="gtConfirmDiscardAndCloseClientModal()">Cerrar sin guardar</button>
+        <button class="btn btn-outline" onclick="gtCancelCloseClientModal()">Seguir editando</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -310,21 +336,23 @@
 <div class="modal-overlay" id="planModalOverlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closePlanModal()">&times;</button>
-    <h3 id="planModalTitle">Nuevo plan</h3>
-    <input type="hidden" id="planId">
-    <div class="form-grid" style="margin-top:18px;">
-      <div class="form-field"><label>Nombre</label><input id="planName"></div>
-      <div class="form-field"><label>Categoría</label>
-        <select id="planCategory"><option value="trazabilidad">Trazabilidad</option><option value="facturacion">Facturación</option><option value="combo">Combo</option></select>
+    <div class="modal-scroll">
+      <h3 id="planModalTitle">Nuevo plan</h3>
+      <input type="hidden" id="planId">
+      <div class="form-grid" style="margin-top:18px;">
+        <div class="form-field"><label>Nombre</label><input id="planName"></div>
+        <div class="form-field"><label>Categoría</label>
+          <select id="planCategory"><option value="trazabilidad">Trazabilidad</option><option value="facturacion">Facturación</option><option value="combo">Combo</option></select>
+        </div>
+        <div class="form-field"><label>Precio mensual</label><input id="planPriceMonthly" type="number" oninput="updatePlanAnnualPreview()"></div>
+        <div class="form-field"><label>Anual (automático, 1 mes gratis)</label><input id="planPriceAnnual" type="text" disabled style="background:var(--blue-light);color:var(--ink-soft);font-weight:600;"></div>
       </div>
-      <div class="form-field"><label>Precio mensual</label><input id="planPriceMonthly" type="number" oninput="updatePlanAnnualPreview()"></div>
-      <div class="form-field"><label>Anual (automático, 1 mes gratis)</label><input id="planPriceAnnual" type="text" disabled style="background:var(--blue-light);color:var(--ink-soft);font-weight:600;"></div>
+      <div class="form-field" style="margin-top:14px;"><label>Descripción</label><textarea id="planDescription" rows="2"></textarea></div>
+      <div class="form-field" style="margin-top:14px;"><label>Características (una por línea)</label><textarea id="planFeatures" rows="4"></textarea></div>
+      <div class="form-field" style="margin-top:14px;"><label><input type="checkbox" id="planFeatured" style="width:auto;margin-right:8px;">Destacado ("Más elegido")</label></div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="savePlan()">Guardar</button>
+      <p id="planModalError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
     </div>
-    <div class="form-field" style="margin-top:14px;"><label>Descripción</label><textarea id="planDescription" rows="2"></textarea></div>
-    <div class="form-field" style="margin-top:14px;"><label>Características (una por línea)</label><textarea id="planFeatures" rows="4"></textarea></div>
-    <div class="form-field" style="margin-top:14px;"><label><input type="checkbox" id="planFeatured" style="width:auto;margin-right:8px;">Destacado ("Más elegido")</label></div>
-    <button class="btn btn-primary" style="margin-top:16px;" onclick="savePlan()">Guardar</button>
-    <p id="planModalError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
   </div>
 </div>
 
@@ -332,23 +360,25 @@
 <div class="modal-overlay" id="newAssociationModalOverlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeNewAssociationModal()">&times;</button>
-    <h3>Nueva asociación</h3>
-    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí solo registras el link para que el cliente entre.</p>
-    <div class="form-grid" style="margin-top:18px;">
-      <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
-      <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
-      <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
-      <div class="form-field"><label>Link de facturación (opcional)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
+    <div class="modal-scroll">
+      <h3>Nueva asociación</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí solo registras el link para que el cliente entre.</p>
+      <div class="form-grid" style="margin-top:18px;">
+        <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
+        <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
+        <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
+        <div class="form-field"><label>Link de facturación (opcional)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
+      </div>
+      <h4 style="margin-top:20px;font-size:14px;">Usuario de contacto (opcional, para que puedan iniciar sesión)</h4>
+      <div class="form-grid" style="margin-top:10px;">
+        <div class="form-field"><label>Nombre completo</label><input id="newAssocContactName"></div>
+        <div class="form-field"><label>Correo</label><input id="newAssocContactEmail" type="email"></div>
+        <div class="form-field"><label>Celular</label><input id="newAssocContactPhone"></div>
+        <div class="form-field"><label>Contraseña</label><div class="pwd-wrap"><input id="newAssocContactPassword" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:18px;" onclick="createAssociation()">Crear asociación</button>
+      <p id="newAssociationError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
     </div>
-    <h4 style="margin-top:20px;font-size:14px;">Usuario de contacto (opcional, para que puedan iniciar sesión)</h4>
-    <div class="form-grid" style="margin-top:10px;">
-      <div class="form-field"><label>Nombre completo</label><input id="newAssocContactName"></div>
-      <div class="form-field"><label>Correo</label><input id="newAssocContactEmail" type="email"></div>
-      <div class="form-field"><label>Celular</label><input id="newAssocContactPhone"></div>
-      <div class="form-field"><label>Contraseña</label><div class="pwd-wrap"><input id="newAssocContactPassword" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
-    </div>
-    <button class="btn btn-primary" style="margin-top:18px;" onclick="createAssociation()">Crear asociación</button>
-    <p id="newAssociationError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
   </div>
 </div>
 
@@ -356,12 +386,14 @@
 <div class="modal-overlay" id="newRouteModalOverlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeNewRouteModal()">&times;</button>
-    <h3>Mapa de rutas</h3>
-    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;" id="newRouteAssociationLabel"></p>
-    <input type="hidden" id="newRouteAssociationId">
-    <div class="form-field" style="margin-top:18px;"><label>Archivo KML/KMZ (con todos los recicladores como capas)</label><input id="newRouteFile" type="file" accept=".kml,.kmz"></div>
-    <button class="btn btn-primary" style="margin-top:16px;" onclick="addRoute()">Subir mapa</button>
-    <p id="newRouteError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+    <div class="modal-scroll">
+      <h3>Mapa de rutas</h3>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;" id="newRouteAssociationLabel"></p>
+      <input type="hidden" id="newRouteAssociationId">
+      <div class="form-field" style="margin-top:18px;"><label>Archivo KML/KMZ (con todos los recicladores como capas)</label><input id="newRouteFile" type="file" accept=".kml,.kmz"></div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="addRoute()">Subir mapa</button>
+      <p id="newRouteError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+    </div>
   </div>
 </div>
 
@@ -478,6 +510,29 @@
       offBlock.style.display = enabled ? 'none' : 'block';
       onBlock.style.display = enabled ? 'block' : 'none';
     });
+    if(isPro) loadNotificationSettings();
+  }
+
+  function loadNotificationSettings(){
+    gtApiFetch('/admin/notification-settings').then(function(res){
+      if(!res.ok) return;
+      document.getElementById('notifyEmailInput').value = res.data.email || '';
+      document.getElementById('notifyPhoneInput').value = res.data.phone || '';
+    });
+  }
+
+  function saveNotificationSettings(){
+    var email = document.getElementById('notifyEmailInput').value.trim();
+    var phone = document.getElementById('notifyPhoneInput').value.trim();
+    var msg = document.getElementById('notifySettingsMsg');
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Guardando…';
+    gtApiFetch('/admin/notification-settings', { method: 'PUT', body: JSON.stringify({ email: email, phone: phone }) })
+      .then(function(res){
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo guardar.'; return; }
+        msg.style.color = 'var(--green)';
+        msg.textContent = 'Guardado.';
+      });
   }
 
   function startTwoFASetup(){
@@ -601,7 +656,12 @@
   }
 
   // ---- Modal cliente (soporte) ----
+  var clientModalAssociationId = null;
+  var clientModalDirty = false;
+
   function openClientModal(id, name){
+    clientModalAssociationId = id;
+    clientModalDirty = false;
     document.getElementById('clientModalTitle').textContent = name;
     document.getElementById('clientModalBody').innerHTML = 'Cargando…';
     document.getElementById('clientModalOverlay').classList.add('open');
@@ -664,6 +724,14 @@
 
       body.innerHTML = html;
 
+      // Solo los campos basicos de la asociacion cuentan para la advertencia de "cambios sin
+      // guardar" al cerrar: son los unicos con datos escritos a mano que se pierden sin aviso;
+      // corregir plan, pago en efectivo, etc. son acciones con su propio boton y confirmacion.
+      ['editAssocName','editAssocNit','editAssocRecyclerCount','editAssocFacturacionUrl'].forEach(function(fieldId){
+        var el = document.getElementById(fieldId);
+        if(el) el.addEventListener('input', function(){ clientModalDirty = true; });
+      });
+
       gtApiFetch('/plans').then(function(planRes){
         var sel = document.getElementById('fixPlanSelect');
         var cashSel = document.getElementById('cashPlanSelect');
@@ -697,9 +765,30 @@
       });
     });
   }
-  function closeClientModal(){ document.getElementById('clientModalOverlay').classList.remove('open'); }
+  function closeClientModal(){
+    if(clientModalDirty){
+      document.getElementById('unsavedConfirmOverlay').classList.add('open');
+      return;
+    }
+    document.getElementById('clientModalOverlay').classList.remove('open');
+  }
 
-  function saveAssociationEdits(associationId){
+  function gtCancelCloseClientModal(){
+    document.getElementById('unsavedConfirmOverlay').classList.remove('open');
+  }
+
+  function gtConfirmDiscardAndCloseClientModal(){
+    clientModalDirty = false;
+    document.getElementById('unsavedConfirmOverlay').classList.remove('open');
+    document.getElementById('clientModalOverlay').classList.remove('open');
+  }
+
+  function gtConfirmSaveAndCloseClientModal(){
+    document.getElementById('unsavedConfirmOverlay').classList.remove('open');
+    saveAssociationEdits(clientModalAssociationId, true);
+  }
+
+  function saveAssociationEdits(associationId, closeAfter){
     var msgEl = document.getElementById('clientEditMsg');
     var body = {
       name: document.getElementById('editAssocName').value.trim(),
@@ -712,7 +801,9 @@
         if(!res.ok){ throw new Error(res.data.error || 'No se pudo guardar.'); }
         msgEl.style.color = 'var(--green)';
         msgEl.textContent = 'Guardado.';
+        clientModalDirty = false;
         loadAsociaciones();
+        if(closeAfter) document.getElementById('clientModalOverlay').classList.remove('open');
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
