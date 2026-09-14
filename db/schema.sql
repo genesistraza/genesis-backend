@@ -81,6 +81,16 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS association_routes (
+  id SERIAL PRIMARY KEY,
+  association_id INT REFERENCES associations(id) ON DELETE CASCADE,
+  reciclador_name VARCHAR(150) NOT NULL,
+  kml_url TEXT NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS news_articles (
   id SERIAL PRIMARY KEY,
   title VARCHAR(300) NOT NULL,

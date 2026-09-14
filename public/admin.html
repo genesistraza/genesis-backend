@@ -385,6 +385,27 @@
       html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:12px;" onclick="uploadAssociationDocuments(' + d.association.id + ')">Subir documentos</button>';
       html += '<p id="docUploadMsg" style="margin-top:8px;font-size:13px;"></p>';
 
+      html += '<h4 style="margin-top:20px;font-size:14px;">Mis Rutas (mapa por reciclador)</h4>';
+      if(d.routes.length === 0){
+        html += '<p style="font-size:13.5px;color:var(--ink-soft);">Sin rutas cargadas todavía.</p>';
+      } else {
+        html += '<ul style="padding-left:0;list-style:none;font-size:13.5px;">';
+        d.routes.forEach(function(r){
+          html += '<li style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px;">';
+          html += '<span><strong>' + r.reciclador_name + '</strong>' + (r.notes ? ' — ' + r.notes : '') + ' — <a href="' + r.kml_url + '" target="_blank" style="color:var(--blue);">ver KML</a></span>';
+          html += '<button type="button" class="cell-action" style="color:#C0392B;flex-shrink:0;" onclick="deleteRoute(' + r.id + ',' + d.association.id + ')">Eliminar</button>';
+          html += '</li>';
+        });
+        html += '</ul>';
+      }
+      html += '<div class="form-grid" style="margin-top:10px;">';
+      html += '<div class="form-field"><label>Nombre del reciclador</label><input id="newRouteReciclador"></div>';
+      html += '<div class="form-field"><label>Archivo KML/KMZ</label><input id="newRouteFile" type="file" accept=".kml,.kmz"></div>';
+      html += '</div>';
+      html += '<div class="form-field" style="margin-top:10px;"><label>Información adicional (opcional)</label><textarea id="newRouteNotes" rows="2"></textarea></div>';
+      html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:10px;" onclick="addRoute(' + d.association.id + ')">Agregar ruta</button>';
+      html += '<p id="routeMsg" style="margin-top:8px;font-size:13px;"></p>';
+
       html += '<h4 style="margin-top:16px;font-size:14px;">Usuarios</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.users.forEach(function(u){ html += '<li>' + u.full_name + ' — ' + u.email + ' (' + u.role + (u.is_verified ? '' : ', sin verificar') + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
@@ -487,6 +508,46 @@
       .then(function(res){
         if(!res.ok){ throw new Error(res.data.error || 'No se pudo eliminar.'); }
         loadAsociaciones();
+      })
+      .catch(function(err){ alert(err.message); });
+  }
+
+  function addRoute(associationId){
+    var msgEl = document.getElementById('routeMsg');
+    var reciclador = document.getElementById('newRouteReciclador').value.trim();
+    var file = document.getElementById('newRouteFile').files[0];
+    var notes = document.getElementById('newRouteNotes').value.trim();
+    if(!reciclador || !file){
+      msgEl.style.color = '#C0392B';
+      msgEl.textContent = 'El nombre del reciclador y el archivo KML/KMZ son obligatorios.';
+      return;
+    }
+    var formData = new FormData();
+    formData.append('reciclador_name', reciclador);
+    formData.append('notes', notes);
+    formData.append('kml', file);
+
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Subiendo…';
+    fetch(API_BASE + '/admin/associations/' + associationId + '/routes', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gtGetToken() },
+      body: formData
+    })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo agregar la ruta.');
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  function deleteRoute(routeId, associationId){
+    if(!confirm('¿Eliminar esta ruta?')) return;
+    gtApiFetch('/admin/routes/' + routeId, { method: 'DELETE' })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo eliminar.');
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
       })
       .catch(function(err){ alert(err.message); });
   }
