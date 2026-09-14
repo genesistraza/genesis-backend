@@ -598,6 +598,31 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   res.json(result.rows[0]);
 }));
 
+// PUT /admin/users/:id -> corrige el correo y/o celular de contacto de un usuario del cliente
+// (para cuando el cliente se equivocó al registrarse y no puede entrar a corregirlo él mismo).
+router.put('/users/:id', asyncRoute(async (req, res) => {
+  const { email, phone } = req.body;
+  if (!email) {
+    return res.status(400).json({ error: 'El correo es obligatorio.' });
+  }
+  try {
+    const result = await pool.query(
+      'UPDATE users SET email = $1, phone = $2 WHERE id = $3 RETURNING id, full_name, email, phone',
+      [email.toLowerCase().trim(), phone ? phone.trim() : null, req.params.id]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+    await logActivity(req.user.id, 'usuario_contacto_actualizado', { userId: req.params.id, email, phone }, req.ip);
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(409).json({ error: 'Ese correo ya está en uso por otro usuario.' });
+    }
+    throw err;
+  }
+}));
+
 // GET /admin/notification-settings -> correo y telefono a donde llegan las notificaciones de pago
 router.get('/notification-settings', requireRole('pro'), asyncRoute(async (req, res) => {
   const result = await pool.query('SELECT email, phone FROM notification_settings WHERE id = 1');
