@@ -902,6 +902,7 @@
         link.addEventListener('click', function(e){
           e.preventDefault();
           selectPlan(plan.name, link, plan.id);
+          document.getElementById('pago').scrollIntoView({ behavior: 'smooth' });
         });
         div.appendChild(link);
 
