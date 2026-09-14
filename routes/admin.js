@@ -58,7 +58,7 @@ router.post('/associations', asyncRoute(async (req, res) => {
 // GET /admin/associations -> lista de asociaciones con su estado de pago
 router.get('/associations', asyncRoute(async (req, res) => {
   const result = await pool.query(`
-    SELECT a.id, a.name, a.nit, a.recycler_count,
+    SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url,
            s.status AS subscription_status, s.next_due_date, p.name AS plan_name
     FROM associations a
     LEFT JOIN subscriptions s ON s.association_id = a.id
@@ -68,16 +68,30 @@ router.get('/associations', asyncRoute(async (req, res) => {
   res.json(result.rows);
 }));
 
-// GET /admin/routes -> todas las rutas de todas las asociaciones (para la pestaña Rutas)
-router.get('/routes', asyncRoute(async (req, res) => {
-  const result = await pool.query(`
-    SELECT r.id, r.reciclador_name, r.kml_url, r.notes, r.created_at,
-           a.id AS association_id, a.name AS association_name
-    FROM association_routes r
-    JOIN associations a ON a.id = r.association_id
-    ORDER BY a.name, r.reciclador_name
-  `);
-  res.json(result.rows);
+// POST /admin/associations/:id/routes-map -> sube el KML/KMZ con todas las rutas de la asociación (un solo archivo)
+router.post('/associations/:id/routes-map', upload.single('kml'), asyncRoute(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Falta el archivo KML/KMZ.' });
+  }
+  const kmlUrl = await uploadToCloudinary(req.file.buffer, `genesis-traza/associations/${req.params.id}/routes`);
+  const result = await pool.query(
+    'UPDATE associations SET routes_kml_url = $1 WHERE id = $2 RETURNING *',
+    [kmlUrl, req.params.id]
+  );
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Asociación no encontrada.' });
+  await logActivity(req.user.id, 'mapa_rutas_subido', { associationId: Number(req.params.id) }, req.ip);
+  res.json(result.rows[0]);
+}));
+
+// DELETE /admin/associations/:id/routes-map -> quita el mapa de rutas de la asociación
+router.delete('/associations/:id/routes-map', asyncRoute(async (req, res) => {
+  const result = await pool.query(
+    'UPDATE associations SET routes_kml_url = NULL WHERE id = $1 RETURNING *',
+    [req.params.id]
+  );
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Asociación no encontrada.' });
+  await logActivity(req.user.id, 'mapa_rutas_eliminado', { associationId: Number(req.params.id) }, req.ip);
+  res.json({ message: 'Mapa de rutas eliminado.' });
 }));
 
 // GET /admin/payments -> quién pagó y quién no
@@ -119,58 +133,14 @@ router.get('/associations/:id', asyncRoute(async (req, res) => {
      WHERE s.association_id = $1 ORDER BY pay.created_at DESC LIMIT 100`,
     [associationId]
   );
-  const routes = await pool.query(
-    'SELECT id, reciclador_name, kml_url, notes, created_at FROM association_routes WHERE association_id = $1 ORDER BY reciclador_name',
-    [associationId]
-  );
-
   await logActivity(req.user.id, 'admin_vio_cliente', { associationId: Number(associationId) }, req.ip);
 
   res.json({
     association: association.rows[0],
     users: users.rows,
     subscriptions: subscriptions.rows,
-    payments: payments.rows,
-    routes: routes.rows
+    payments: payments.rows
   });
-}));
-
-// POST /admin/associations/:id/routes -> sube una ruta (KML/KMZ) de un reciclador para una asociación
-router.post('/associations/:id/routes', upload.single('kml'), asyncRoute(async (req, res) => {
-  const { reciclador_name, notes } = req.body;
-  if (!reciclador_name || !req.file) {
-    return res.status(400).json({ error: 'Falta el nombre del reciclador o el archivo KML/KMZ.' });
-  }
-  const kmlUrl = await uploadToCloudinary(req.file.buffer, `genesis-traza/associations/${req.params.id}/routes`);
-  const result = await pool.query(
-    `INSERT INTO association_routes (association_id, reciclador_name, kml_url, notes) VALUES ($1,$2,$3,$4) RETURNING *`,
-    [req.params.id, reciclador_name, kmlUrl, notes || null]
-  );
-  await logActivity(req.user.id, 'ruta_agregada', { associationId: Number(req.params.id), reciclador_name }, req.ip);
-  res.json(result.rows[0]);
-}));
-
-// PUT /admin/routes/:routeId -> editar nombre del reciclador o las notas de una ruta
-router.put('/routes/:routeId', asyncRoute(async (req, res) => {
-  const { reciclador_name, notes } = req.body;
-  const result = await pool.query(
-    `UPDATE association_routes SET
-       reciclador_name = COALESCE($1, reciclador_name),
-       notes = $2,
-       updated_at = NOW()
-     WHERE id = $3 RETURNING *`,
-    [reciclador_name || null, notes || null, req.params.routeId]
-  );
-  if (result.rows.length === 0) return res.status(404).json({ error: 'Ruta no encontrada.' });
-  await logActivity(req.user.id, 'ruta_editada', { routeId: Number(req.params.routeId) }, req.ip);
-  res.json(result.rows[0]);
-}));
-
-// DELETE /admin/routes/:routeId -> elimina una ruta
-router.delete('/routes/:routeId', asyncRoute(async (req, res) => {
-  await pool.query('DELETE FROM association_routes WHERE id = $1', [req.params.routeId]);
-  await logActivity(req.user.id, 'ruta_eliminada', { routeId: Number(req.params.routeId) }, req.ip);
-  res.json({ message: 'Ruta eliminada.' });
 }));
 
 // PUT /admin/associations/:id -> editar datos de una asociación, incluyendo su link único de facturación (solo 'pro')

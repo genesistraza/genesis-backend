@@ -86,14 +86,13 @@
     <!-- RUTAS -->
     <section class="tab-panel" id="tab-rutas" style="display:none;">
       <div class="app-topbar">
-        <div><h1>Rutas</h1><p>Mapa por reciclador, cargado por ti (los clientes solo lo ven).</p></div>
-        <button class="btn btn-primary" onclick="openNewRouteModal()">+ Nueva ruta</button>
+        <div><h1>Rutas</h1><p>Un solo archivo KML/KMZ por asociación, con todos sus recicladores adentro. Los clientes solo lo ven.</p></div>
       </div>
       <div class="panel">
         <div class="table-scroll">
           <table class="data-table">
-            <thead><tr><th>Asociación</th><th>Reciclador</th><th>Notas</th><th>Archivo</th><th></th></tr></thead>
-            <tbody id="routesTableBody"><tr><td class="empty-row" colspan="5">Cargando…</td></tr></tbody>
+            <thead><tr><th>Asociación</th><th>Mapa de rutas</th><th></th></tr></thead>
+            <tbody id="routesTableBody"><tr><td class="empty-row" colspan="3">Cargando…</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -216,19 +215,15 @@
   </div>
 </div>
 
-<!-- Modal: nueva ruta -->
+<!-- Modal: subir mapa de rutas -->
 <div class="modal-overlay" id="newRouteModalOverlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeNewRouteModal()">&times;</button>
-    <h3>Nueva ruta</h3>
-    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El cliente solo puede ver esta ruta, no editarla.</p>
-    <div class="form-grid" style="margin-top:18px;">
-      <div class="form-field"><label>Asociación</label><select id="newRouteAssociationId"></select></div>
-      <div class="form-field"><label>Nombre del reciclador</label><input id="newRouteReciclador"></div>
-      <div class="form-field"><label>Archivo KML/KMZ</label><input id="newRouteFile" type="file" accept=".kml,.kmz"></div>
-    </div>
-    <div class="form-field" style="margin-top:14px;"><label>Información adicional (opcional)</label><textarea id="newRouteNotes" rows="3"></textarea></div>
-    <button class="btn btn-primary" style="margin-top:16px;" onclick="addRoute()">Agregar ruta</button>
+    <h3>Mapa de rutas</h3>
+    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;" id="newRouteAssociationLabel"></p>
+    <input type="hidden" id="newRouteAssociationId">
+    <div class="form-field" style="margin-top:18px;"><label>Archivo KML/KMZ (con todos los recicladores como capas)</label><input id="newRouteFile" type="file" accept=".kml,.kmz"></div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="addRoute()">Subir mapa</button>
     <p id="newRouteError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
   </div>
 </div>
@@ -527,82 +522,71 @@
   }
 
   function loadRutas(){
-    gtApiFetch('/admin/routes').then(function(res){
+    gtApiFetch('/admin/associations').then(function(res){
       var tbody = document.getElementById('routesTableBody');
-      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="5">No hay rutas cargadas todavía.</td></tr>'; return; }
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="3">No hay asociaciones registradas.</td></tr>'; return; }
       tbody.innerHTML = '';
-      res.data.forEach(function(r){
+      res.data.forEach(function(a){
         var tr = document.createElement('tr');
+        var hasMap = !!a.routes_kml_url;
         tr.innerHTML =
-          '<td></td><td></td><td></td>' +
-          '<td><a href="' + r.kml_url + '" target="_blank" style="color:var(--blue);">ver KML</a></td>' +
-          '<td><button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button></td>';
-        tr.children[0].textContent = r.association_name;
-        tr.children[1].textContent = r.reciclador_name;
-        tr.children[2].textContent = r.notes || '—';
-        tr.querySelector('.cell-action').addEventListener('click', function(){ deleteRoute(r.id); });
+          '<td></td>' +
+          '<td>' + (hasMap ? '<a href="' + a.routes_kml_url + '" target="_blank" style="color:var(--blue);">ver KML</a>' : '<span style="color:var(--ink-soft);">Sin mapa</span>') + '</td>' +
+          '<td><button type="button" class="cell-action" style="margin-right:12px;">' + (hasMap ? 'Reemplazar' : 'Subir mapa') + '</button>' +
+          (hasMap ? '<button type="button" class="cell-action" style="color:#C0392B;">Quitar</button>' : '') + '</td>';
+        tr.children[0].textContent = a.name;
+        var actionBtns = tr.children[2].querySelectorAll('.cell-action');
+        actionBtns[0].addEventListener('click', function(){ openNewRouteModal(a.id, a.name); });
+        if(hasMap){
+          actionBtns[1].addEventListener('click', function(){ removeRoutesMap(a.id); });
+        }
         tbody.appendChild(tr);
       });
     });
   }
 
-  function openNewRouteModal(){
+  var gtRouteModalAssociationId = null;
+
+  function openNewRouteModal(associationId, associationName){
+    gtRouteModalAssociationId = associationId;
+    document.getElementById('newRouteAssociationLabel').textContent = associationName;
     document.getElementById('newRouteError').style.display = 'none';
-    document.getElementById('newRouteReciclador').value = '';
-    document.getElementById('newRouteNotes').value = '';
     document.getElementById('newRouteFile').value = '';
-    var select = document.getElementById('newRouteAssociationId');
-    select.innerHTML = '<option value="">Cargando asociaciones…</option>';
-    gtApiFetch('/admin/associations').then(function(res){
-      select.innerHTML = '';
-      if(res.ok){
-        res.data.forEach(function(a){
-          var opt = document.createElement('option');
-          opt.value = a.id; opt.textContent = a.name;
-          select.appendChild(opt);
-        });
-      }
-    });
     document.getElementById('newRouteModalOverlay').classList.add('open');
   }
   function closeNewRouteModal(){ document.getElementById('newRouteModalOverlay').classList.remove('open'); }
 
   function addRoute(){
     var msgEl = document.getElementById('newRouteError');
-    var associationId = document.getElementById('newRouteAssociationId').value;
-    var reciclador = document.getElementById('newRouteReciclador').value.trim();
     var file = document.getElementById('newRouteFile').files[0];
-    var notes = document.getElementById('newRouteNotes').value.trim();
     msgEl.style.display = 'none';
-    if(!associationId || !reciclador || !file){
-      msgEl.textContent = 'Asociación, nombre del reciclador y archivo KML/KMZ son obligatorios.';
+    if(!file){
+      msgEl.textContent = 'Selecciona un archivo KML/KMZ.';
       msgEl.style.display = 'block';
       return;
     }
     var formData = new FormData();
-    formData.append('reciclador_name', reciclador);
-    formData.append('notes', notes);
     formData.append('kml', file);
 
-    fetch(API_BASE + '/admin/associations/' + associationId + '/routes', {
+    fetch(API_BASE + '/admin/associations/' + gtRouteModalAssociationId + '/routes-map', {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + gtGetToken() },
       body: formData
     })
       .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
       .then(function(res){
-        if(!res.ok) throw new Error(res.data.error || 'No se pudo agregar la ruta.');
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo subir el mapa.');
         closeNewRouteModal();
         loadRutas();
       })
       .catch(function(err){ msgEl.textContent = err.message; msgEl.style.display = 'block'; });
   }
 
-  function deleteRoute(routeId){
-    if(!confirm('¿Eliminar esta ruta?')) return;
-    gtApiFetch('/admin/routes/' + routeId, { method: 'DELETE' })
+  function removeRoutesMap(associationId){
+    if(!confirm('¿Quitar el mapa de rutas de esta asociación?')) return;
+    gtApiFetch('/admin/associations/' + associationId + '/routes-map', { method: 'DELETE' })
       .then(function(res){
-        if(!res.ok) throw new Error(res.data.error || 'No se pudo eliminar.');
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo quitar.');
         loadRutas();
       })
       .catch(function(err){ alert(err.message); });

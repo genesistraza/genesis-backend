@@ -164,7 +164,6 @@ router.get('/me', requireAuth, asyncRoute(async (req, res) => {
   let association = null;
   let subscriptions = [];
   let payments = [];
-  let routes = [];
 
   if (user.association_id) {
     const assocResult = await pool.query('SELECT * FROM associations WHERE id = $1', [user.association_id]);
@@ -188,15 +187,9 @@ router.get('/me', requireAuth, asyncRoute(async (req, res) => {
       [user.association_id]
     );
     payments = paymentsResult.rows;
-
-    const routesResult = await pool.query(
-      'SELECT id, reciclador_name, kml_url, notes FROM association_routes WHERE association_id = $1 ORDER BY reciclador_name',
-      [user.association_id]
-    );
-    routes = routesResult.rows;
   }
 
-  res.json({ user, association, subscriptions, payments, routes });
+  res.json({ user, association, subscriptions, payments });
 }));
 
 module.exports = router;

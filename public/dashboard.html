@@ -201,9 +201,9 @@
         });
       }
 
-      if((meData.routes || []).length > 0){
+      if(meData.association.routes_kml_url){
         document.getElementById('routesPanelData').style.display = 'block';
-        renderRouteTabs(meData.routes);
+        loadRoutesMap(meData.association.routes_kml_url);
       } else {
         document.getElementById('routesPanelEmpty').style.display = 'block';
       }
@@ -211,60 +211,56 @@
   }
 
   var gtMap = null;
-  var gtRouteLayers = {}; // reciclador_name -> L.geoJSON layer
   var GT_ROUTE_COLORS = ['#1E6FD6', '#F2941F', '#7AB72E', '#C0392B', '#8E44AD', '#0FB5A6', '#D4A017', '#E91E8C'];
 
-  function renderRouteTabs(routes){
-    var tabsEl = document.getElementById('routeTabs');
-    tabsEl.innerHTML = '';
-    gtMap = L.map('routesMap').setView([4.6097, -74.0817], 11); // Bogotá por defecto
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(gtMap);
-
-    var allBounds = null;
-    var pending = routes.length;
-
-    routes.forEach(function(r, i){
-      var color = GT_ROUTE_COLORS[i % GT_ROUTE_COLORS.length];
-      var btn = document.createElement('button');
-      btn.className = 'tab-btn';
-      btn.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + r.reciclador_name;
-      btn.addEventListener('click', function(){
-        document.getElementById('routeNotes').textContent = r.notes || '';
-        var layer = gtRouteLayers[r.id];
-        if(layer) gtMap.fitBounds(layer.getBounds());
-      });
-      tabsEl.appendChild(btn);
-
-      loadRouteOnMap(r, color, function(bounds){
-        if(bounds){
-          allBounds = allBounds ? allBounds.extend(bounds) : bounds;
-        }
-        pending--;
-        if(pending === 0 && allBounds){ gtMap.fitBounds(allBounds); }
-      });
-    });
-
-    if(routes[0]) document.getElementById('routeNotes').textContent = routes[0].notes || '';
-  }
-
-  function loadRouteOnMap(route, color, onDone){
-    fetch(route.kml_url)
+  function loadRoutesMap(kmlUrl){
+    fetch(kmlUrl)
       .then(function(r){ return r.text(); })
       .then(function(kmlText){
         var kmlDom = new DOMParser().parseFromString(kmlText, 'text/xml');
-        var geojson = toGeoJSON.kml(kmlDom);
-        var layer = L.geoJSON(geojson, {
-          style: { color: color, weight: 4 },
-          pointToLayer: function(feature, latlng){ return L.circleMarker(latlng, { radius: 6, color: color, fillColor: color, fillOpacity: 1 }); }
+        var folders = Array.prototype.slice.call(kmlDom.getElementsByTagName('Folder'));
+
+        gtMap = L.map('routesMap').setView([4.6097, -74.0817], 11); // Bogotá por defecto
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
         }).addTo(gtMap);
-        gtRouteLayers[route.id] = layer;
-        onDone(layer.getBounds());
+
+        var tabsEl = document.getElementById('routeTabs');
+        tabsEl.innerHTML = '';
+        var allBounds = null;
+
+        // Si el KML no tiene carpetas, se trata como una sola capa con todo el archivo.
+        var groups = folders.length > 0 ? folders : [kmlDom];
+
+        groups.forEach(function(node, i){
+          var color = GT_ROUTE_COLORS[i % GT_ROUTE_COLORS.length];
+          var nameEl = node.getElementsByTagName('name')[0];
+          var label = nameEl ? nameEl.textContent : ('Reciclador ' + (i + 1));
+
+          var geojson = toGeoJSON.kml(node);
+          if(!geojson.features.length) return;
+
+          var layer = L.geoJSON(geojson, {
+            style: { color: color, weight: 4 },
+            pointToLayer: function(feature, latlng){ return L.circleMarker(latlng, { radius: 6, color: color, fillColor: color, fillOpacity: 1 }); }
+          }).addTo(gtMap);
+
+          var bounds = layer.getBounds();
+          if(bounds.isValid()){
+            allBounds = allBounds ? allBounds.extend(bounds) : bounds;
+          }
+
+          var btn = document.createElement('button');
+          btn.className = 'tab-btn';
+          btn.innerHTML = '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + color + ';margin-right:6px;"></span>' + label;
+          btn.addEventListener('click', function(){ if(bounds.isValid()) gtMap.fitBounds(bounds); });
+          tabsEl.appendChild(btn);
+        });
+
+        if(allBounds) gtMap.fitBounds(allBounds);
       })
       .catch(function(){
-        document.getElementById('routeNotes').textContent = 'No se pudo cargar el mapa de esta ruta.';
-        onDone(null);
+        document.getElementById('routeNotes').textContent = 'No se pudo cargar el mapa de rutas.';
       });
   }
 

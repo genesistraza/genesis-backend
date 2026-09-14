@@ -15,6 +15,7 @@ ALTER TABLE associations ADD COLUMN IF NOT EXISTS facturacion_url TEXT;
 ALTER TABLE associations ADD COLUMN IF NOT EXISTS rut_url TEXT;
 ALTER TABLE associations ADD COLUMN IF NOT EXISTS camara_comercio_url TEXT;
 ALTER TABLE associations ADD COLUMN IF NOT EXISTS representante_cedula_url TEXT;
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS routes_kml_url TEXT;
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
