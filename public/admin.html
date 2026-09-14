@@ -373,6 +373,9 @@
       d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + p.status + '</li>'; });
       html += '</ul>';
 
+      html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:8px;" id="sendReminderBtn">Enviar recordatorio de pago</button>';
+      html += '<p id="reminderMsg" style="margin-top:8px;font-size:13px;"></p>';
+
       if(isPro){
         html += '<h4 style="margin-top:16px;font-size:14px;">Link único de facturación electrónica</h4>';
         html += '<div class="form-field"><input id="clientFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' +
@@ -382,6 +385,19 @@
       }
 
       body.innerHTML = html;
+
+      document.getElementById('sendReminderBtn').addEventListener('click', function(){
+        var msgEl = document.getElementById('reminderMsg');
+        msgEl.textContent = 'Enviando…';
+        msgEl.style.color = 'var(--ink-soft)';
+        gtApiFetch('/admin/associations/' + id + '/send-reminder', { method: 'POST' })
+          .then(function(r2){
+            if(!r2.ok){ throw new Error(r2.data.error || 'No se pudo enviar.'); }
+            msgEl.style.color = 'var(--green)';
+            msgEl.textContent = r2.data.message;
+          })
+          .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+      });
     });
   }
   function closeClientModal(){ document.getElementById('clientModalOverlay').classList.remove('open'); }

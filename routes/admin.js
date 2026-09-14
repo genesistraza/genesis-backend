@@ -143,6 +143,39 @@ router.delete('/associations/:id', requireRole('pro'), asyncRoute(async (req, re
   res.json({ message: 'Asociación eliminada.' });
 }));
 
+// POST /admin/associations/:id/send-reminder -> envía manualmente un correo de recordatorio de pago
+router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  const target = await pool.query(
+    `SELECT u.email, u.full_name, a.name AS association_name, p.name AS plan_name, s.next_due_date, s.status
+     FROM associations a
+     LEFT JOIN users u ON u.association_id = a.id AND u.role = 'operativo'
+     LEFT JOIN subscriptions s ON s.association_id = a.id
+     LEFT JOIN plans p ON p.id = s.plan_id
+     WHERE a.id = $1
+     ORDER BY s.created_at DESC LIMIT 1`,
+    [req.params.id]
+  );
+  const row = target.rows[0];
+  if (!row || !row.email) {
+    return res.status(404).json({ error: 'Esta asociación no tiene un usuario con correo para notificar.' });
+  }
+
+  await resend.emails.send({
+    from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
+    to: row.email,
+    subject: 'Recordatorio de pago - Genesis Traza',
+    html: `<p>Hola ${row.full_name},</p>
+           <p>Te escribimos para recordarte tu pago${row.plan_name ? ' del plan <strong>' + row.plan_name + '</strong>' : ''} de <strong>${row.association_name}</strong>${row.next_due_date ? ' con vencimiento el ' + row.next_due_date : ''}.</p>
+           <p>Ingresa a tu cuenta en Genesis Traza para ponerte al día y evitar la suspensión del servicio.</p>`
+  });
+
+  await logActivity(req.user.id, 'recordatorio_manual_enviado', { associationId: Number(req.params.id), email: row.email }, req.ip);
+  res.json({ message: 'Recordatorio enviado a ' + row.email + '.' });
+}));
+
 // GET /admin/revenue-summary -> ingresos totales, del mes, y suscripciones activas (solo 'pro')
 router.get('/revenue-summary', requireRole('pro'), asyncRoute(async (req, res) => {
   const totals = await pool.query(`

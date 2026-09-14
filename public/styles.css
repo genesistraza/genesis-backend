@@ -318,6 +318,24 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 .modal-close{position:absolute;top:14px;right:14px;background:none;border:none;font-size:20px;cursor:pointer;color:var(--ink-soft);width:32px;height:32px;border-radius:50%;transition:background .15s ease;}
 .modal-close:hover{background:var(--blue-light);}
 
+.stepper{display:flex;align-items:flex-start;justify-content:center;gap:0;margin-bottom:52px;max-width:640px;margin-left:auto;margin-right:auto;}
+.step{display:flex;flex-direction:column;align-items:center;gap:8px;flex:0 0 auto;width:150px;}
+.step-num{width:38px;height:38px;border-radius:50%;background:#fff;border:2px solid var(--line);color:var(--ink-soft);display:flex;align-items:center;justify-content:center;font-weight:700;font-family:'Poppins';transition:all .2s ease;}
+.step.active .step-num{background:var(--grad-brand);border-color:transparent;color:#fff;box-shadow:0 6px 16px rgba(10,51,105,.28);}
+.step.done .step-num{background:var(--green);border-color:transparent;color:#fff;}
+.step-label{font-size:13px;font-weight:600;color:var(--ink-soft);text-align:center;}
+.step.active .step-label{color:var(--blue-deep);}
+.step-line{flex:1 1 auto;height:2px;background:var(--line);margin-top:19px;min-width:20px;}
+.step-line.done{background:var(--green);}
+@media(max-width:600px){ .step-label{display:none;} .step{width:auto;} }
+
+.plan-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-bottom:36px;}
+@media(max-width:860px){ .plan-preview-grid{grid-template-columns:1fr;} }
+
+.checkout-box{max-width:640px;margin:0 auto;background:#fff;border:1px solid var(--line);border-radius:20px;padding:40px;box-shadow:var(--shadow-sm);}
+.method-row{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px;flex-wrap:wrap;}
+.method-chip{display:flex;align-items:center;gap:6px;background:var(--blue-light);color:var(--blue-deep);font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:99px;}
+
 .wa-float{position:fixed;right:22px;bottom:22px;width:58px;height:58px;border-radius:50%;background:#25D366;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 10px 26px rgba(37,211,102,.45);z-index:120;transition:transform .18s ease,box-shadow .18s ease;animation:waPulse 2.6s ease infinite;}
 .wa-float svg{width:30px;height:30px;}
 .wa-float:hover{transform:scale(1.08);box-shadow:0 14px 32px rgba(37,211,102,.55);}

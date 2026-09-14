@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planes | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+
+<div id="gtPageLoader">
+  <div class="gt-loader-mark">
+    <div class="gt-spinner"></div>
+    <span>Cargando planes…</span>
+  </div>
+</div>
+
+<header class="nav">
+  <nav class="wrap">
+    <a class="brand" href="/">
+      <span class="brand-text">Genesis <span>Traza</span></span>
+    </a>
+    <div id="userBadge" style="display:none;align-items:center;gap:12px;">
+      <span style="font-size:14px;font-weight:600;color:var(--ink);" id="userBadgeName"></span>
+      <a href="#" class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);padding:9px 16px;" onclick="logout();return false;">Salir</a>
+    </div>
+  </nav>
+</header>
+
+<section style="padding:56px 0 100px;">
+  <div class="wrap">
+    <div class="section-head reveal visible" style="text-align:center;margin-left:auto;margin-right:auto;">
+      <span class="kicker">Planes</span>
+      <h2>Elige el plan de Genesis Traza</h2>
+      <p>Trazabilidad, facturación electrónica, o la combinación con el mejor precio.</p>
+    </div>
+
+    <div class="stepper">
+      <div class="step active" id="stepIndicator1"><div class="step-num">1</div><div class="step-label">Elige un plan</div></div>
+      <div class="step-line" id="line1"></div>
+      <div class="step" id="stepIndicator2"><div class="step-num">2</div><div class="step-label">Crea tu cuenta</div></div>
+      <div class="step-line" id="line2"></div>
+      <div class="step" id="stepIndicator3"><div class="step-num">3</div><div class="step-label">Finaliza tu compra</div></div>
+    </div>
+
+    <!-- PASO 1: elegir plan -->
+    <div id="panelStep1">
+      <div class="tabs plan-tabs" style="justify-content:center;">
+        <button class="tab-btn active" onclick="setPlanTab('trazabilidad', this)">Trazabilidad</button>
+        <button class="tab-btn" onclick="setPlanTab('facturacion', this)">Facturación</button>
+        <button class="tab-btn" onclick="setPlanTab('combo', this)">Combinados</button>
+      </div>
+      <div class="toggle-row">
+        <div class="toggle">
+          <button class="active" id="btnMensual" onclick="setBilling('mensual')">Mensual</button>
+          <button id="btnAnual" onclick="setBilling('anual')">Anual (2 meses gratis)</button>
+        </div>
+      </div>
+
+      <div class="plan-tab-panel active" id="tab-trazabilidad">
+        <div class="plans-grid" id="grid-trazabilidad">
+          <div class="plan-skeleton"><div class="skeleton sk-title"></div><div class="skeleton sk-price"></div><div class="skeleton sk-line"></div></div>
+          <div class="plan-skeleton"><div class="skeleton sk-title"></div><div class="skeleton sk-price"></div><div class="skeleton sk-line"></div></div>
+          <div class="plan-skeleton"><div class="skeleton sk-title"></div><div class="skeleton sk-price"></div><div class="skeleton sk-line"></div></div>
+        </div>
+      </div>
+      <div class="plan-tab-panel" id="tab-facturacion" style="display:none;">
+        <div class="plans-grid" id="grid-facturacion"></div>
+      </div>
+      <div class="plan-tab-panel" id="tab-combo" style="display:none;">
+        <div class="plans-grid" id="grid-combo"></div>
+      </div>
+    </div>
+
+    <!-- PASO 2: crear cuenta / iniciar sesión -->
+    <div id="panelStep2" style="display:none;">
+      <div class="checkout-box">
+        <p style="text-align:center;color:var(--ink-soft);margin-bottom:8px;">Plan seleccionado</p>
+        <h3 style="text-align:center;margin-bottom:26px;" id="step2PlanName">—</h3>
+
+        <div class="tabs" style="justify-content:center;">
+          <button class="tab-btn active" id="authTabLogin" onclick="setAuthTab('login')">Ya tengo cuenta</button>
+          <button class="tab-btn" id="authTabRegister" onclick="setAuthTab('register')">Soy nuevo</button>
+        </div>
+
+        <div id="authPanelLogin">
+          <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="loginEmail2" type="email" autocomplete="off" placeholder="nombre@empresa.com"></div>
+          <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><input id="loginPassword2" type="password" autocomplete="off" placeholder="Tu contraseña"></div>
+          <p id="loginError2" style="display:none;color:#C0392B;font-size:13px;margin-bottom:10px;"></p>
+          <button class="btn btn-primary" style="width:100%;" onclick="submitLogin2()">Ingresar y continuar</button>
+        </div>
+
+        <div id="authPanelRegister" style="display:none;">
+          <div class="form-grid">
+            <div class="form-field"><label>Nombre completo</label><input id="regFullName2"></div>
+            <div class="form-field"><label>Nombre de la asociación</label><input id="regAssociationName2"></div>
+            <div class="form-field"><label>NIT (opcional)</label><input id="regNit2"></div>
+            <div class="form-field"><label># de recicladores (opcional)</label><input id="regRecyclerCount2" type="number" min="0"></div>
+            <div class="form-field"><label>Correo</label><input id="regEmail2" type="email"></div>
+            <div class="form-field"><label>Celular (opcional)</label><input id="regPhone2" type="tel"></div>
+          </div>
+          <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><input id="regPassword2" type="password"></div>
+          <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+          <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitRegister2()">Crear cuenta y continuar</button>
+        </div>
+
+        <div id="verifyPanel2" style="display:none;">
+          <p style="text-align:center;color:var(--ink-soft);margin-bottom:18px;">Enviamos un código de 6 dígitos a <strong id="verifyEmailLabel2"></strong>.</p>
+          <div class="form-field"><label>Código</label><input id="verifyCode2" maxlength="6" style="text-align:center;letter-spacing:4px;font-size:20px;"></div>
+          <p id="verifyError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+          <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitVerify2()">Verificar y continuar</button>
+          <p style="text-align:center;font-size:13px;margin-top:14px;"><a href="#" style="color:var(--blue);font-weight:600;" onclick="resendCode2();return false;">Reenviar código</a></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- PASO 3: pago -->
+    <div id="panelStep3" style="display:none;">
+      <div class="checkout-box" style="text-align:center;">
+        <h3>Finaliza tu compra</h3>
+        <p style="color:var(--ink-soft);margin:12px 0 6px;">Plan: <strong id="step3PlanName" style="color:var(--orange);">—</strong></p>
+        <p style="color:var(--ink-soft);font-size:14px;">Total a pagar: <strong id="step3Amount" style="color:var(--blue-deep);"></strong></p>
+        <button class="btn btn-primary" style="margin-top:22px;" id="payBtn" onclick="startCheckoutPayment()">Pagar con cualquier método</button>
+        <div class="method-row">
+          <span class="method-chip">💳 Tarjeta</span>
+          <span class="method-chip">🏦 PSE</span>
+          <span class="method-chip">📱 Nequi</span>
+        </div>
+        <p id="payError3" style="display:none;color:#C0392B;font-size:13px;margin-top:14px;"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-bottom">
+      <span>© 2026 Genesis Traza. Todos los derechos reservados.</span>
+      <a href="/">Volver al inicio</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  var API_BASE = 'https://genesis-backend-production-edc7.up.railway.app';
+  var authToken = localStorage.getItem('gt_token');
+  var authUser = { role: localStorage.getItem('gt_role'), fullName: localStorage.getItem('gt_fullName') };
+  var selectedPlanId = null, selectedPlanName = null, selectedAmount = null, selectedBillingCycle = 'mensual';
+  var pendingVerifyUserId = null, pendingVerifyEmail = null, pendingVerifyPassword = null;
+
+  function logout(){
+    localStorage.removeItem('gt_token'); localStorage.removeItem('gt_role'); localStorage.removeItem('gt_fullName');
+    window.location.reload();
+  }
+
+  function updateAuthUI(){
+    var loggedIn = !!authToken;
+    document.getElementById('userBadge').style.display = loggedIn ? 'flex' : 'none';
+    if(loggedIn){
+      var firstName = (authUser.fullName || '').split(' ').slice(0,2).join(' ');
+      document.getElementById('userBadgeName').textContent = 'Hola, ' + firstName;
+    }
+  }
+
+  function goToStep(n){
+    [1,2,3].forEach(function(i){
+      document.getElementById('panelStep' + i).style.display = (i === n) ? 'block' : 'none';
+      var ind = document.getElementById('stepIndicator' + i);
+      ind.classList.remove('active','done');
+      if(i < n) ind.classList.add('done');
+      if(i === n) ind.classList.add('active');
+    });
+    document.getElementById('line1').className = 'step-line' + (n > 1 ? ' done' : '');
+    document.getElementById('line2').className = 'step-line' + (n > 2 ? ' done' : '');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function selectPlan(planName, linkEl, planId, priceMonthly, priceAnnual){
+    selectedPlanId = planId;
+    selectedPlanName = planName;
+    selectedBillingCycle = document.getElementById('btnAnual').classList.contains('active') ? 'anual' : 'mensual';
+    selectedAmount = selectedBillingCycle === 'anual' ? (priceAnnual || priceMonthly) : priceMonthly;
+    document.getElementById('step2PlanName').textContent = planName + ' — ' + gtFormatCOP(selectedAmount) + '/' + (selectedBillingCycle === 'anual' ? 'año' : 'mes');
+    if(authToken){
+      prepareStep3();
+    } else {
+      goToStep(2);
+    }
+  }
+
+  function gtFormatCOP(v){ return '$' + Number(v || 0).toLocaleString('es-CO'); }
+
+  function setAuthTab(which){
+    document.getElementById('authTabLogin').classList.toggle('active', which === 'login');
+    document.getElementById('authTabRegister').classList.toggle('active', which === 'register');
+    document.getElementById('authPanelLogin').style.display = which === 'login' ? 'block' : 'none';
+    document.getElementById('authPanelRegister').style.display = which === 'register' ? 'block' : 'none';
+    document.getElementById('verifyPanel2').style.display = 'none';
+  }
+
+  function submitLogin2(){
+    var email = document.getElementById('loginEmail2').value.trim().toLowerCase();
+    var pass = document.getElementById('loginPassword2').value;
+    var errorEl = document.getElementById('loginError2');
+    errorEl.style.display = 'none';
+    fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email:email, password:pass }) })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'Correo o contraseña incorrectos.');
+        authToken = res.data.token;
+        authUser = { role: res.data.role, fullName: res.data.fullName };
+        localStorage.setItem('gt_token', authToken); localStorage.setItem('gt_role', authUser.role); localStorage.setItem('gt_fullName', authUser.fullName);
+        updateAuthUI();
+        prepareStep3();
+      })
+      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+  }
+
+  function submitRegister2(){
+    var fullName = document.getElementById('regFullName2').value.trim();
+    var associationName = document.getElementById('regAssociationName2').value.trim();
+    var email = document.getElementById('regEmail2').value.trim().toLowerCase();
+    var password = document.getElementById('regPassword2').value;
+    var errorEl = document.getElementById('registerError2');
+    errorEl.style.display = 'none';
+    if(!fullName || !associationName || !email || !password){
+      errorEl.textContent = 'Completa nombre, asociación, correo y contraseña.'; errorEl.style.display = 'block'; return;
+    }
+    fetch(API_BASE + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
+      fullName: fullName, associationName: associationName,
+      nit: document.getElementById('regNit2').value.trim() || undefined,
+      recyclerCount: Number(document.getElementById('regRecyclerCount2').value) || undefined,
+      email: email, phone: document.getElementById('regPhone2').value.trim() || undefined, password: password
+    })})
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo crear la cuenta.');
+        pendingVerifyUserId = res.data.userId; pendingVerifyEmail = email; pendingVerifyPassword = password;
+        document.getElementById('verifyEmailLabel2').textContent = email;
+        document.getElementById('authPanelLogin').style.display = 'none';
+        document.getElementById('authPanelRegister').style.display = 'none';
+        document.getElementById('verifyPanel2').style.display = 'block';
+      })
+      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+  }
+
+  function resendCode2(){
+    if(!pendingVerifyEmail) return;
+    fetch(API_BASE + '/auth/resend-code', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: pendingVerifyEmail }) });
+  }
+
+  function submitVerify2(){
+    var code = document.getElementById('verifyCode2').value.trim();
+    var errorEl = document.getElementById('verifyError2');
+    errorEl.style.display = 'none';
+    fetch(API_BASE + '/auth/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ userId: pendingVerifyUserId, code: code }) })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'Código incorrecto o vencido.');
+        return fetch(API_BASE + '/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email: pendingVerifyEmail, password: pendingVerifyPassword }) });
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar sesión.');
+        authToken = res.data.token;
+        authUser = { role: res.data.role, fullName: res.data.fullName };
+        localStorage.setItem('gt_token', authToken); localStorage.setItem('gt_role', authUser.role); localStorage.setItem('gt_fullName', authUser.fullName);
+        updateAuthUI();
+        prepareStep3();
+      })
+      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+  }
+
+  function prepareStep3(){
+    document.getElementById('step3PlanName').textContent = selectedPlanName;
+    document.getElementById('step3Amount').textContent = gtFormatCOP(selectedAmount) + (selectedBillingCycle === 'anual' ? ' / año' : ' / mes');
+    goToStep(3);
+  }
+
+  function startCheckoutPayment(){
+    var btn = document.getElementById('payBtn');
+    var errorEl = document.getElementById('payError3');
+    errorEl.style.display = 'none';
+    btn.disabled = true;
+    fetch(API_BASE + '/subscriptions', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body: JSON.stringify({ planId: selectedPlanId, billingCycle: selectedBillingCycle }) })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar la suscripción.');
+        return fetch(API_BASE + '/payments/create', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+authToken}, body: JSON.stringify({ subscriptionId: res.data.subscriptionId, amount: res.data.amount }) });
+      })
+      .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
+      .then(function(res){
+        btn.disabled = false;
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo iniciar el pago.');
+        var checkout = new WidgetCheckout({
+          currency: res.data.currency, amountInCents: res.data.amountInCents, reference: res.data.reference,
+          publicKey: res.data.publicKey, signature: { integrity: res.data.signature },
+          redirectUrl: window.location.origin + '/planes/'
+        });
+        checkout.open(function(result){
+          var t = result.transaction;
+          if(t && t.status === 'APPROVED'){ alert('¡Pago aprobado! Tu plan quedará activo en unos minutos.'); window.location.href = '/dashboard.html'; }
+          else { alert('El pago no se completó (estado: ' + (t ? t.status : 'desconocido') + ').'); }
+        });
+      })
+      .catch(function(err){ btn.disabled = false; errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+  }
+
+  function setBilling(mode){
+    document.getElementById('btnMensual').classList.toggle('active', mode==='mensual');
+    document.getElementById('btnAnual').classList.toggle('active', mode==='anual');
+    document.querySelectorAll('.amount').forEach(function(el){
+      var val = mode==='anual' ? el.getAttribute('data-a') : el.getAttribute('data-m');
+      el.textContent = isNaN(val) ? val : '$' + Number(val).toLocaleString('es-CO');
+    });
+  }
+  function setPlanTab(name, btn){
+    document.querySelectorAll('.plan-tabs .tab-btn').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.querySelectorAll('.plan-tab-panel').forEach(function(p){ p.style.display='none'; });
+    document.getElementById('tab-' + name).style.display = 'block';
+  }
+
+  function renderPlans(plans){
+    var byCategory = { trazabilidad: [], facturacion: [], combo: [] };
+    plans.forEach(function(p){ if(byCategory[p.category]) byCategory[p.category].push(p); });
+    Object.keys(byCategory).forEach(function(cat){
+      var container = document.getElementById('grid-' + cat);
+      if(!container) return;
+      container.innerHTML = '';
+      byCategory[cat].forEach(function(plan){
+        var div = document.createElement('div');
+        div.className = 'plan' + (plan.is_featured ? ' featured' : '');
+        if(plan.is_featured){ var badge = document.createElement('span'); badge.className = 'plan-badge'; badge.textContent = 'Más elegido'; div.appendChild(badge); }
+        var h3 = document.createElement('h3'); h3.textContent = plan.name; div.appendChild(h3);
+        var priceDiv = document.createElement('div'); priceDiv.className = 'price';
+        var amountSpan = document.createElement('span'); amountSpan.className = 'amount';
+        amountSpan.setAttribute('data-m', plan.price_monthly); amountSpan.setAttribute('data-a', plan.price_annual || plan.price_monthly);
+        amountSpan.textContent = '$' + Number(plan.price_monthly).toLocaleString('es-CO');
+        var small = document.createElement('small'); small.textContent = '/mes';
+        priceDiv.appendChild(amountSpan); priceDiv.appendChild(small); div.appendChild(priceDiv);
+        var desc = document.createElement('p'); desc.className = 'desc'; desc.textContent = plan.description || ''; div.appendChild(desc);
+        var ul = document.createElement('ul');
+        (Array.isArray(plan.features) ? plan.features : []).forEach(function(f){ var li = document.createElement('li'); li.textContent = f; ul.appendChild(li); });
+        div.appendChild(ul);
+        var link = document.createElement('a');
+        link.className = plan.is_featured ? 'btn btn-primary' : 'btn btn-outline';
+        if(!plan.is_featured){ link.style.borderColor = 'var(--blue-deep)'; link.style.color = 'var(--blue-deep)'; }
+        link.href = '#'; link.textContent = 'Elegir este plan';
+        link.addEventListener('click', function(e){ e.preventDefault(); selectPlan(plan.name, link, plan.id, plan.price_monthly, plan.price_annual); });
+        div.appendChild(link);
+        container.appendChild(div);
+      });
+    });
+    setBilling(document.getElementById('btnAnual').classList.contains('active') ? 'anual' : 'mensual');
+  }
+
+  updateAuthUI();
+  window.addEventListener('load', function(){
+    var loader = document.getElementById('gtPageLoader');
+    if(loader) setTimeout(function(){ loader.classList.add('hidden'); }, 200);
+  });
+  fetch(API_BASE + '/plans').then(function(r){ return r.json(); }).then(renderPlans).catch(function(){});
+</script>
+<script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
+</body>
+</html>

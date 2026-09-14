@@ -1,0 +1,6 @@
+# Redirige URLs viejas del sitio anterior (Wix) que Google ya indexó,
+# para que no den 404.
+/nosotros        /#nosotros     301
+/login           /              301
+/servicios-1     /#soluciones   301
+/video           /              301
