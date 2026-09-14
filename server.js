@@ -8,6 +8,7 @@ const adminRoutes = require('./routes/admin');
 const paymentsRoutes = require('./routes/payments');
 const subscriptionsRoutes = require('./routes/subscriptions');
 const newsRoutes = require('./routes/news');
+const massBalanceRoutes = require('./routes/massBalance');
 const startPaymentReminders = require('./jobs/paymentReminders');
 const startNewsFetcher = require('./jobs/newsFetcher');
 
@@ -23,6 +24,7 @@ app.use('/admin', adminRoutes);
 app.use('/payments', paymentsRoutes);
 app.use('/subscriptions', subscriptionsRoutes);
 app.use('/news', newsRoutes);
+app.use('/', massBalanceRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

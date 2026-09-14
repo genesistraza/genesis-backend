@@ -1,12 +1,61 @@
 const express = require('express');
 const multer = require('multer');
+const XLSX = require('xlsx');
 const pool = require('../db/pool');
 const cloudinary = require('../db/cloudinary');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
+const { getMassBalanceSummary, getRecicladores } = require('../db/massBalanceQueries');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// Los exportes de balance de masas de un año completo pueden pesar bastante mas que un PDF/KML normal.
+const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 60 * 1024 * 1024 } });
+
+function normalizeRowKeys(row) {
+  const out = {};
+  for (const key in row) out[key.trim()] = row[key];
+  return out;
+}
+// Devuelve 'YYYY-MM-DD' (no un objeto Date) usando los componentes UTC: XLSX arma las fechas
+// de Excel en UTC, y si se le pasa un Date crudo a pg, "pg" lo serializa con la hora local del
+// servidor y en zonas horarias detras de UTC (como Bogota, UTC-5) la fecha termina corriéndose
+// un dia hacia atras. Con un string 'YYYY-MM-DD' Postgres lo toma literal, sin conversion.
+function toDateValue(v) {
+  let d = null;
+  if (v instanceof Date) {
+    d = v;
+  } else if (typeof v === 'string' && v.trim()) {
+    const parsed = new Date(v);
+    if (!isNaN(parsed)) d = parsed;
+  }
+  if (!d) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function toNumberValue(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+function toTextValue(v) {
+  return v === null || v === undefined || v === '' ? null : String(v);
+}
+async function bulkInsert(client, table, columns, rows) {
+  const chunkSize = 500;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const values = [];
+    const placeholders = chunk.map((row, idx) => {
+      const base = idx * columns.length;
+      columns.forEach((col) => values.push(row[col]));
+      return '(' + columns.map((_, k) => '$' + (base + k + 1)).join(',') + ')';
+    }).join(',');
+    await client.query(`INSERT INTO ${table} (${columns.join(',')}) VALUES ${placeholders}`, values);
+  }
+}
 
 function uploadToCloudinary(fileBuffer, folder) {
   return new Promise((resolve, reject) => {
@@ -269,6 +318,121 @@ router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, re
     suscripcionesEliminadas: subs.rows.length
   }, req.ip);
   res.json({ paymentsEliminados: payments.rows.length, suscripcionesEliminadas: subs.rows.length });
+}));
+
+// POST /admin/associations/:id/mass-balance -> sube el Excel de balance de masas (formulario_de_masas)
+// del sistema de trazabilidad. Reemplaza las filas de esa asociacion dentro del rango de fechas
+// que trae el archivo, para poder volver a subirlo sin duplicar filas.
+router.post('/associations/:id/mass-balance', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo Excel.' });
+
+  const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: null }).map(normalizeRowKeys);
+  if (rows.length === 0) return res.status(400).json({ error: 'El archivo no tiene filas.' });
+
+  const associationId = Number(req.params.id);
+  const parsed = rows.map((r) => ({
+    association_id: associationId,
+    fecha: toDateValue(r['fecha']),
+    semana: toNumberValue(r['Número de semana']),
+    reciclador_documento: toTextValue(r['Nro ident.']),
+    reciclador_nombre: toTextValue(r['nombre_completo']),
+    material_codigo: toTextValue(r['Tipo Material']),
+    material_desc: toTextValue(r['desc_tipo_material_padre']),
+    toneladas: toNumberValue(r['toneladas']) || 0,
+    toneladas_rechazo: toNumberValue(r['Toneladas_rechazo']) || 0,
+    valor_kilogramo: toNumberValue(r['valor_kilogramo']),
+    valor_total: toNumberValue(r['valor_total']),
+    tipo_destino: toTextValue(r['Tipo de destino']),
+    sitio_destino: toTextValue(r['Número único del sitio de destino'])
+  })).filter((r) => r.fecha);
+
+  if (parsed.length === 0) return res.status(400).json({ error: 'No se pudo leer ninguna fila con fecha válida.' });
+
+  const fechaMin = parsed.reduce((min, r) => (r.fecha < min ? r.fecha : min), parsed[0].fecha);
+  const fechaMax = parsed.reduce((max, r) => (r.fecha > max ? r.fecha : max), parsed[0].fecha);
+
+  const columns = ['association_id', 'fecha', 'semana', 'reciclador_documento', 'reciclador_nombre',
+    'material_codigo', 'material_desc', 'toneladas', 'toneladas_rechazo', 'valor_kilogramo', 'valor_total',
+    'tipo_destino', 'sitio_destino'];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      'DELETE FROM mass_balance_entries WHERE association_id = $1 AND fecha BETWEEN $2 AND $3',
+      [associationId, fechaMin, fechaMax]
+    );
+    await bulkInsert(client, 'mass_balance_entries', columns, parsed);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await logActivity(req.user.id, 'balance_masas_subido', { associationId, filas: parsed.length }, req.ip);
+  res.json({ message: 'Balance de masas actualizado.', filas: parsed.length });
+}));
+
+// GET /admin/associations/:id/mass-balance/summary -> resumen del balance de masas de una asociacion
+router.get('/associations/:id/mass-balance/summary', asyncRoute(async (req, res) => {
+  const summary = await getMassBalanceSummary(Number(req.params.id));
+  res.json(summary);
+}));
+
+// POST /admin/associations/:id/recicladores -> sube el Excel del listado de recicladores.
+// Reemplaza por completo el listado de esa asociacion (es una foto del estado actual, no historico).
+router.post('/associations/:id/recicladores', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo Excel.' });
+
+  const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: null }).map(normalizeRowKeys);
+  if (rows.length === 0) return res.status(400).json({ error: 'El archivo no tiene filas.' });
+
+  const associationId = Number(req.params.id);
+  const parsed = rows.map((r) => ({
+    association_id: associationId,
+    documento_numero: toTextValue(r['NRO_DOCUMENTO']),
+    nombre_completo: toTextValue(r['NOMBRE_COMPLETO']),
+    estado: toTextValue(r['ESTADO']) || 'Activo',
+    fecha_exp_documento: toDateValue(r['fecha_exp_documento']),
+    fecha_nacimiento: toDateValue(r['fecha_nacimiento']),
+    direccion: toTextValue(r['DIRECCION']),
+    telefono: toTextValue(r['TELEFONO']),
+    tipo_vehiculo: toTextValue(r['TIPO_VEHICULO']),
+    placa: toTextValue(r['PLACA'])
+  })).filter((r) => r.documento_numero && r.nombre_completo);
+
+  if (parsed.length === 0) return res.status(400).json({ error: 'No se pudo leer ningún reciclador válido.' });
+
+  const columns = ['association_id', 'documento_numero', 'nombre_completo', 'estado', 'fecha_exp_documento',
+    'fecha_nacimiento', 'direccion', 'telefono', 'tipo_vehiculo', 'placa'];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM recicladores WHERE association_id = $1', [associationId]);
+    await bulkInsert(client, 'recicladores', columns, parsed);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await logActivity(req.user.id, 'recicladores_subidos', { associationId, filas: parsed.length }, req.ip);
+  res.json({ message: 'Listado de recicladores actualizado.', filas: parsed.length });
+}));
+
+// GET /admin/associations/:id/recicladores -> listado de recicladores de una asociacion
+router.get('/associations/:id/recicladores', asyncRoute(async (req, res) => {
+  const recicladores = await getRecicladores(Number(req.params.id));
+  res.json(recicladores);
 }));
 
 // POST /admin/associations/:id/send-reminder -> envía manualmente un correo de recordatorio de pago

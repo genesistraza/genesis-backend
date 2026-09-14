@@ -39,6 +39,13 @@
     </div>
     <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen de mi cuenta</div>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
+    <div class="side-link side-group-toggle" id="dashboardGroupToggle" onclick="gtToggleDashboardGroup()">
+      <span>Dashboard</span><span class="caret">▾</span>
+    </div>
+    <div id="dashboardSubmenu" style="display:none;">
+      <div class="side-link sub" data-tab="balance" onclick="showTab('balance')">Balance de masas</div>
+      <div class="side-link sub" data-tab="recicladores" onclick="showTab('recicladores')">Recicladores</div>
+    </div>
     <a class="side-link" href="index.html#planes">Ver planes</a>
     <a class="side-link" href="index.html">Ir a la web</a>
     <div class="side-spacer"></div>
@@ -145,6 +152,57 @@
         <a class="btn btn-primary" href="https://wa.me/573228753230?text=Hola%2C%20quiero%20contratar%20el%20servicio%20de%20Mis%20Rutas%20de%20Genesis%20Traza" target="_blank" rel="noopener">Contratar Mis Rutas</a>
       </div>
     </section>
+
+    <section class="tab-panel" id="tab-balance" style="display:none;">
+      <div class="panel" id="balanceEmpty" style="display:none;text-align:center;">
+        <h2>Balance de masas</h2>
+        <p style="color:var(--ink-soft);margin:10px 0 0;">Todavía no hay datos de balance de masas cargados para tu asociación.</p>
+      </div>
+      <div id="balanceContent" style="display:none;">
+        <div class="stat-grid">
+          <div class="stat-card"><div class="label">Total toneladas</div><div class="value" id="balTotalToneladas" style="font-size:20px;">—</div></div>
+          <div class="stat-card"><div class="label">Valor total</div><div class="value" id="balTotalValor" style="font-size:20px;">—</div></div>
+          <div class="stat-card"><div class="label">Recicladores con entregas</div><div class="value" id="balRecicladores" style="font-size:20px;">—</div></div>
+          <div class="stat-card"><div class="label">Periodo</div><div class="value" id="balPeriodo" style="font-size:15px;">—</div></div>
+        </div>
+        <div class="panel" style="margin-top:20px;">
+          <div class="panel-head"><h2>Toneladas por mes</h2></div>
+          <div style="height:280px;"><canvas id="chartByMonth"></canvas></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1.1fr 1fr;gap:20px;margin-top:20px;">
+          <div class="panel">
+            <div class="panel-head"><h2>Por material</h2></div>
+            <div style="height:300px;"><canvas id="chartByMaterial"></canvas></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Últimas entradas</h2></div>
+            <div class="table-scroll" style="max-height:300px;overflow-y:auto;">
+              <table class="data-table">
+                <thead><tr><th>Fecha</th><th>Reciclador</th><th>Material</th><th>Ton.</th><th>Valor</th></tr></thead>
+                <tbody id="balanceRecentBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="tab-recicladores" style="display:none;">
+      <div class="panel" id="recicladoresEmpty" style="display:none;text-align:center;">
+        <h2>Recicladores</h2>
+        <p style="color:var(--ink-soft);margin:10px 0 0;">Todavía no hay un listado de recicladores cargado para tu asociación.</p>
+      </div>
+      <div class="panel" id="recicladoresContent" style="display:none;">
+        <div class="panel-head"><h2>Recicladores</h2></div>
+        <input type="text" id="recicladoresSearch" placeholder="Buscar reciclador…" style="width:100%;max-width:320px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;margin-bottom:14px;">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Nombre</th><th>Documento</th><th>Estado</th><th>Vehículo</th><th>Placa</th><th>Teléfono</th></tr></thead>
+            <tbody id="recicladoresTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -152,6 +210,7 @@
 <script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/@tmcw/togeojson@5.8.1/dist/togeojson.umd.js"></script>
+<script src="https://unpkg.com/chart.js@4.4.4/dist/chart.umd.js"></script>
 <script>
   var session = gtRequireAuth(['operativo', 'admin', 'pro']);
   var meData = null;
@@ -167,6 +226,8 @@
 
   var gtRoutesKmlUrl = null;
   var gtRoutesLoadedOnce = false;
+  var gtBalanceLoadedOnce = false;
+  var gtRecicladoresLoadedOnce = false;
 
   function showTab(name){
     document.querySelectorAll('.tab-panel').forEach(function(p){ p.style.display = 'none'; });
@@ -178,6 +239,22 @@
       gtRoutesLoadedOnce = true;
       loadRoutesMap(gtRoutesKmlUrl);
     }
+    if(name === 'balance' && !gtBalanceLoadedOnce){
+      gtBalanceLoadedOnce = true;
+      loadBalanceDashboard();
+    }
+    if(name === 'recicladores' && !gtRecicladoresLoadedOnce){
+      gtRecicladoresLoadedOnce = true;
+      loadRecicladores();
+    }
+  }
+
+  function gtToggleDashboardGroup(){
+    var submenu = document.getElementById('dashboardSubmenu');
+    var toggle = document.getElementById('dashboardGroupToggle');
+    var willOpen = submenu.style.display === 'none';
+    submenu.style.display = willOpen ? 'block' : 'none';
+    toggle.classList.toggle('open', willOpen);
   }
 
   function loadDashboard(){
@@ -515,6 +592,109 @@
       errorEl.textContent = err.message;
       errorEl.style.display = 'block';
     });
+  }
+
+  var GT_MATERIAL_COLORS = ['#1E6FD6','#F2941F','#7AB72E','#C0392B','#8E44AD','#0FB5A6','#D4A017','#E91E8C','#2F8FEA','#4C7A16','#0A3369','#A85E0A'];
+  var gtMonthChart = null, gtMaterialChart = null;
+
+  function gtMonthLabel(ym){
+    var parts = ym.split('-');
+    var meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return meses[Number(parts[1]) - 1] + ' ' + parts[0];
+  }
+
+  function loadBalanceDashboard(){
+    gtApiFetch('/mass-balance/summary').then(function(res){
+      var emptyEl = document.getElementById('balanceEmpty');
+      var contentEl = document.getElementById('balanceContent');
+      if(!res.ok){ emptyEl.style.display = 'block'; contentEl.style.display = 'none'; return; }
+      var d = res.data;
+      var totals = d.totals || {};
+      if(!totals.total_entradas || Number(totals.total_entradas) === 0){
+        emptyEl.style.display = 'block';
+        contentEl.style.display = 'none';
+        return;
+      }
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      document.getElementById('balTotalToneladas').textContent = Number(totals.total_toneladas).toLocaleString('es-CO', {maximumFractionDigits: 2}) + ' t';
+      document.getElementById('balTotalValor').textContent = gtFormatCOP(totals.total_valor);
+      document.getElementById('balRecicladores').textContent = totals.recicladores_activos;
+      document.getElementById('balPeriodo').textContent = gtFormatDate(totals.fecha_min) + ' – ' + gtFormatDate(totals.fecha_max);
+
+      var monthCtx = document.getElementById('chartByMonth').getContext('2d');
+      if(gtMonthChart) gtMonthChart.destroy();
+      gtMonthChart = new Chart(monthCtx, {
+        type: 'bar',
+        data: {
+          labels: d.byMonth.map(function(m){ return gtMonthLabel(m.mes); }),
+          datasets: [{ label: 'Toneladas', data: d.byMonth.map(function(m){ return Number(m.toneladas); }), backgroundColor: '#1E6FD6', borderRadius: 6 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+
+      var materialCtx = document.getElementById('chartByMaterial').getContext('2d');
+      if(gtMaterialChart) gtMaterialChart.destroy();
+      var topMaterials = d.byMaterial.slice(0, 8);
+      gtMaterialChart = new Chart(materialCtx, {
+        type: 'doughnut',
+        data: {
+          labels: topMaterials.map(function(m){ return m.material_desc; }),
+          datasets: [{ data: topMaterials.map(function(m){ return Number(m.toneladas); }), backgroundColor: GT_MATERIAL_COLORS }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11.5 } } } } }
+      });
+
+      var recentBody = document.getElementById('balanceRecentBody');
+      recentBody.innerHTML = '';
+      d.recent.forEach(function(r){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td>';
+        tr.children[0].textContent = gtFormatDate(r.fecha);
+        tr.children[1].textContent = r.reciclador_nombre || '—';
+        tr.children[2].textContent = r.material_desc || '—';
+        tr.children[3].textContent = Number(r.toneladas).toLocaleString('es-CO', {maximumFractionDigits: 3});
+        tr.children[4].textContent = gtFormatCOP(r.valor_total);
+        recentBody.appendChild(tr);
+      });
+    }).catch(function(){ document.getElementById('balanceEmpty').style.display = 'block'; });
+  }
+
+  var gtAllRecicladores = [];
+  function renderRecicladoresTable(filterText){
+    var tbody = document.getElementById('recicladoresTableBody');
+    var q = (filterText || '').toLowerCase();
+    var filtered = gtAllRecicladores.filter(function(r){ return !q || (r.nombre_completo || '').toLowerCase().indexOf(q) !== -1; });
+    tbody.innerHTML = '';
+    if(filtered.length === 0){
+      tbody.innerHTML = '<tr><td class="empty-row" colspan="6">No se encontraron recicladores.</td></tr>';
+      return;
+    }
+    filtered.forEach(function(r){
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td><td></td>';
+      tr.children[0].textContent = r.nombre_completo;
+      tr.children[1].textContent = r.documento_numero;
+      tr.children[2].innerHTML = '<span class="badge ' + (r.estado === 'Activo' ? 'badge-green' : 'badge-gray') + '">' + r.estado + '</span>';
+      tr.children[3].textContent = r.tipo_vehiculo || '—';
+      tr.children[4].textContent = r.placa || '—';
+      tr.children[5].textContent = r.telefono || '—';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function loadRecicladores(){
+    gtApiFetch('/recicladores').then(function(res){
+      var emptyEl = document.getElementById('recicladoresEmpty');
+      var contentEl = document.getElementById('recicladoresContent');
+      if(!res.ok || !res.data.length){ emptyEl.style.display = 'block'; contentEl.style.display = 'none'; return; }
+      emptyEl.style.display = 'none';
+      contentEl.style.display = 'block';
+      gtAllRecicladores = res.data;
+      renderRecicladoresTable('');
+      var searchEl = document.getElementById('recicladoresSearch');
+      searchEl.addEventListener('input', function(){ renderRecicladoresTable(searchEl.value); });
+    }).catch(function(){ document.getElementById('recicladoresEmpty').style.display = 'block'; });
   }
 
   if(session) loadDashboard();

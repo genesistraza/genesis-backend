@@ -254,6 +254,10 @@ details.card .more li{margin-bottom:6px;}
 .side-link{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;font-size:14.5px;font-weight:500;color:#CFE0F5;cursor:pointer;transition:background .15s ease,color .15s ease;border-left:3px solid transparent;}
 .side-link:hover{background:rgba(255,255,255,.08);color:#fff;}
 .side-link.active{background:rgba(255,255,255,.12);color:#fff;font-weight:600;border-left-color:var(--orange);}
+.side-link.sub{padding-left:34px;font-size:13.5px;}
+.side-group-toggle{display:flex;align-items:center;justify-content:space-between;}
+.side-group-toggle .caret{transition:transform .15s ease;font-size:11px;}
+.side-group-toggle.open .caret{transform:rotate(180deg);}
 .side-spacer{flex:1;}
 .side-user{padding:14px;border-top:1px solid rgba(255,255,255,.14);font-size:13px;}
 .side-user .name{color:#fff;font-weight:600;font-size:14px;}
@@ -368,6 +372,15 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 .cookie-banner a{color:#fff;text-decoration:underline;}
 .cookie-banner button{background:#fff;color:var(--blue-deep);border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;}
 @media(max-width:480px){ .cookie-banner{left:12px;right:12px;bottom:12px;max-width:none;} }
+
+.compliance-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:44px;}
+.compliance-card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:34px 28px;text-align:center;transition:transform .16s ease,box-shadow .16s ease;}
+.compliance-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-md);}
+.compliance-logo{height:72px;display:flex;align-items:center;justify-content:center;margin-bottom:22px;}
+.compliance-logo img{max-height:100%;max-width:170px;object-fit:contain;}
+.compliance-card h3{font-size:16.5px;margin-bottom:10px;}
+.compliance-card p{color:var(--ink-soft);font-size:13.8px;line-height:1.65;}
+@media(max-width:860px){ .compliance-grid{grid-template-columns:1fr;} }
 
 .pill-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
 .spinner-inline{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid rgba(10,51,105,.2);border-top-color:var(--blue-deep);animation:gtSpin .7s linear infinite;vertical-align:middle;}

@@ -98,6 +98,48 @@ CREATE TABLE IF NOT EXISTS association_routes (
   updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Recicladores de cada asociación (se cargan desde el Excel de recicladores del sistema
+-- de trazabilidad/cumplimiento). Cada carga reemplaza por completo el listado de la asociación.
+CREATE TABLE IF NOT EXISTS recicladores (
+  id SERIAL PRIMARY KEY,
+  association_id INT REFERENCES associations(id) ON DELETE CASCADE,
+  documento_numero VARCHAR(30) NOT NULL,
+  nombre_completo VARCHAR(200) NOT NULL,
+  estado VARCHAR(20) DEFAULT 'Activo',
+  fecha_exp_documento DATE,
+  fecha_nacimiento DATE,
+  direccion TEXT,
+  telefono VARCHAR(30),
+  tipo_vehiculo VARCHAR(50),
+  placa VARCHAR(20),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS recicladores_association_idx ON recicladores (association_id);
+
+-- Balance de masas: una fila por cada entrada de material pesada/registrada, tal como la
+-- exporta el sistema de trazabilidad (formulario_de_masas). Al subir un nuevo Excel se
+-- reemplazan las filas de esa asociación dentro del rango de fechas que trae el archivo,
+-- para poder re-subir sin duplicar.
+CREATE TABLE IF NOT EXISTS mass_balance_entries (
+  id SERIAL PRIMARY KEY,
+  association_id INT REFERENCES associations(id) ON DELETE CASCADE,
+  fecha DATE NOT NULL,
+  semana INT,
+  reciclador_documento VARCHAR(30),
+  reciclador_nombre VARCHAR(200),
+  material_codigo VARCHAR(10),
+  material_desc VARCHAR(100),
+  toneladas NUMERIC(12,4) DEFAULT 0,
+  toneladas_rechazo NUMERIC(12,4) DEFAULT 0,
+  valor_kilogramo NUMERIC(12,2),
+  valor_total NUMERIC(14,2),
+  tipo_destino VARCHAR(10),
+  sitio_destino VARCHAR(50),
+  placa VARCHAR(20),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS mass_balance_association_fecha_idx ON mass_balance_entries (association_id, fecha);
+
 CREATE TABLE IF NOT EXISTS news_articles (
   id SERIAL PRIMARY KEY,
   title VARCHAR(300) NOT NULL,
