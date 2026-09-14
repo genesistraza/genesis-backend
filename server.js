@@ -12,6 +12,7 @@ const startPaymentReminders = require('./jobs/paymentReminders');
 const startNewsFetcher = require('./jobs/newsFetcher');
 
 const app = express();
+app.set('trust proxy', 1); // Railway corre detras de un proxy; necesario para que el rate limiting vea la IP real
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));

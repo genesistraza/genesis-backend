@@ -104,6 +104,10 @@
             <div class="form-field"><label>Celular</label><input id="regPhone2" type="tel"></div>
           </div>
           <div class="form-field" style="margin-top:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="regPassword2" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+          <label style="display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--ink-soft);margin-top:14px;cursor:pointer;">
+            <input id="regAcceptTerms2" type="checkbox" style="margin-top:2px;">
+            <span>He leído y acepto los <a href="/terminos/" target="_blank" style="color:var(--blue);font-weight:600;">Términos y Condiciones</a> y la <a href="/privacidad/" target="_blank" style="color:var(--blue);font-weight:600;">Política de tratamiento de datos</a>.</span>
+          </label>
           <p id="registerError2" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
           <div id="registerCaptcha2" style="margin-bottom:14px;"></div>
           <button class="btn btn-primary" style="width:100%;margin-top:16px;" onclick="submitRegister2()">Crear cuenta y continuar</button>
@@ -141,7 +145,7 @@
   <div class="wrap">
     <div class="foot-bottom">
       <span>© 2026 Genesis Traza. Todos los derechos reservados.</span>
-      <a href="/">Volver al inicio</a>
+      <span><a href="/terminos/">Términos</a> · <a href="/privacidad/">Privacidad</a> · <a href="/">Volver al inicio</a></span>
     </div>
   </div>
 </footer>
@@ -229,6 +233,9 @@
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
         if(!res.ok) throw new Error(res.data.error || 'Correo o contraseña incorrectos.');
+        if(res.data.requires2FA){
+          throw new Error('Tu cuenta tiene verificación en dos pasos activa. Inicia sesión desde la página principal.');
+        }
         authToken = res.data.token;
         authUser = { role: res.data.role, fullName: res.data.fullName };
         localStorage.setItem('gt_token', authToken); localStorage.setItem('gt_role', authUser.role); localStorage.setItem('gt_fullName', authUser.fullName);
@@ -249,17 +256,21 @@
     var email = document.getElementById('regEmail2').value.trim().toLowerCase();
     var phone = document.getElementById('regPhone2').value.trim();
     var password = document.getElementById('regPassword2').value;
+    var acceptedTerms = document.getElementById('regAcceptTerms2').checked;
     var errorEl = document.getElementById('registerError2');
     var recaptchaToken = (typeof grecaptcha !== 'undefined' && gtRegisterCaptchaId !== null) ? grecaptcha.getResponse(gtRegisterCaptchaId) : '';
     errorEl.style.display = 'none';
     if(!fullName || !associationName || !nit || !phone || !recyclerCount || !email || !password){
       errorEl.textContent = 'Todos los campos son obligatorios.'; errorEl.style.display = 'block'; return;
     }
+    if(!acceptedTerms){
+      errorEl.textContent = 'Debes aceptar los Términos y Condiciones y la Política de tratamiento de datos.'; errorEl.style.display = 'block'; return;
+    }
     if(!recaptchaToken){ errorEl.textContent = 'Confirma que no eres un robot.'; errorEl.style.display = 'block'; return; }
     fetch(API_BASE + '/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({
       fullName: fullName, associationName: associationName,
       nit: nit, recyclerCount: Number(recyclerCount),
-      email: email, phone: phone, password: password, recaptchaToken: recaptchaToken
+      email: email, phone: phone, password: password, acceptedTerms: acceptedTerms, recaptchaToken: recaptchaToken
     })})
       .then(function(r){ return r.json().then(function(d){ return {ok:r.ok, data:d}; }); })
       .then(function(res){
@@ -388,7 +399,25 @@
     if(loader) setTimeout(function(){ loader.classList.add('hidden'); }, 200);
   });
   fetch(API_BASE + '/plans').then(function(r){ return r.json(); }).then(renderPlans).catch(function(){});
+
+  (function(){
+    try {
+      if(!localStorage.getItem('gt_cookie_ack')){
+        document.getElementById('cookieBanner').style.display = 'block';
+      }
+    } catch(e){}
+  })();
+  function gtAcceptCookies(){
+    try { localStorage.setItem('gt_cookie_ack', '1'); } catch(e){}
+    document.getElementById('cookieBanner').style.display = 'none';
+  }
 </script>
 <script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
+
+<div class="cookie-banner" id="cookieBanner" style="display:none;">
+  <p>Usamos almacenamiento local del navegador para mantener tu sesión y mejorar tu experiencia. Consulta nuestra <a href="/privacidad/">Política de Privacidad</a>.</p>
+  <button type="button" onclick="gtAcceptCookies()">Entendido</button>
+</div>
+
 </body>
 </html>

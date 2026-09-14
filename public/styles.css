@@ -347,5 +347,11 @@ table.data-table tbody tr:hover{background:var(--blue-light);}
 @media (prefers-reduced-motion: reduce){ .wa-float{animation:none;} }
 @media(max-width:480px){ .wa-float{right:16px;bottom:16px;width:52px;height:52px;} .wa-float svg{width:26px;height:26px;} }
 
+.cookie-banner{position:fixed;left:18px;bottom:18px;max-width:380px;background:var(--blue-deep);color:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 16px 36px rgba(10,51,105,.35);z-index:150;}
+.cookie-banner p{font-size:13px;color:#CFE0F5;margin:0 0 12px;line-height:1.55;}
+.cookie-banner a{color:#fff;text-decoration:underline;}
+.cookie-banner button{background:#fff;color:var(--blue-deep);border:none;border-radius:8px;padding:8px 16px;font-weight:700;font-size:13px;cursor:pointer;}
+@media(max-width:480px){ .cookie-banner{left:12px;right:12px;bottom:12px;max-width:none;} }
+
 .pill-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:22px;}
 .spinner-inline{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid rgba(10,51,105,.2);border-top-color:var(--blue-deep);animation:gtSpin .7s linear infinite;vertical-align:middle;}

@@ -27,6 +27,7 @@
     <div class="side-link" data-tab="asociaciones" onclick="showTab('asociaciones')">Asociaciones</div>
     <div class="side-link" data-tab="pagos" onclick="showTab('pagos')">Pagos</div>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Rutas</div>
+    <div class="side-link" data-tab="seguridad" onclick="showTab('seguridad')">Seguridad</div>
     <div class="side-link pro-only" data-tab="planes" onclick="showTab('planes')">Planes</div>
     <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Sub-administradores</div>
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
@@ -109,6 +110,38 @@
             <tbody id="routesTableBody"><tr><td class="empty-row" colspan="3">Cargando…</td></tr></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <!-- SEGURIDAD -->
+    <section class="tab-panel" id="tab-seguridad" style="display:none;">
+      <div class="app-topbar">
+        <div><h1>Seguridad</h1><p>Verificación en dos pasos para tu cuenta.</p></div>
+      </div>
+      <div class="panel" style="max-width:520px;">
+        <div class="panel-head"><h2>Verificación en dos pasos (2FA)</h2></div>
+        <p id="twoFAStatusMsg" style="color:var(--ink-soft);font-size:14px;margin-bottom:16px;">Cargando…</p>
+
+        <div id="twoFAOffBlock" style="display:none;">
+          <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:14px;">Al activarla, además de tu contraseña necesitarás un código de una app de autenticación (Google Authenticator, Authy, etc.) para iniciar sesión.</p>
+          <button class="btn btn-primary" id="startTwoFASetupBtn">Activar verificación en dos pasos</button>
+          <div id="twoFASetupBox" style="display:none;margin-top:18px;">
+            <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:10px;">Escanea este código QR con tu app de autenticación:</p>
+            <img id="twoFAQrImg" style="width:180px;height:180px;border:1px solid var(--line);border-radius:10px;">
+            <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 4px;">O ingresa este código manualmente:</p>
+            <code id="twoFASecretText" style="display:block;font-size:13px;background:var(--blue-light);padding:8px 10px;border-radius:8px;word-break:break-all;margin-bottom:14px;"></code>
+            <div class="form-field"><label>Código de la app</label><input id="twoFAConfirmCode" maxlength="6" style="letter-spacing:3px;"></div>
+            <button class="btn btn-primary" style="margin-top:10px;" onclick="confirmTwoFASetup()">Confirmar y activar</button>
+          </div>
+        </div>
+
+        <div id="twoFAOnBlock" style="display:none;">
+          <p style="color:var(--green);font-weight:600;font-size:14px;margin-bottom:14px;">✓ Verificación en dos pasos activa.</p>
+          <div class="form-field"><label>Código de la app (para desactivar)</label><input id="twoFADisableCode" maxlength="6" style="letter-spacing:3px;"></div>
+          <button class="btn btn-outline" style="border-color:#C0392B;color:#C0392B;margin-top:10px;" onclick="disableTwoFA()">Desactivar verificación en dos pasos</button>
+        </div>
+
+        <p id="twoFAActionMsg" style="margin-top:12px;font-size:13px;"></p>
       </div>
     </section>
 
@@ -276,6 +309,7 @@
     if(name === 'asociaciones') loadAsociaciones();
     if(name === 'pagos') loadPagos();
     if(name === 'rutas') loadRutas();
+    if(name === 'seguridad') loadSeguridad();
     if(name === 'planes') loadPlanes();
     if(name === 'actividad') loadActividad();
     if(name === 'errores') loadErrores();
@@ -337,6 +371,62 @@
         }
         tbody.appendChild(tr);
       });
+    });
+  }
+
+  function loadSeguridad(){
+    var msg = document.getElementById('twoFAStatusMsg');
+    var offBlock = document.getElementById('twoFAOffBlock');
+    var onBlock = document.getElementById('twoFAOnBlock');
+    document.getElementById('twoFAActionMsg').textContent = '';
+    document.getElementById('twoFASetupBox').style.display = 'none';
+    gtApiFetch('/auth/me').then(function(res){
+      if(!res.ok){ msg.textContent = 'No se pudo cargar el estado.'; return; }
+      var enabled = !!res.data.user.totp_enabled;
+      msg.style.display = 'none';
+      offBlock.style.display = enabled ? 'none' : 'block';
+      onBlock.style.display = enabled ? 'block' : 'none';
+    });
+  }
+
+  function startTwoFASetup(){
+    var actionMsg = document.getElementById('twoFAActionMsg');
+    actionMsg.style.color = 'var(--ink-soft)';
+    actionMsg.textContent = 'Generando código…';
+    gtApiFetch('/auth/2fa/setup', { method: 'POST' }).then(function(res){
+      if(!res.ok){ actionMsg.style.color = '#C0392B'; actionMsg.textContent = res.data.error || 'No se pudo generar el código.'; return; }
+      actionMsg.textContent = '';
+      document.getElementById('twoFAQrImg').src = res.data.qrDataUrl;
+      document.getElementById('twoFASecretText').textContent = res.data.secret;
+      document.getElementById('twoFAConfirmCode').value = '';
+      document.getElementById('twoFASetupBox').style.display = 'block';
+    });
+  }
+
+  function confirmTwoFASetup(){
+    var code = document.getElementById('twoFAConfirmCode').value.trim();
+    var actionMsg = document.getElementById('twoFAActionMsg');
+    actionMsg.style.color = 'var(--ink-soft)';
+    actionMsg.textContent = 'Verificando…';
+    gtApiFetch('/auth/2fa/confirm', { method: 'POST', body: JSON.stringify({ code: code }) }).then(function(res){
+      if(!res.ok){ actionMsg.style.color = '#C0392B'; actionMsg.textContent = res.data.error || 'Código incorrecto.'; return; }
+      actionMsg.style.color = 'var(--green)';
+      actionMsg.textContent = 'Verificación en dos pasos activada.';
+      loadSeguridad();
+    });
+  }
+
+  function disableTwoFA(){
+    var code = document.getElementById('twoFADisableCode').value.trim();
+    var actionMsg = document.getElementById('twoFAActionMsg');
+    if(!confirm('¿Desactivar la verificación en dos pasos?')) return;
+    actionMsg.style.color = 'var(--ink-soft)';
+    actionMsg.textContent = 'Desactivando…';
+    gtApiFetch('/auth/2fa/disable', { method: 'POST', body: JSON.stringify({ code: code }) }).then(function(res){
+      if(!res.ok){ actionMsg.style.color = '#C0392B'; actionMsg.textContent = res.data.error || 'Código incorrecto.'; return; }
+      actionMsg.style.color = 'var(--green)';
+      actionMsg.textContent = 'Verificación en dos pasos desactivada.';
+      loadSeguridad();
     });
   }
 
@@ -798,6 +888,8 @@
     loadResumen();
     var clearBtn = document.getElementById('clearPendingPaymentsBtn');
     if(clearBtn) clearBtn.addEventListener('click', clearPendingPayments);
+    var twoFABtn = document.getElementById('startTwoFASetupBtn');
+    if(twoFABtn) twoFABtn.addEventListener('click', startTwoFASetup);
   }
 </script>
 </body>

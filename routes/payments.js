@@ -14,7 +14,29 @@ function gtFormatCOP(value) {
 
 // POST /payments/create -> genera los datos para abrir el widget de Wompi en el frontend
 router.post('/create', requireAuth, asyncRoute(async (req, res) => {
-  const { subscriptionId, amount } = req.body;
+  const { subscriptionId } = req.body;
+
+  if (!req.user.associationId) {
+    return res.status(400).json({ error: 'Tu usuario no tiene una asociación asignada.' });
+  }
+
+  // El monto nunca se confia del navegador: se recalcula aqui a partir del plan real de la
+  // suscripcion, y se verifica que la suscripcion sea realmente de la asociacion del usuario.
+  const subResult = await pool.query(
+    `SELECT s.id, s.association_id, s.billing_cycle, p.price_monthly, p.price_annual
+     FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+     WHERE s.id = $1`,
+    [subscriptionId]
+  );
+  const sub = subResult.rows[0];
+  if (!sub) {
+    return res.status(404).json({ error: 'Suscripción no encontrada.' });
+  }
+  if (sub.association_id !== req.user.associationId) {
+    return res.status(403).json({ error: 'No tienes permiso sobre esta suscripción.' });
+  }
+
+  const amount = sub.billing_cycle === 'anual' ? sub.price_annual : sub.price_monthly;
 
   const reference = `GT-${subscriptionId}-${Date.now()}`;
   const amountInCents = amount * 100;

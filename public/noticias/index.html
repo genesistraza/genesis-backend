@@ -98,6 +98,24 @@
     var loader = document.getElementById('gtPageLoader');
     if(loader) setTimeout(function(){ loader.classList.add('hidden'); }, 200);
   });
+
+  (function(){
+    try {
+      if(!localStorage.getItem('gt_cookie_ack')){
+        document.getElementById('cookieBanner').style.display = 'block';
+      }
+    } catch(e){}
+  })();
+  function gtAcceptCookies(){
+    try { localStorage.setItem('gt_cookie_ack', '1'); } catch(e){}
+    document.getElementById('cookieBanner').style.display = 'none';
+  }
 </script>
+
+<div class="cookie-banner" id="cookieBanner" style="display:none;">
+  <p>Usamos almacenamiento local del navegador para mantener tu sesión y mejorar tu experiencia. Consulta nuestra <a href="/privacidad/">Política de Privacidad</a>.</p>
+  <button type="button" onclick="gtAcceptCookies()">Entendido</button>
+</div>
+
 </body>
 </html>
