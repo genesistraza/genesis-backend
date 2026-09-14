@@ -1,3 +1,4 @@
 node_modules/
 .env
 TABLA_ACCESOS_FACTURACION.csv
+.claude/

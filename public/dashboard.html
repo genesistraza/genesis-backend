@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi cuenta | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="gtPageLoader">
+  <div class="gt-loader-mark">
+    <div class="gt-spinner"></div>
+    <span>Cargando tu cuenta…</span>
+  </div>
+</div>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-text">Genesis <span>Traza</span></span>
+    </div>
+    <div class="side-link active">Resumen de mi cuenta</div>
+    <a class="side-link" href="index.html#planes">Ver planes</a>
+    <a class="side-link" href="index.html">Ir a la landing</a>
+    <div class="side-spacer"></div>
+    <div class="side-user">
+      <div class="name" id="sideUserName">—</div>
+      <div class="role" id="sideUserRole">—</div>
+    </div>
+    <div class="side-logout" onclick="gtLogout()">Cerrar sesión</div>
+  </aside>
+
+  <main class="app-main">
+    <div class="app-topbar">
+      <div>
+        <h1>Hola, <span id="topUserName">—</span></h1>
+        <p id="topAssociation">Cargando información de tu asociación…</p>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="card">
+        <div class="stat-card" style="border:none;padding:0;">
+          <div class="label">Plan actual</div>
+          <div class="value" id="statPlan" style="font-size:20px;">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat-card" style="border:none;padding:0;">
+          <div class="label">Estado</div>
+          <div class="value" id="statStatus" style="font-size:20px;">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat-card" style="border:none;padding:0;">
+          <div class="label">Próximo vencimiento</div>
+          <div class="value" id="statDueDate" style="font-size:20px;">—</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="stat-card" style="border:none;padding:0;">
+          <div class="label">Total pagado</div>
+          <div class="value" id="statTotalPaid" style="font-size:20px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
+      <h2>Aún no tienes un plan activo</h2>
+      <p style="color:var(--ink-soft);margin-top:8px;">Elige un plan desde la landing para empezar.</p>
+      <a class="btn btn-primary" href="index.html#planes" style="margin-top:18px;">Ver planes</a>
+    </div>
+
+    <div id="renewalPanel" class="panel" style="display:none;">
+      <div class="panel-head">
+        <h2>Tu suscripción</h2>
+      </div>
+      <p id="renewalMsg" style="color:var(--ink-soft);margin-bottom:16px;"></p>
+      <button class="btn btn-primary" id="renewBtn" onclick="renewSubscription()">Pagar ahora</button>
+      <p id="renewError" style="display:none;color:#C0392B;font-size:13px;margin-top:12px;"></p>
+    </div>
+
+    <div class="panel" id="paymentsPanel" style="display:none;">
+      <div class="panel-head">
+        <h2>Historial de pagos</h2>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr><th>Fecha</th><th>Plan</th><th>Monto</th><th>Método</th><th>Estado</th></tr>
+          </thead>
+          <tbody id="paymentsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script type="text/javascript" src="https://checkout.wompi.co/widget.js"></script>
+<script>
+  var session = gtRequireAuth(['operativo', 'admin', 'pro']);
+  var meData = null;
+
+  function statusBadge(status){
+    var map = {
+      activa: 'badge-green', pendiente: 'badge-orange', vencida: 'badge-red', cancelada: 'badge-gray',
+      aprobado: 'badge-green', rechazado: 'badge-red'
+    };
+    var cls = map[status] || 'badge-gray';
+    return '<span class="badge ' + cls + '">' + status + '</span>';
+  }
+
+  function loadDashboard(){
+    document.getElementById('sideUserName').textContent = session.fullName;
+    document.getElementById('sideUserRole').textContent = session.role;
+    document.getElementById('topUserName').textContent = session.fullName;
+
+    gtApiFetch('/auth/me').then(function(res){
+      var loader = document.getElementById('gtPageLoader');
+      if(loader) loader.classList.add('hidden');
+
+      if(!res.ok){
+        document.getElementById('topAssociation').textContent = 'No se pudo cargar tu información.';
+        return;
+      }
+      meData = res.data;
+
+      if(!meData.association){
+        document.getElementById('topAssociation').textContent = 'Sin asociación registrada.';
+        document.getElementById('noAssociationPanel').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('topAssociation').textContent = 'Asociación: ' + meData.association.name;
+
+      var sub = meData.subscriptions && meData.subscriptions[0];
+      var totalPaid = (meData.payments || []).filter(function(p){ return p.status === 'aprobado'; })
+        .reduce(function(sum, p){ return sum + Number(p.amount); }, 0);
+      document.getElementById('statTotalPaid').textContent = gtFormatCOP(totalPaid);
+
+      if(sub){
+        document.getElementById('statPlan').textContent = sub.plan_name;
+        document.getElementById('statStatus').innerHTML = statusBadge(sub.status);
+        document.getElementById('statDueDate').textContent = gtFormatDate(sub.next_due_date);
+
+        if(sub.status !== 'activa' || !sub.next_due_date){
+          document.getElementById('renewalPanel').style.display = 'block';
+          var amount = sub.billing_cycle === 'anual' ? sub.price_annual : sub.price_monthly;
+          document.getElementById('renewalMsg').textContent =
+            'Tu plan "' + sub.plan_name + '" está ' + sub.status + '. Monto a pagar: ' + gtFormatCOP(amount) + ' (' + sub.billing_cycle + ').';
+          window.gtPendingSubscription = { id: sub.id, amount: amount };
+        }
+      } else {
+        document.getElementById('noAssociationPanel').style.display = 'block';
+      }
+
+      if((meData.payments || []).length > 0){
+        document.getElementById('paymentsPanel').style.display = 'block';
+        var tbody = document.getElementById('paymentsTableBody');
+        tbody.innerHTML = '';
+        meData.payments.forEach(function(p){
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td>' + gtFormatDate(p.paid_at || p.created_at) + '</td>' +
+            '<td></td>' +
+            '<td>' + gtFormatCOP(p.amount) + '</td>' +
+            '<td>' + (p.payment_method || '—') + '</td>' +
+            '<td>' + statusBadge(p.status) + '</td>';
+          tr.children[1].textContent = p.plan_name || '—';
+          tbody.appendChild(tr);
+        });
+      }
+    });
+  }
+
+  function renewSubscription(){
+    if(!window.gtPendingSubscription) return;
+    var btn = document.getElementById('renewBtn');
+    var errorEl = document.getElementById('renewError');
+    errorEl.style.display = 'none';
+    btn.disabled = true;
+    gtApiFetch('/payments/create', {
+      method: 'POST',
+      body: JSON.stringify({ subscriptionId: window.gtPendingSubscription.id, amount: window.gtPendingSubscription.amount })
+    }).then(function(res){
+      btn.disabled = false;
+      if(!res.ok){ throw new Error(res.data.error || 'No se pudo iniciar el pago.'); }
+      var checkout = new WidgetCheckout({
+        currency: res.data.currency,
+        amountInCents: res.data.amountInCents,
+        reference: res.data.reference,
+        publicKey: res.data.publicKey,
+        signature: { integrity: res.data.signature },
+        redirectUrl: window.location.href
+      });
+      checkout.open(function(result){
+        var transaction = result.transaction;
+        if(transaction && transaction.status === 'APPROVED'){
+          alert('Pago aprobado. Tu plan quedará activo en unos minutos.');
+          window.location.reload();
+        } else {
+          alert('El pago no se completó (estado: ' + (transaction ? transaction.status : 'desconocido') + ').');
+        }
+      });
+    }).catch(function(err){
+      btn.disabled = false;
+      errorEl.textContent = err.message;
+      errorEl.style.display = 'block';
+    });
+  }
+
+  if(session) loadDashboard();
+</script>
+</body>
+</html>

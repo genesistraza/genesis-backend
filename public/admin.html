@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel de administración | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="gtPageLoader">
+  <div class="gt-loader-mark">
+    <div class="gt-spinner"></div>
+    <span>Cargando panel…</span>
+  </div>
+</div>
+
+<div class="app-shell">
+  <aside class="app-sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-text">Genesis <span>Traza</span></span>
+    </div>
+    <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen</div>
+    <div class="side-link" data-tab="asociaciones" onclick="showTab('asociaciones')">Asociaciones</div>
+    <div class="side-link" data-tab="pagos" onclick="showTab('pagos')">Pagos</div>
+    <div class="side-link pro-only" data-tab="planes" onclick="showTab('planes')">Planes</div>
+    <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Sub-administradores</div>
+    <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
+    <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
+    <a class="side-link" href="index.html">Ver landing</a>
+    <div class="side-spacer"></div>
+    <div class="side-user">
+      <div class="name" id="sideUserName">—</div>
+      <div class="role" id="sideUserRole">—</div>
+    </div>
+    <div class="side-logout" onclick="gtLogout()">Cerrar sesión</div>
+  </aside>
+
+  <main class="app-main">
+    <!-- RESUMEN -->
+    <section class="tab-panel" id="tab-resumen">
+      <div class="app-topbar"><div><h1>Resumen</h1><p>Ingresos y actividad general de Genesis Traza.</p></div></div>
+      <div class="stat-grid" id="resumenStats">
+        <div class="stat-card"><div class="label">Ingresos totales</div><div class="value">—</div></div>
+        <div class="stat-card"><div class="label">Ingresos este mes</div><div class="value">—</div></div>
+        <div class="stat-card"><div class="label">Pagos aprobados</div><div class="value">—</div></div>
+        <div class="stat-card"><div class="label">Suscripciones activas</div><div class="value">—</div></div>
+      </div>
+      <p id="resumenAdminNote" class="panel" style="display:none;color:var(--ink-soft);">Los ingresos totales solo los ve el rol <strong>pro</strong>.</p>
+    </section>
+
+    <!-- ASOCIACIONES -->
+    <section class="tab-panel" id="tab-asociaciones" style="display:none;">
+      <div class="app-topbar"><div><h1>Asociaciones</h1><p>Estado de pago de cada asociación registrada.</p></div></div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Asociación</th><th>NIT</th><th>Recicladores</th><th>Plan</th><th>Estado</th><th>Vence</th><th></th></tr></thead>
+            <tbody id="associationsTableBody"><tr><td class="empty-row" colspan="7">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAGOS -->
+    <section class="tab-panel" id="tab-pagos" style="display:none;">
+      <div class="app-topbar"><div><h1>Pagos</h1><p>Historial de pagos de todas las asociaciones.</p></div></div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Asociación</th><th>Plan</th><th>Monto</th><th>Método</th><th>Estado</th></tr></thead>
+            <tbody id="paymentsTableBody"><tr><td class="empty-row" colspan="6">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLANES -->
+    <section class="tab-panel pro-only" id="tab-planes" style="display:none;">
+      <div class="app-topbar">
+        <div><h1>Planes</h1><p>Crea y edita los planes que ven los clientes en la landing.</p></div>
+        <button class="btn btn-primary" onclick="openPlanModal()">+ Nuevo plan</button>
+      </div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Nombre</th><th>Categoría</th><th>Precio/mes</th><th>Destacado</th><th>Activo</th><th></th></tr></thead>
+            <tbody id="plansTableBody"><tr><td class="empty-row" colspan="6">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUB-ADMINS -->
+    <section class="tab-panel pro-only" id="tab-subadmins" style="display:none;">
+      <div class="app-topbar"><div><h1>Sub-administradores</h1><p>Crea usuarios con rol operativo o admin para una asociación.</p></div></div>
+      <div class="panel" style="max-width:520px;">
+        <div class="form-field" style="margin-bottom:14px;"><label>Nombre completo</label><input id="subFullName"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="subEmail" type="email"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><input id="subPassword" type="password"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>ID de asociación</label><input id="subAssociationId" type="number" placeholder="Ver en la pestaña Asociaciones"></div>
+        <div class="form-field" style="margin-bottom:14px;">
+          <label>Rol</label>
+          <select id="subRole"><option value="admin">admin (operativo, ve datos)</option><option value="operativo">operativo (usuario normal)</option></select>
+        </div>
+        <button class="btn btn-primary" onclick="createSubAdmin()">Crear usuario</button>
+        <p id="subAdminMsg" style="margin-top:12px;font-size:13px;"></p>
+      </div>
+    </section>
+
+    <!-- ACTIVIDAD -->
+    <section class="tab-panel pro-only" id="tab-actividad" style="display:none;">
+      <div class="app-topbar"><div><h1>Logs de actividad</h1><p>Últimas 300 acciones registradas en el sistema.</p></div></div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr></thead>
+            <tbody id="activityTableBody"><tr><td class="empty-row" colspan="4">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ERRORES -->
+    <section class="tab-panel pro-only" id="tab-errores" style="display:none;">
+      <div class="app-topbar"><div><h1>Logs de errores</h1><p>Errores técnicos capturados por el backend.</p></div></div>
+      <div class="panel">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Ruta</th><th>Mensaje</th></tr></thead>
+            <tbody id="errorsTableBody"><tr><td class="empty-row" colspan="3">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Modal: detalle de cliente (soporte) -->
+<div class="modal-overlay" id="clientModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeClientModal()">&times;</button>
+    <h3 id="clientModalTitle">Cliente</h3>
+    <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">Esta consulta queda registrada en los logs de actividad.</p>
+    <div id="clientModalBody" style="margin-top:18px;">Cargando…</div>
+  </div>
+</div>
+
+<!-- Modal: crear/editar plan -->
+<div class="modal-overlay" id="planModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closePlanModal()">&times;</button>
+    <h3 id="planModalTitle">Nuevo plan</h3>
+    <input type="hidden" id="planId">
+    <div class="form-grid" style="margin-top:18px;">
+      <div class="form-field"><label>Nombre</label><input id="planName"></div>
+      <div class="form-field"><label>Categoría</label>
+        <select id="planCategory"><option value="trazabilidad">Trazabilidad</option><option value="facturacion">Facturación</option><option value="combo">Combo</option></select>
+      </div>
+      <div class="form-field"><label>Precio mensual</label><input id="planPriceMonthly" type="number"></div>
+      <div class="form-field"><label>Precio anual</label><input id="planPriceAnnual" type="number"></div>
+    </div>
+    <div class="form-field" style="margin-top:14px;"><label>Descripción</label><textarea id="planDescription" rows="2"></textarea></div>
+    <div class="form-field" style="margin-top:14px;"><label>Características (una por línea)</label><textarea id="planFeatures" rows="4"></textarea></div>
+    <div class="form-field" style="margin-top:14px;"><label><input type="checkbox" id="planFeatured" style="width:auto;margin-right:8px;">Destacado ("Más elegido")</label></div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="savePlan()">Guardar</button>
+    <p id="planModalError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+<script>
+  var session = gtRequireAuth(['pro', 'admin']);
+  var isPro = session && session.role === 'pro';
+  var allPlans = [];
+
+  function statusBadge(status){
+    var map = { activa:'badge-green', pendiente:'badge-orange', vencida:'badge-red', cancelada:'badge-gray', aprobado:'badge-green', rechazado:'badge-red' };
+    return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + (status || '—') + '</span>';
+  }
+
+  function initShell(){
+    document.getElementById('sideUserName').textContent = session.fullName;
+    document.getElementById('sideUserRole').textContent = session.role;
+    if(!isPro){
+      document.querySelectorAll('.pro-only').forEach(function(el){ el.style.display = 'none'; });
+      document.getElementById('resumenAdminNote').style.display = 'block';
+    }
+    var loader = document.getElementById('gtPageLoader');
+    if(loader) loader.classList.add('hidden');
+  }
+
+  function showTab(name){
+    document.querySelectorAll('.tab-panel').forEach(function(p){ p.style.display = 'none'; });
+    document.querySelectorAll('.side-link[data-tab]').forEach(function(l){ l.classList.remove('active'); });
+    document.getElementById('tab-' + name).style.display = 'block';
+    var link = document.querySelector('.side-link[data-tab="' + name + '"]');
+    if(link) link.classList.add('active');
+    if(name === 'resumen') loadResumen();
+    if(name === 'asociaciones') loadAsociaciones();
+    if(name === 'pagos') loadPagos();
+    if(name === 'planes') loadPlanes();
+    if(name === 'actividad') loadActividad();
+    if(name === 'errores') loadErrores();
+  }
+
+  function loadResumen(){
+    if(!isPro) return;
+    gtApiFetch('/admin/revenue-summary').then(function(res){
+      if(!res.ok) return;
+      var cards = document.querySelectorAll('#resumenStats .stat-card .value');
+      cards[0].textContent = gtFormatCOP(res.data.totalAprobado);
+      cards[1].textContent = gtFormatCOP(res.data.totalMesActual);
+      cards[2].textContent = res.data.pagosAprobados;
+      cards[3].textContent = res.data.suscripcionesActivas;
+    });
+  }
+
+  function loadAsociaciones(){
+    gtApiFetch('/admin/associations').then(function(res){
+      var tbody = document.getElementById('associationsTableBody');
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="7">No hay asociaciones registradas.</td></tr>'; return; }
+      tbody.innerHTML = '';
+      res.data.forEach(function(a){
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td></td><td></td><td></td><td></td>' +
+          '<td>' + statusBadge(a.subscription_status) + '</td>' +
+          '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
+          '<td><span class="cell-action">Ver detalle</span></td>';
+        tr.children[0].textContent = a.name;
+        tr.children[1].textContent = a.nit || '—';
+        tr.children[2].textContent = a.recycler_count || 0;
+        tr.children[3].textContent = a.plan_name || '—';
+        tr.querySelector('.cell-action').addEventListener('click', function(){ openClientModal(a.id, a.name); });
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function loadPagos(){
+    gtApiFetch('/admin/payments').then(function(res){
+      var tbody = document.getElementById('paymentsTableBody');
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="6">No hay pagos registrados.</td></tr>'; return; }
+      tbody.innerHTML = '';
+      res.data.forEach(function(p){
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + gtFormatDate(p.paid_at || p.created_at) + '</td><td></td><td></td>' +
+          '<td>' + gtFormatCOP(p.amount) + '</td><td></td>' +
+          '<td>' + statusBadge(p.status) + '</td>';
+        tr.children[1].textContent = p.association_name;
+        tr.children[2].textContent = p.plan_name;
+        tr.children[4].textContent = p.payment_method || '—';
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function loadPlanes(){
+    if(!isPro) return;
+    gtApiFetch('/plans').then(function(res){
+      var tbody = document.getElementById('plansTableBody');
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="6">Sin planes.</td></tr>'; return; }
+      allPlans = res.data;
+      tbody.innerHTML = '';
+      res.data.forEach(function(p){
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td></td><td></td>' +
+          '<td>' + gtFormatCOP(p.price_monthly) + '</td>' +
+          '<td>' + (p.is_featured ? '⭐' : '—') + '</td>' +
+          '<td>' + (p.active ? statusBadge('activa') : statusBadge('cancelada')) + '</td>' +
+          '<td><span class="cell-action" style="margin-right:12px;">Editar</span><span class="cell-action">' + (p.active ? 'Desactivar' : '') + '</span></td>';
+        tr.children[0].textContent = p.name;
+        tr.children[1].textContent = p.category;
+        var actions = tr.children[5].querySelectorAll('.cell-action');
+        actions[0].addEventListener('click', function(){ openPlanModal(p); });
+        if(p.active){
+          actions[1].addEventListener('click', function(){ deactivatePlan(p.id); });
+        }
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function loadActividad(){
+    if(!isPro) return;
+    gtApiFetch('/admin/logs/activity').then(function(res){
+      var tbody = document.getElementById('activityTableBody');
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="4">Sin actividad registrada.</td></tr>'; return; }
+      tbody.innerHTML = '';
+      res.data.forEach(function(l){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + gtFormatDate(l.created_at) + '</td><td></td><td></td><td></td>';
+        tr.children[1].textContent = l.full_name || l.email || 'Sistema';
+        tr.children[2].textContent = l.action;
+        tr.children[3].textContent = JSON.stringify(l.details || {});
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function loadErrores(){
+    if(!isPro) return;
+    gtApiFetch('/admin/logs/errors').then(function(res){
+      var tbody = document.getElementById('errorsTableBody');
+      if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="3">Sin errores registrados.</td></tr>'; return; }
+      tbody.innerHTML = '';
+      res.data.forEach(function(e){
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + gtFormatDate(e.created_at) + '</td><td></td><td></td>';
+        tr.children[1].textContent = e.route || '—';
+        tr.children[2].textContent = e.message;
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  // ---- Modal cliente (soporte) ----
+  function openClientModal(id, name){
+    document.getElementById('clientModalTitle').textContent = name;
+    document.getElementById('clientModalBody').innerHTML = 'Cargando…';
+    document.getElementById('clientModalOverlay').classList.add('open');
+    gtApiFetch('/admin/associations/' + id).then(function(res){
+      var body = document.getElementById('clientModalBody');
+      if(!res.ok){ body.textContent = res.data.error || 'No se pudo cargar.'; return; }
+      var d = res.data;
+      var html = '<p><strong>NIT:</strong> ' + (d.association.nit || '—') + ' · <strong>Recicladores:</strong> ' + (d.association.recycler_count || 0) + '</p>';
+      html += '<h4 style="margin-top:16px;font-size:14px;">Usuarios</h4><ul style="padding-left:18px;font-size:13.5px;">';
+      d.users.forEach(function(u){ html += '<li>' + u.full_name + ' — ' + u.email + ' (' + u.role + (u.is_verified ? '' : ', sin verificar') + ')</li>'; });
+      html += '</ul><h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
+      d.subscriptions.forEach(function(s){ html += '<li>' + s.plan_name + ' — ' + s.status + ' (vence ' + gtFormatDate(s.next_due_date) + ')</li>'; });
+      html += '</ul><h4 style="margin-top:16px;font-size:14px;">Pagos recientes</h4><ul style="padding-left:18px;font-size:13.5px;">';
+      d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + p.status + '</li>'; });
+      html += '</ul>';
+      body.innerHTML = html;
+    });
+  }
+  function closeClientModal(){ document.getElementById('clientModalOverlay').classList.remove('open'); }
+
+  // ---- Modal planes ----
+  function openPlanModal(plan){
+    document.getElementById('planModalError').style.display = 'none';
+    document.getElementById('planModalTitle').textContent = plan ? 'Editar plan' : 'Nuevo plan';
+    document.getElementById('planId').value = plan ? plan.id : '';
+    document.getElementById('planName').value = plan ? plan.name : '';
+    document.getElementById('planCategory').value = plan ? plan.category : 'trazabilidad';
+    document.getElementById('planPriceMonthly').value = plan ? plan.price_monthly : '';
+    document.getElementById('planPriceAnnual').value = plan ? plan.price_annual : '';
+    document.getElementById('planDescription').value = plan ? (plan.description || '') : '';
+    document.getElementById('planFeatures').value = plan && Array.isArray(plan.features) ? plan.features.join('\n') : '';
+    document.getElementById('planFeatured').checked = !!(plan && plan.is_featured);
+    document.getElementById('planModalOverlay').classList.add('open');
+  }
+  function closePlanModal(){ document.getElementById('planModalOverlay').classList.remove('open'); }
+
+  function savePlan(){
+    var id = document.getElementById('planId').value;
+    var body = {
+      name: document.getElementById('planName').value.trim(),
+      category: document.getElementById('planCategory').value,
+      price_monthly: Number(document.getElementById('planPriceMonthly').value),
+      price_annual: Number(document.getElementById('planPriceAnnual').value) || null,
+      description: document.getElementById('planDescription').value.trim(),
+      features: document.getElementById('planFeatures').value.split('\n').map(function(s){ return s.trim(); }).filter(Boolean),
+      is_featured: document.getElementById('planFeatured').checked,
+      active: true
+    };
+    var errorEl = document.getElementById('planModalError');
+    errorEl.style.display = 'none';
+    if(!body.name || !body.price_monthly){
+      errorEl.textContent = 'Nombre y precio mensual son obligatorios.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    gtApiFetch(id ? '/plans/' + id : '/plans', { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo guardar el plan.'); }
+        closePlanModal();
+        loadPlanes();
+      })
+      .catch(function(err){ errorEl.textContent = err.message; errorEl.style.display = 'block'; });
+  }
+
+  function deactivatePlan(id){
+    if(!confirm('¿Desactivar este plan? Ya no se mostrará en la landing.')) return;
+    gtApiFetch('/plans/' + id, { method: 'DELETE' }).then(function(){ loadPlanes(); });
+  }
+
+  // ---- Sub-admins ----
+  function createSubAdmin(){
+    var body = {
+      fullName: document.getElementById('subFullName').value.trim(),
+      email: document.getElementById('subEmail').value.trim().toLowerCase(),
+      password: document.getElementById('subPassword').value,
+      associationId: Number(document.getElementById('subAssociationId').value) || null,
+      role: document.getElementById('subRole').value
+    };
+    var msgEl = document.getElementById('subAdminMsg');
+    if(!body.fullName || !body.email || !body.password){
+      msgEl.style.color = '#C0392B';
+      msgEl.textContent = 'Completa nombre, correo y contraseña.';
+      return;
+    }
+    gtApiFetch('/admin/users', { method: 'POST', body: JSON.stringify(body) })
+      .then(function(res){
+        if(!res.ok){ throw new Error(res.data.error || 'No se pudo crear el usuario.'); }
+        msgEl.style.color = 'var(--green)';
+        msgEl.textContent = 'Usuario creado: ' + res.data.email;
+        document.getElementById('subFullName').value = '';
+        document.getElementById('subEmail').value = '';
+        document.getElementById('subPassword').value = '';
+        document.getElementById('subAssociationId').value = '';
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  if(session){
+    initShell();
+    loadResumen();
+  }
+</script>
+</body>
+</html>

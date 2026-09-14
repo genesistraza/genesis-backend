@@ -36,6 +36,59 @@ router.get('/payments', asyncRoute(async (req, res) => {
   res.json(result.rows);
 }));
 
+// GET /admin/associations/:id -> detalle completo de una asociación (para soporte técnico).
+// Queda registrado en activity_logs quién vio a qué cliente y cuándo.
+router.get('/associations/:id', asyncRoute(async (req, res) => {
+  const associationId = req.params.id;
+  const association = await pool.query('SELECT * FROM associations WHERE id = $1', [associationId]);
+  if (association.rows.length === 0) {
+    return res.status(404).json({ error: 'Asociación no encontrada.' });
+  }
+  const users = await pool.query(
+    'SELECT id, full_name, email, phone, role, is_verified, created_at FROM users WHERE association_id = $1 ORDER BY created_at',
+    [associationId]
+  );
+  const subscriptions = await pool.query(
+    `SELECT s.id, s.status, s.billing_cycle, s.next_due_date, s.created_at, p.name AS plan_name
+     FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+     WHERE s.association_id = $1 ORDER BY s.created_at DESC`,
+    [associationId]
+  );
+  const payments = await pool.query(
+    `SELECT pay.id, pay.amount, pay.status, pay.payment_method, pay.paid_at, pay.created_at
+     FROM payments pay JOIN subscriptions s ON s.id = pay.subscription_id
+     WHERE s.association_id = $1 ORDER BY pay.created_at DESC LIMIT 100`,
+    [associationId]
+  );
+
+  await logActivity(req.user.id, 'admin_vio_cliente', { associationId: Number(associationId) }, req.ip);
+
+  res.json({
+    association: association.rows[0],
+    users: users.rows,
+    subscriptions: subscriptions.rows,
+    payments: payments.rows
+  });
+}));
+
+// GET /admin/revenue-summary -> ingresos totales, del mes, y suscripciones activas (solo 'pro')
+router.get('/revenue-summary', requireRole('pro'), asyncRoute(async (req, res) => {
+  const totals = await pool.query(`
+    SELECT
+      COALESCE(SUM(amount) FILTER (WHERE status = 'aprobado'), 0) AS total_aprobado,
+      COALESCE(SUM(amount) FILTER (WHERE status = 'aprobado' AND paid_at >= date_trunc('month', NOW())), 0) AS total_mes_actual,
+      COUNT(*) FILTER (WHERE status = 'aprobado') AS pagos_aprobados
+    FROM payments
+  `);
+  const activeSubs = await pool.query(`SELECT COUNT(*) AS activas FROM subscriptions WHERE status = 'activa'`);
+  res.json({
+    totalAprobado: Number(totals.rows[0].total_aprobado),
+    totalMesActual: Number(totals.rows[0].total_mes_actual),
+    pagosAprobados: Number(totals.rows[0].pagos_aprobados),
+    suscripcionesActivas: Number(activeSubs.rows[0].activas)
+  });
+}));
+
 // GET /admin/pending-payments -> asociaciones con pago vencido (para recordatorios)
 router.get('/pending-payments', asyncRoute(async (req, res) => {
   const result = await pool.query(`

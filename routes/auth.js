@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Resend } = require('resend');
 const pool = require('../db/pool');
+const { requireAuth } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 
 const router = express.Router();
@@ -122,6 +123,46 @@ router.post('/login', asyncRoute(async (req, res) => {
   );
   await logActivity(user.id, 'inicio_sesion', {}, req.ip);
   res.json({ token, role: user.role, fullName: user.full_name });
+}));
+
+// GET /auth/me -> datos del usuario logueado + su asociación, suscripciones y pagos
+router.get('/me', requireAuth, asyncRoute(async (req, res) => {
+  const userResult = await pool.query(
+    'SELECT id, full_name, email, phone, role, is_verified, association_id, created_at FROM users WHERE id = $1',
+    [req.user.id]
+  );
+  const user = userResult.rows[0];
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado.' });
+
+  let association = null;
+  let subscriptions = [];
+  let payments = [];
+
+  if (user.association_id) {
+    const assocResult = await pool.query('SELECT * FROM associations WHERE id = $1', [user.association_id]);
+    association = assocResult.rows[0] || null;
+
+    const subsResult = await pool.query(
+      `SELECT s.id, s.status, s.billing_cycle, s.next_due_date, s.created_at,
+              p.id AS plan_id, p.name AS plan_name, p.category, p.price_monthly, p.price_annual
+       FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+       WHERE s.association_id = $1 ORDER BY s.created_at DESC`,
+      [user.association_id]
+    );
+    subscriptions = subsResult.rows;
+
+    const paymentsResult = await pool.query(
+      `SELECT pay.id, pay.amount, pay.status, pay.payment_method, pay.paid_at, pay.created_at, p.name AS plan_name
+       FROM payments pay
+       JOIN subscriptions s ON s.id = pay.subscription_id
+       JOIN plans p ON p.id = s.plan_id
+       WHERE s.association_id = $1 ORDER BY pay.created_at DESC LIMIT 50`,
+      [user.association_id]
+    );
+    payments = paymentsResult.rows;
+  }
+
+  res.json({ user, association, subscriptions, payments });
 }));
 
 module.exports = router;
