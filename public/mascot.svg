@@ -1,0 +1,76 @@
+<svg viewBox="0 0 420 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="eyeGlow" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#8FF3FF"/>
+      <stop offset="55%" stop-color="#3FD8E8"/>
+      <stop offset="100%" stop-color="#0FB5A6"/>
+    </radialGradient>
+    <linearGradient id="bodyShade" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#EAF3FC"/>
+    </linearGradient>
+    <linearGradient id="badgeShade" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#123A72"/>
+      <stop offset="100%" stop-color="#0A3369"/>
+    </linearGradient>
+  </defs>
+
+  <!-- piernas -->
+  <rect x="148" y="486" width="46" height="80" rx="23" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+  <rect x="226" y="486" width="46" height="80" rx="23" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+  <rect x="140" y="548" width="62" height="34" rx="16" fill="#0A3369"/>
+  <rect x="218" y="548" width="62" height="34" rx="16" fill="#0A3369"/>
+
+  <!-- brazo izquierdo -->
+  <g>
+    <circle cx="78" cy="336" r="34" fill="#0A3369"/>
+    <rect x="52" y="330" width="52" height="150" rx="26" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+    <rect x="46" y="440" width="64" height="30" rx="15" fill="#0A3369"/>
+    <circle cx="78" cy="486" r="30" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+    <path d="M62 486 L62 470 M78 490 L78 472 M94 486 L94 470" stroke="#0A3369" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- brazo derecho -->
+  <g>
+    <circle cx="342" cy="336" r="34" fill="#0A3369"/>
+    <rect x="316" y="330" width="52" height="150" rx="26" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+    <rect x="310" y="440" width="64" height="30" rx="15" fill="#0A3369"/>
+    <circle cx="342" cy="486" r="30" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="4"/>
+    <path d="M326 486 L326 470 M342 490 L342 472 M358 486 L358 470" stroke="#0A3369" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- torso -->
+  <rect x="100" y="300" width="220" height="210" rx="66" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="5"/>
+  <rect x="100" y="440" width="220" height="70" rx="35" fill="#0A3369"/>
+
+  <!-- placa del pecho -->
+  <rect x="148" y="326" width="124" height="116" rx="20" fill="url(#badgeShade)" stroke="#4FE3F0" stroke-width="3"/>
+  <path d="M166 400 C 182 372, 206 372, 222 352" fill="none" stroke="#2FD9C9" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="234" cy="344" r="7" fill="#F2941F"/>
+  <text x="210" y="392" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-weight="700" font-size="26" fill="#FFFFFF">Genesis</text>
+  <text x="210" y="422" text-anchor="middle" font-family="'Segoe UI', Arial, sans-serif" font-weight="700" font-size="26" fill="#FFFFFF">Traza</text>
+
+  <!-- cuello -->
+  <rect x="185" y="266" width="50" height="40" rx="12" fill="#0A3369"/>
+
+  <!-- orejas -->
+  <circle cx="70" cy="150" r="44" fill="#0A3369"/>
+  <circle cx="70" cy="150" r="27" fill="none" stroke="#4FE3F0" stroke-width="5"/>
+  <circle cx="350" cy="150" r="44" fill="#0A3369"/>
+  <circle cx="350" cy="150" r="27" fill="none" stroke="#4FE3F0" stroke-width="5"/>
+
+  <!-- cabeza -->
+  <circle cx="210" cy="148" r="130" fill="url(#bodyShade)" stroke="#0A3369" stroke-width="5"/>
+  <path d="M92 100 C 140 40, 280 40, 328 100" fill="none" stroke="#0A3369" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- visor / rostro -->
+  <rect x="98" y="92" width="224" height="140" rx="66" fill="#0F1B2D"/>
+  <ellipse cx="168" cy="160" rx="24" ry="30" fill="url(#eyeGlow)"/>
+  <ellipse cx="252" cy="160" rx="24" ry="30" fill="url(#eyeGlow)"/>
+  <circle cx="160" cy="148" r="6" fill="#FFFFFF" opacity="0.85"/>
+  <circle cx="244" cy="148" r="6" fill="#FFFFFF" opacity="0.85"/>
+  <path d="M188 200 Q 210 214, 232 200" fill="none" stroke="#4FE3F0" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- sombra suave -->
+  <ellipse cx="210" cy="588" rx="120" ry="10" fill="#0A3369" opacity="0.12"/>
+</svg>
