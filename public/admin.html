@@ -600,7 +600,7 @@
 
   function loadPlanes(){
     if(!isPro) return;
-    gtApiFetch('/plans').then(function(res){
+    gtApiFetch('/plans/all').then(function(res){
       var tbody = document.getElementById('plansTableBody');
       if(!res.ok || res.data.length === 0){ tbody.innerHTML = '<tr><td class="empty-row" colspan="6">Sin planes.</td></tr>'; return; }
       allPlans = res.data;
@@ -612,14 +612,12 @@
           '<td>' + gtFormatCOP(p.price_monthly) + '</td>' +
           '<td>' + (p.is_featured ? '⭐' : '—') + '</td>' +
           '<td>' + (p.active ? statusBadge('activa') : statusBadge('cancelada')) + '</td>' +
-          '<td><button type="button" class="cell-action" style="margin-right:12px;">Editar</button>' + (p.active ? '<button type="button" class="cell-action">Desactivar</button>' : '') + '</td>';
+          '<td><button type="button" class="cell-action" style="margin-right:12px;">Editar</button>' + (p.active ? '<button type="button" class="cell-action">Desactivar</button>' : '<button type="button" class="cell-action">Reactivar</button>') + '</td>';
         tr.children[0].textContent = p.name;
         tr.children[1].textContent = p.category;
         var actions = tr.children[5].querySelectorAll('.cell-action');
         actions[0].addEventListener('click', function(){ openPlanModal(p); });
-        if(p.active){
-          actions[1].addEventListener('click', function(){ deactivatePlan(p.id); });
-        }
+        actions[1].addEventListener('click', function(){ p.active ? deactivatePlan(p.id) : reactivatePlan(p); });
         tbody.appendChild(tr);
       });
     });
@@ -944,8 +942,25 @@
   }
 
   function deactivatePlan(id){
-    if(!confirm('¿Desactivar este plan? Ya no se mostrará en la landing.')) return;
+    if(!confirm('¿Desactivar este plan? Ya no se mostrará en la landing, pero puedes reactivarlo cuando quieras desde esta misma lista.')) return;
     gtApiFetch('/plans/' + id, { method: 'DELETE' }).then(function(){ loadPlanes(); });
+  }
+
+  function reactivatePlan(p){
+    gtApiFetch('/plans/' + p.id, {
+      method: 'PUT',
+      body: JSON.stringify({
+        category: p.category, name: p.name, price_monthly: p.price_monthly,
+        description: p.description, features: p.features, is_featured: p.is_featured,
+        active: true
+      })
+    }).then(function(res){
+      if(!res.ok){
+        alert(res.data.error || 'No se pudo reactivar: ya hay otro plan activo con el mismo nombre y categoría.');
+        return;
+      }
+      loadPlanes();
+    });
   }
 
   function deleteAssociation(id, name){
