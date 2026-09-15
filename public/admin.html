@@ -245,6 +245,13 @@
         <button class="btn btn-primary" style="margin-top:14px;" onclick="saveNotificationSettings()">Guardar</button>
         <p id="notifySettingsMsg" style="margin-top:10px;font-size:13px;"></p>
       </div>
+
+      <div class="panel pro-only" style="max-width:520px;margin-top:20px;">
+        <div class="panel-head"><h2>Cerrar sesión en todos los dispositivos</h2></div>
+        <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:16px;">Invalida de una vez todas las sesiones activas, de todos los usuarios (clientes y administradores) y en todos los dispositivos donde hayan iniciado sesión — incluida esta. Úsalo si sospechas que alguien más tiene acceso.</p>
+        <button class="btn btn-outline" style="border-color:#C0392B;color:#C0392B;" onclick="forceLogoutAll()">Cerrar todas las sesiones ahora</button>
+        <p id="forceLogoutMsg" style="margin-top:10px;font-size:13px;"></p>
+      </div>
     </section>
 
     <!-- PLANES -->
@@ -536,6 +543,17 @@
         msg.style.color = 'var(--green)';
         msg.textContent = 'Guardado.';
       });
+  }
+
+  function forceLogoutAll(){
+    if(!confirm('¿Cerrar la sesión en TODOS los dispositivos, de todos los usuarios? Esto también te cerrará la sesión a ti.')) return;
+    var msg = document.getElementById('forceLogoutMsg');
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Cerrando sesiones…';
+    gtApiFetch('/admin/force-logout-all', { method: 'POST' }).then(function(res){
+      if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo completar.'; return; }
+      gtLogout();
+    });
   }
 
   function startTwoFASetup(){

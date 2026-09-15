@@ -153,6 +153,22 @@ CREATE TABLE IF NOT EXISTS notification_settings (
 INSERT INTO notification_settings (id, email, phone) VALUES (1, 'genesistraza@gmail.com', '3228753230')
 ON CONFLICT (id) DO NOTHING;
 
+-- Fila unica que permite cerrar la sesion en todos los dispositivos de una sola vez: cualquier
+-- token (JWT) emitido ANTES de sessions_invalidated_at deja de servir, sin importar que su firma
+-- sea valida y no haya expirado - los tokens son sin estado, asi que esta es la unica forma de
+-- "recordarlos" e invalidarlos en bloque. TIMESTAMPTZ (no TIMESTAMP) a proposito: se compara
+-- directo contra el "iat" del JWT como instante absoluto, y un TIMESTAMP sin zona horaria
+-- se guarda/lee corrido segun el timezone de la sesion de Postgres (el mismo tipo de bug de
+-- zona horaria que ya se corrigio para las fechas del balance de masas).
+CREATE TABLE IF NOT EXISTS security_settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  sessions_invalidated_at TIMESTAMPTZ,
+  CHECK (id = 1)
+);
+INSERT INTO security_settings (id, sessions_invalidated_at) VALUES (1, NULL)
+ON CONFLICT (id) DO NOTHING;
+ALTER TABLE security_settings ALTER COLUMN sessions_invalidated_at TYPE TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS news_articles (
   id SERIAL PRIMARY KEY,
   title VARCHAR(300) NOT NULL,

@@ -633,6 +633,17 @@ router.put('/users/:id', asyncRoute(async (req, res) => {
   }
 }));
 
+// POST /admin/force-logout-all -> invalida de una vez todos los tokens (JWT) emitidos hasta
+// ahora, en todos los dispositivos y para todos los usuarios - incluido quien ejecuta esto.
+router.post('/force-logout-all', requireRole('pro'), asyncRoute(async (req, res) => {
+  await pool.query(
+    `INSERT INTO security_settings (id, sessions_invalidated_at) VALUES (1, NOW())
+     ON CONFLICT (id) DO UPDATE SET sessions_invalidated_at = NOW()`
+  );
+  await logActivity(req.user.id, 'sesiones_cerradas_todos_los_dispositivos', {}, req.ip);
+  res.json({ message: 'Se cerró la sesión en todos los dispositivos.' });
+}));
+
 // GET /admin/notification-settings -> correo y telefono a donde llegan las notificaciones de pago
 router.get('/notification-settings', requireRole('pro'), asyncRoute(async (req, res) => {
   const result = await pool.query('SELECT email, phone FROM notification_settings WHERE id = 1');
