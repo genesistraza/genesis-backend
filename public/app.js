@@ -91,3 +91,16 @@ function gtFormatDate(value){
   var d = new Date(value);
   return d.toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
 }
+
+// Ordena una lista de recicladores (con toneladas_mes/pago_mes/nombre_completo) segun uno de
+// los valores del selector "Ordenar por" del dashboard/panel. Compartido entre dashboard.html
+// y admin.html para que el criterio de orden sea exactamente el mismo en los dos.
+function gtSortRecicladores(list, sortBy){
+  var sorted = list.slice();
+  if(sortBy === 'toneladas_desc') sorted.sort(function(a,b){ return Number(b.toneladas_mes||0) - Number(a.toneladas_mes||0); });
+  else if(sortBy === 'toneladas_asc') sorted.sort(function(a,b){ return Number(a.toneladas_mes||0) - Number(b.toneladas_mes||0); });
+  else if(sortBy === 'pago_desc') sorted.sort(function(a,b){ return Number(b.pago_mes||0) - Number(a.pago_mes||0); });
+  else if(sortBy === 'pago_asc') sorted.sort(function(a,b){ return Number(a.pago_mes||0) - Number(b.pago_mes||0); });
+  else sorted.sort(function(a,b){ return (a.nombre_completo||'').localeCompare(b.nombre_completo||''); });
+  return sorted;
+}

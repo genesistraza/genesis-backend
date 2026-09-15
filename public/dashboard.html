@@ -203,10 +203,29 @@
         <p id="recicladoresEmptyMsg" style="color:var(--ink-soft);margin:10px 0 0;">Todavía no hay un listado de recicladores cargado para tu asociación.</p>
       </div>
       <div class="panel" id="recicladoresContent" style="display:none;">
-        <div class="panel-head"><h2>Recicladores</h2></div>
+        <div class="panel-head">
+          <h2 id="recicladoresChartTitle">Toneladas por reciclador</h2>
+          <div class="period-type-toggle" id="recicladoresChartToggle">
+            <button type="button" class="period-type-btn active" data-metric="toneladas" onclick="setRecicladoresChartMetric('toneladas')">Toneladas</button>
+            <button type="button" class="period-type-btn" data-metric="pago" onclick="setRecicladoresChartMetric('pago')">Pago</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <div id="recicladoresChartWrap" style="height:280px;min-width:100%;position:relative;">
+            <canvas id="recicladoresChart"></canvas>
+          </div>
+        </div>
+        <div class="panel-head" style="margin-top:22px;"><h2>Recicladores</h2></div>
         <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px;">
           <input type="text" id="recicladoresSearch" placeholder="Buscar por nombre o cédula…" style="flex:1;min-width:180px;max-width:320px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font-size:14px;">
           <select id="recicladoresMonthSelect" class="period-value-select" onchange="onRecicladoresMonthChange()" style="max-width:220px;"></select>
+          <select id="recicladoresSortSelect" class="period-value-select" onchange="onRecicladoresSortChange()" style="max-width:220px;">
+            <option value="nombre_asc">Ordenar por: Nombre (A-Z)</option>
+            <option value="toneladas_desc">Toneladas: mayor a menor</option>
+            <option value="toneladas_asc">Toneladas: menor a mayor</option>
+            <option value="pago_desc">Pago: mayor a menor</option>
+            <option value="pago_asc">Pago: menor a mayor</option>
+          </select>
         </div>
         <div class="table-scroll">
           <table class="data-table">
@@ -756,6 +775,59 @@
 
   var gtAllRecicladores = [];
   var gtRecicladoresMonth = null;
+  var gtRecicladoresSort = 'nombre_asc';
+  var gtRecicladoresChart = null;
+  var gtRecicladoresChartMetric = 'toneladas';
+
+  function onRecicladoresSortChange(){
+    gtRecicladoresSort = document.getElementById('recicladoresSortSelect').value;
+    renderRecicladoresTable(document.getElementById('recicladoresSearch').value);
+  }
+
+  function setRecicladoresChartMetric(metric){
+    gtRecicladoresChartMetric = metric;
+    document.querySelectorAll('#recicladoresChartToggle .period-type-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-metric') === metric);
+    });
+    renderRecicladoresTable(document.getElementById('recicladoresSearch').value);
+  }
+
+  function renderRecicladoresChart(filtered){
+    var wrap = document.getElementById('recicladoresChartWrap');
+    var isToneladas = gtRecicladoresChartMetric === 'toneladas';
+    document.getElementById('recicladoresChartTitle').textContent = isToneladas ? 'Toneladas por reciclador' : 'Pago por reciclador';
+    var barWidth = 46;
+    var minWidth = wrap.parentElement.clientWidth;
+    wrap.style.width = Math.max(filtered.length * barWidth, minWidth) + 'px';
+    var ctx = document.getElementById('recicladoresChart').getContext('2d');
+    if(gtRecicladoresChart) gtRecicladoresChart.destroy();
+    gtRecicladoresChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: filtered.map(function(r){ return r.nombre_completo; }),
+        datasets: [{
+          label: isToneladas ? 'Toneladas' : 'Pago',
+          data: filtered.map(function(r){ return Number(isToneladas ? (r.toneladas_mes || 0) : (r.pago_mes || 0)); }),
+          backgroundColor: isToneladas ? '#1E6FD6' : '#F2941F',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx){ return isToneladas ? (Number(ctx.raw).toLocaleString('es-CO', {maximumFractionDigits:2}) + ' t') : gtFormatCOP(ctx.raw); } } }
+        },
+        scales: {
+          y: { beginAtZero: true },
+          x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 40 } }
+        }
+      }
+    });
+    requestAnimationFrame(function(){ if(gtRecicladoresChart) gtRecicladoresChart.resize(); });
+  }
+
   function renderRecicladoresTable(filterText){
     var tbody = document.getElementById('recicladoresTableBody');
     var q = (filterText || '').toLowerCase();
@@ -764,6 +836,8 @@
       return (r.nombre_completo || '').toLowerCase().indexOf(q) !== -1 ||
         (r.documento_numero || '').toLowerCase().indexOf(q) !== -1;
     });
+    filtered = gtSortRecicladores(filtered, gtRecicladoresSort);
+    renderRecicladoresChart(filtered);
     tbody.innerHTML = '';
     if(filtered.length === 0){
       tbody.innerHTML = '<tr><td class="empty-row" colspan="4">No se encontraron recicladores.</td></tr>';
