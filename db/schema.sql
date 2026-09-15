@@ -211,3 +211,285 @@ INSERT INTO plans (category, name, price_monthly, price_annual, description, fea
 ('combo','Combo Crecimiento',295000,248000,'Trazabilidad 21-60 recicladores + facturación Profesional.','["Todo Trazabilidad 21-60","300 documentos/mes"]',true),
 ('combo','Combo Total',440000,370000,'Trazabilidad +60 recicladores + facturación ilimitada.','["Todo Trazabilidad +60","Documentos ilimitados"]',false)
 ON CONFLICT (category, name) WHERE active DO NOTHING;
+
+-- =====================================================================================
+-- Modulo "Pruebas" (trazabilidad nativa, tablas tz_*) - replica el mecanismo de registro
+-- del sistema aparte en genesis-traza.com (ASP.NET + MySQL), pero con diseño propio y
+-- normalizado. Aislado por completo de associations/recicladores/mass_balance_entries
+-- (las tablas reales en produccion) - vive solo bajo /admin -> Pruebas mientras se decide
+-- si se integra de verdad. No trae datos historicos, solo la estructura.
+-- =====================================================================================
+
+-- Catalogo generico: reemplaza ~15 tablas casi identicas de codigo/descripcion del sistema
+-- original (estados, tipos_documento, usuario_uso, usuario_tipo, etc.) por una sola tabla
+-- con "categoria" como discriminador. Misma finalidad (listas de referencia), diseño mas simple.
+CREATE TABLE IF NOT EXISTS tz_catalogos (
+  id SERIAL PRIMARY KEY,
+  categoria VARCHAR(60) NOT NULL,
+  codigo VARCHAR(30) NOT NULL,
+  descripcion VARCHAR(255) NOT NULL,
+  grupo VARCHAR(120),
+  orden INT DEFAULT 0,
+  UNIQUE (categoria, codigo)
+);
+
+CREATE TABLE IF NOT EXISTS tz_centros (
+  id SERIAL PRIMARY KEY,
+  cod_centro VARCHAR(30) UNIQUE,
+  desc_centro VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_bodegas (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  cod_bodega VARCHAR(30),
+  desc_bodega VARCHAR(255),
+  desc_ubicacion VARCHAR(255),
+  direccion VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS tz_localidades (
+  id SERIAL PRIMARY KEY,
+  cod_localidad VARCHAR(30),
+  desc_localidad VARCHAR(255) NOT NULL,
+  ciudad VARCHAR(120)
+);
+
+CREATE TABLE IF NOT EXISTS tz_numacros (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_localidad INT REFERENCES tz_localidades(id),
+  cod_numacro VARCHAR(30)
+);
+
+CREATE TABLE IF NOT EXISTS tz_tipos_material (
+  id SERIAL PRIMARY KEY,
+  cod_tipo_material VARCHAR(30) UNIQUE,
+  desc_familia VARCHAR(255),
+  desc_tipo_material VARCHAR(255) NOT NULL,
+  cod_tipo_material_padre VARCHAR(30),
+  desc_tipo_material_padre VARCHAR(255),
+  desc_familia_padre VARCHAR(255),
+  secuencia_orden INT DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tz_recicladores (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  nombre_completo VARCHAR(255) NOT NULL,
+  nro_documento VARCHAR(30) NOT NULL,
+  estado VARCHAR(20) DEFAULT 'Activo',
+  fecha_exp_documento DATE,
+  fecha_nacimiento DATE,
+  direccion VARCHAR(255),
+  telefono VARCHAR(30),
+  tipo_de_vehiculo VARCHAR(60),
+  placa VARCHAR(20),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- El formulario mas usado del sistema original (144,882 registros historicos alla) -
+-- captura diaria de material recuperado por reciclador.
+CREATE TABLE IF NOT EXISTS tz_formulario_balance_masas (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_reciclador INT REFERENCES tz_recicladores(id),
+  id_tipo_material INT REFERENCES tz_tipos_material(id),
+  id_numacro INT REFERENCES tz_numacros(id),
+  id_bodega INT REFERENCES tz_bodegas(id),
+  fecha DATE NOT NULL,
+  cantidad NUMERIC(12,4) DEFAULT 0,
+  valor NUMERIC(12,2) DEFAULT 0,
+  cantidad_rechazo NUMERIC(12,4) DEFAULT 0,
+  cantidad_nosui NUMERIC(12,4) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_microrrutas (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_reciclador INT REFERENCES tz_recicladores(id),
+  fecha_entrada_operacion DATE,
+  estado VARCHAR(20) DEFAULT 'Activo',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_microrrutas_detalle (
+  id SERIAL PRIMARY KEY,
+  id_formulario_microrruta INT REFERENCES tz_formulario_microrrutas(id) ON DELETE CASCADE,
+  desc_microrruta VARCHAR(255),
+  id_tipo_microrruta INT REFERENCES tz_catalogos(id),
+  direccion_inicio VARCHAR(255),
+  hora_inicio VARCHAR(20),
+  direccion_finalizacion VARCHAR(255),
+  hora_finalizacion VARCHAR(20),
+  distancia_via_pavimentada NUMERIC(10,2),
+  distancia_via_no_pavimentada NUMERIC(10,2),
+  frecuencia_semanal INT,
+  dias_frecuencia VARCHAR(60),
+  id_estacion_transferencia INT REFERENCES tz_catalogos(id),
+  tipo_barrido VARCHAR(120)
+);
+
+-- Usuarios DEL SERVICIO (predios/suscriptores, para el reporte al SUI) - no confundir con
+-- los usuarios del sistema Genesis Traza. Concepto nuevo, no existe hoy en produccion.
+CREATE TABLE IF NOT EXISTS tz_usuarios (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_numacro INT REFERENCES tz_numacros(id),
+  nuis_nuid VARCHAR(60),
+  direccion_usuario VARCHAR(255),
+  id_usuario_uso INT REFERENCES tz_catalogos(id),
+  id_usuario_tipo INT REFERENCES tz_catalogos(id),
+  id_usuario_multiusuario INT REFERENCES tz_catalogos(id),
+  id_usuario_ubicacion INT REFERENCES tz_catalogos(id),
+  id_usuario_clase_de_uso INT REFERENCES tz_catalogos(id),
+  id_usuario_tipo_de_aforo INT REFERENCES tz_catalogos(id),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_aprovechamiento (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_usuario INT REFERENCES tz_usuarios(id),
+  id_numacro INT REFERENCES tz_numacros(id),
+  periodo VARCHAR(20),
+  toneladas NUMERIC(12,4) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_recursos (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  fecha DATE,
+  nuap VARCHAR(60),
+  operador VARCHAR(120),
+  valor NUMERIC(14,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Reporte de ventas de material aprovechado (formato tipo SUI: comprador, factura, IVA).
+CREATE TABLE IF NOT EXISTS tz_formulario_ventas (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  anio INT,
+  periodo VARCHAR(20),
+  fecha_habilitacion DATE,
+  fecha_certificacion DATE,
+  tipo_identificacion VARCHAR(30),
+  nro_identificacion VARCHAR(30),
+  nro_factura VARCHAR(60),
+  nombre_comprador VARCHAR(255),
+  material VARCHAR(120),
+  kg NUMERIC(12,2) DEFAULT 0,
+  toneladas NUMERIC(12,4) DEFAULT 0,
+  valor_kilo NUMERIC(12,2) DEFAULT 0,
+  valor_sin_iva NUMERIC(14,2) DEFAULT 0,
+  iva NUMERIC(14,2) DEFAULT 0,
+  valor_con_iva NUMERIC(14,2) DEFAULT 0,
+  depto_origen VARCHAR(120),
+  municipio_origen VARCHAR(120),
+  origen_residuos VARCHAR(120),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_pago_seguridad (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_reciclador INT REFERENCES tz_recicladores(id),
+  id_tipo_concepto INT REFERENCES tz_catalogos(id),
+  fecha DATE,
+  planilla VARCHAR(60),
+  cantidad NUMERIC(12,2) DEFAULT 0,
+  valor NUMERIC(14,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS tz_formulario_pago_tarifa (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_reciclador INT REFERENCES tz_recicladores(id),
+  id_tipo_concepto INT REFERENCES tz_catalogos(id),
+  fecha DATE,
+  nro_referencia VARCHAR(60),
+  cantidad NUMERIC(12,2) DEFAULT 0,
+  valor NUMERIC(14,2) DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Semilla de catalogos (valores reales tomados del sistema original)
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
+('estados','ac','Activo',NULL,1),
+('estados','des','Desactivado',NULL,2),
+('tipos_documento','NIT','NIT',NULL,1),
+('tipos_documento','CC','CC',NULL,2),
+('tipos_documento','PAS','Pasaporte',NULL,3),
+('tipos_identificacion','1','Cédula de Ciudadanía (CC)',NULL,1),
+('tipos_identificacion','2','Cédula de Extranjería (CE)',NULL,2),
+('tipos_identificacion','3','Pasaporte',NULL,3),
+('tipos_identificacion','4','NIT',NULL,4),
+('tipos_microrruta','1','Recolección de residuos no aprovechables',NULL,1),
+('tipos_microrruta','2','Barrido y limpieza de vías y áreas públicas',NULL,2),
+('tipos_microrruta','3','Limpieza de playas',NULL,3),
+('tipos_microrruta','4','Corte de césped',NULL,4),
+('tipos_microrruta','5','Poda de árboles',NULL,5),
+('tipos_microrruta','6','Recolección de residuos aprovechables',NULL,6),
+('tipos_microrruta','7','Recolección de residuos de barrido y limpieza de vías y áreas públicas',NULL,7),
+('tipos_microrruta','8','Recolección de residuos de corte de césped y poda de árboles',NULL,8),
+('destinos_rechazo','1','Relleno Sanitario',NULL,1),
+('destinos_rechazo','2','Estación de Transferencia',NULL,2),
+('estaciones_transferencia','1','SI',NULL,1),
+('estaciones_transferencia','2','NO',NULL,2),
+('operadores','39834','Promo ambiental',NULL,1),
+('operadores','3339','Lime',NULL,2),
+('operadores','39837','Bogotá Limpia',NULL,3),
+('operadores','2614','Ciudad Limpia',NULL,4),
+('operadores','40018','Area limpia',NULL,5),
+('usuario_aforado','0','No es un usuario aforado',NULL,1),
+('usuario_aforado','1','Es un usuario aforado',NULL,2),
+('usuario_clase_de_uso','0','No aplica',NULL,1),
+('usuario_clase_de_uso','1','Bajo-Bajo',NULL,2),
+('usuario_clase_de_uso','2','Bajo',NULL,3),
+('usuario_clase_de_uso','3','Medio-Bajo',NULL,4),
+('usuario_clase_de_uso','4','Medio',NULL,5),
+('usuario_clase_de_uso','5','Medio-Alto',NULL,6),
+('usuario_clase_de_uso','6','Alto',NULL,7),
+('usuario_clase_de_uso','10','Industrial',NULL,8),
+('usuario_clase_de_uso','11','Comercial',NULL,9),
+('usuario_clase_de_uso','12','Oficial',NULL,10),
+('usuario_multiusuario','1','Es un usuario Multiusuario',NULL,1),
+('usuario_multiusuario','2','No es un usuario Multiusuario',NULL,2),
+('usuario_tipo','0','No aplica',NULL,1),
+('usuario_tipo','1','Gran generador',NULL,2),
+('usuario_tipo','2','Pequeño generador',NULL,3),
+('usuario_tipo_de_aforo','0','No aplica',NULL,1),
+('usuario_tipo_de_aforo','2','Aforo ordinario',NULL,2),
+('usuario_tipo_de_aforo','3','Aforo extraordinario',NULL,3),
+('usuario_tipo_de_aforo','4','Aforo permanente',NULL,4),
+('usuario_ubicacion','0','No aplica',NULL,1),
+('usuario_ubicacion','1','Rural',NULL,2),
+('usuario_ubicacion','2','Urbano',NULL,3),
+('usuario_ubicacion','3','Expansión Urbana',NULL,4),
+('usuario_uso','1','Residencial',NULL,1),
+('usuario_uso','2','Comercial',NULL,2),
+('usuario_uso','3','Industrial',NULL,3),
+('usuario_uso','4','Oficial',NULL,4),
+('tipos_concepto_pago_seguridad','1','Pago salud','Pagos',1),
+('tipos_concepto_pago_seguridad','2','Pago pensión','Pagos',2),
+('tipos_concepto_pago_tarifa','001','Pago tarifa','Pagos',1)
+ON CONFLICT (categoria, codigo) DO NOTHING;
+
+-- Semilla de tipos de material (tomada del sistema original)
+INSERT INTO tz_tipos_material (cod_tipo_material, desc_familia, desc_tipo_material, secuencia_orden) VALUES
+('1','Papel y cartón','Papel','1'),
+('2','Papel y cartón','Cartón','2'),
+('3','Plástico','PET','3'),
+('4','Plástico','Plástico rígido','4'),
+('5','Plástico','Plástico película','5'),
+('6','Vidrio','Vidrio','6'),
+('7','Metales','Chatarra ferrosa','7'),
+('8','Metales','Chatarra no ferrosa','8'),
+('9','Otros','Textiles','9'),
+('10','Otros','Otros aprovechables','10')
+ON CONFLICT (cod_tipo_material) DO NOTHING;

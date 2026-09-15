@@ -1,0 +1,320 @@
+// Modulo "Pruebas": motor generico de CRUD para las tablas tz_* (trazabilidad nativa).
+// En vez de una ruta/pantalla por formulario (como el sistema original en ASP.NET), un
+// solo registro de entidades con metadata de campos alimenta tanto el backend genérico
+// como el frontend, que arma tablas y formularios dinámicamente a partir de esa metadata.
+// Aislado del resto de la app: nunca toca associations/recicladores/mass_balance_entries.
+const express = require('express');
+const pool = require('../db/pool');
+const { requireAuth, requireRole } = require('../middleware/auth');
+const { asyncRoute, logActivity } = require('../middleware/logger');
+
+const router = express.Router();
+router.use(requireAuth, requireRole('pro'));
+
+const ENTITIES = {
+  centros: {
+    table: 'tz_centros', label: 'Centros (Asociaciones)',
+    fields: [
+      { name: 'cod_centro', label: 'Código', type: 'text' },
+      { name: 'desc_centro', label: 'Nombre', type: 'text', required: true }
+    ]
+  },
+  bodegas: {
+    table: 'tz_bodegas', label: 'Bodegas',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'cod_bodega', label: 'Código', type: 'text' },
+      { name: 'desc_bodega', label: 'Descripción', type: 'text' },
+      { name: 'desc_ubicacion', label: 'Ubicación', type: 'text' },
+      { name: 'direccion', label: 'Dirección', type: 'text' }
+    ]
+  },
+  localidades: {
+    table: 'tz_localidades', label: 'Localidades',
+    fields: [
+      { name: 'cod_localidad', label: 'Código', type: 'text' },
+      { name: 'desc_localidad', label: 'Nombre', type: 'text', required: true },
+      { name: 'ciudad', label: 'Ciudad', type: 'text' }
+    ]
+  },
+  numacros: {
+    table: 'tz_numacros', label: 'Numacros (Zonas)',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_localidad', label: 'Localidad', type: 'select-entity', entity: 'localidades', labelField: 'desc_localidad' },
+      { name: 'cod_numacro', label: 'Código', type: 'text' }
+    ]
+  },
+  tipos_material: {
+    table: 'tz_tipos_material', label: 'Tipos de Material',
+    fields: [
+      { name: 'cod_tipo_material', label: 'Código', type: 'text' },
+      { name: 'desc_familia', label: 'Familia', type: 'text' },
+      { name: 'desc_tipo_material', label: 'Material', type: 'text', required: true },
+      { name: 'secuencia_orden', label: 'Orden', type: 'number' }
+    ]
+  },
+  recicladores: {
+    table: 'tz_recicladores', label: 'Recicladores',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'nombre_completo', label: 'Nombre completo', type: 'text', required: true },
+      { name: 'nro_documento', label: 'Documento', type: 'text', required: true },
+      { name: 'estado', label: 'Estado', type: 'text' },
+      { name: 'fecha_exp_documento', label: 'Fecha expedición doc.', type: 'date' },
+      { name: 'fecha_nacimiento', label: 'Fecha nacimiento', type: 'date' },
+      { name: 'direccion', label: 'Dirección', type: 'text' },
+      { name: 'telefono', label: 'Teléfono', type: 'text' },
+      { name: 'tipo_de_vehiculo', label: 'Tipo vehículo', type: 'text' },
+      { name: 'placa', label: 'Placa', type: 'text' }
+    ]
+  },
+  balance_masas: {
+    table: 'tz_formulario_balance_masas', label: 'Balance de Masas',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo', required: true },
+      { name: 'id_tipo_material', label: 'Material', type: 'select-entity', entity: 'tipos_material', labelField: 'desc_tipo_material', required: true },
+      { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
+      { name: 'id_bodega', label: 'Bodega', type: 'select-entity', entity: 'bodegas', labelField: 'desc_bodega' },
+      { name: 'fecha', label: 'Fecha', type: 'date', required: true },
+      { name: 'cantidad', label: 'Cantidad (kg)', type: 'decimal' },
+      { name: 'valor', label: 'Valor/kg', type: 'decimal' },
+      { name: 'cantidad_rechazo', label: 'Cantidad rechazo', type: 'decimal' },
+      { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' }
+    ]
+  },
+  microrrutas: {
+    table: 'tz_formulario_microrrutas', label: 'Microrrutas',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo' },
+      { name: 'fecha_entrada_operacion', label: 'Fecha entrada operación', type: 'date' },
+      { name: 'estado', label: 'Estado', type: 'text' }
+    ]
+  },
+  microrrutas_detalle: {
+    table: 'tz_formulario_microrrutas_detalle', label: 'Detalle de Microrrutas',
+    fields: [
+      { name: 'id_formulario_microrruta', label: 'Microrruta (id)', type: 'select-entity', entity: 'microrrutas', labelField: 'id', required: true },
+      { name: 'desc_microrruta', label: 'Descripción', type: 'text' },
+      { name: 'id_tipo_microrruta', label: 'Tipo', type: 'select-catalogo', categoria: 'tipos_microrruta' },
+      { name: 'direccion_inicio', label: 'Dirección inicio', type: 'text' },
+      { name: 'hora_inicio', label: 'Hora inicio', type: 'text' },
+      { name: 'direccion_finalizacion', label: 'Dirección fin', type: 'text' },
+      { name: 'hora_finalizacion', label: 'Hora fin', type: 'text' },
+      { name: 'distancia_via_pavimentada', label: 'Distancia pavimentada (km)', type: 'decimal' },
+      { name: 'distancia_via_no_pavimentada', label: 'Distancia no pavimentada (km)', type: 'decimal' },
+      { name: 'frecuencia_semanal', label: 'Frecuencia semanal', type: 'number' },
+      { name: 'dias_frecuencia', label: 'Días', type: 'text' },
+      { name: 'id_estacion_transferencia', label: 'Estación transferencia', type: 'select-catalogo', categoria: 'estaciones_transferencia' },
+      { name: 'tipo_barrido', label: 'Tipo barrido', type: 'text' }
+    ]
+  },
+  usuarios: {
+    table: 'tz_usuarios', label: 'Usuarios del Servicio (SUI)',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
+      { name: 'nuis_nuid', label: 'NUIS/NUID', type: 'text' },
+      { name: 'direccion_usuario', label: 'Dirección', type: 'text' },
+      { name: 'id_usuario_uso', label: 'Uso', type: 'select-catalogo', categoria: 'usuario_uso' },
+      { name: 'id_usuario_tipo', label: 'Tipo', type: 'select-catalogo', categoria: 'usuario_tipo' },
+      { name: 'id_usuario_multiusuario', label: 'Multiusuario', type: 'select-catalogo', categoria: 'usuario_multiusuario' },
+      { name: 'id_usuario_ubicacion', label: 'Ubicación', type: 'select-catalogo', categoria: 'usuario_ubicacion' },
+      { name: 'id_usuario_clase_de_uso', label: 'Clase de uso', type: 'select-catalogo', categoria: 'usuario_clase_de_uso' },
+      { name: 'id_usuario_tipo_de_aforo', label: 'Tipo de aforo', type: 'select-catalogo', categoria: 'usuario_tipo_de_aforo' }
+    ]
+  },
+  aprovechamiento: {
+    table: 'tz_formulario_aprovechamiento', label: 'Aprovechamiento',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_usuario', label: 'Usuario', type: 'select-entity', entity: 'usuarios', labelField: 'nuis_nuid' },
+      { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
+      { name: 'periodo', label: 'Periodo', type: 'text' },
+      { name: 'toneladas', label: 'Toneladas', type: 'decimal' }
+    ]
+  },
+  recursos: {
+    table: 'tz_formulario_recursos', label: 'Recursos',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'fecha', label: 'Fecha', type: 'date' },
+      { name: 'nuap', label: 'NUAP', type: 'text' },
+      { name: 'operador', label: 'Operador', type: 'text' },
+      { name: 'valor', label: 'Valor', type: 'decimal' }
+    ]
+  },
+  ventas: {
+    table: 'tz_formulario_ventas', label: 'Ventas',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'anio', label: 'Año', type: 'number' },
+      { name: 'periodo', label: 'Periodo', type: 'text' },
+      { name: 'fecha_habilitacion', label: 'Fecha habilitación', type: 'date' },
+      { name: 'fecha_certificacion', label: 'Fecha certificación', type: 'date' },
+      { name: 'tipo_identificacion', label: 'Tipo identificación', type: 'text' },
+      { name: 'nro_identificacion', label: 'Nro identificación', type: 'text' },
+      { name: 'nro_factura', label: 'Nro factura', type: 'text' },
+      { name: 'nombre_comprador', label: 'Comprador', type: 'text' },
+      { name: 'material', label: 'Material', type: 'text' },
+      { name: 'kg', label: 'Kg', type: 'decimal' },
+      { name: 'toneladas', label: 'Toneladas', type: 'decimal' },
+      { name: 'valor_kilo', label: 'Valor/kg', type: 'decimal' },
+      { name: 'valor_sin_iva', label: 'Valor sin IVA', type: 'decimal' },
+      { name: 'iva', label: 'IVA', type: 'decimal' },
+      { name: 'valor_con_iva', label: 'Valor con IVA', type: 'decimal' },
+      { name: 'depto_origen', label: 'Depto origen', type: 'text' },
+      { name: 'municipio_origen', label: 'Municipio origen', type: 'text' },
+      { name: 'origen_residuos', label: 'Origen residuos', type: 'text' }
+    ]
+  },
+  pago_seguridad: {
+    table: 'tz_formulario_pago_seguridad', label: 'Pago Seguridad Social',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo', required: true },
+      { name: 'id_tipo_concepto', label: 'Concepto', type: 'select-catalogo', categoria: 'tipos_concepto_pago_seguridad' },
+      { name: 'fecha', label: 'Fecha', type: 'date' },
+      { name: 'planilla', label: 'Planilla', type: 'text' },
+      { name: 'cantidad', label: 'Cantidad', type: 'decimal' },
+      { name: 'valor', label: 'Valor', type: 'decimal' }
+    ]
+  },
+  pago_tarifa: {
+    table: 'tz_formulario_pago_tarifa', label: 'Pago Tarifa',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo', required: true },
+      { name: 'id_tipo_concepto', label: 'Concepto', type: 'select-catalogo', categoria: 'tipos_concepto_pago_tarifa' },
+      { name: 'fecha', label: 'Fecha', type: 'date' },
+      { name: 'nro_referencia', label: 'Nro referencia', type: 'text' },
+      { name: 'cantidad', label: 'Cantidad', type: 'decimal' },
+      { name: 'valor', label: 'Valor', type: 'decimal' }
+    ]
+  }
+};
+
+function getEntity(key) {
+  const entity = ENTITIES[key];
+  if (!entity) return null;
+  return entity;
+}
+
+// GET /trazabilidad/entities -> el registro completo, para que el frontend arme menú,
+// tablas y formularios sin tener que hardcodear nada por módulo.
+router.get('/entities', (req, res) => {
+  const out = {};
+  for (const key in ENTITIES) {
+    out[key] = { label: ENTITIES[key].label, fields: ENTITIES[key].fields };
+  }
+  res.json(out);
+});
+
+// GET /trazabilidad/catalogo-options/:categoria -> opciones {value,label} para un select-catalogo
+router.get('/catalogo-options/:categoria', asyncRoute(async (req, res) => {
+  const result = await pool.query(
+    'SELECT id AS value, descripcion AS label FROM tz_catalogos WHERE categoria = $1 ORDER BY orden, descripcion',
+    [req.params.categoria]
+  );
+  res.json(result.rows);
+}));
+
+// GET /trazabilidad/:entity/options?labelField=xxx -> opciones {value,label} para un select-entity
+router.get('/:entity/options', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  const labelField = req.query.labelField;
+  const validCol = entity.fields.some((f) => f.name === labelField) || labelField === 'id';
+  if (!validCol) return res.status(400).json({ error: 'Campo de etiqueta inválido.' });
+  const result = await pool.query(
+    `SELECT id AS value, ${labelField === 'id' ? 'id::text' : labelField} AS label FROM ${entity.table} ORDER BY 2`
+  );
+  res.json(result.rows);
+}));
+
+// GET /trazabilidad/:entity -> lista filas, con las etiquetas de sus select-entity resueltas
+router.get('/:entity', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+
+  const selectCols = ['t.id'];
+  const joins = [];
+  entity.fields.forEach((f, i) => {
+    selectCols.push(`t.${f.name}`);
+    if (f.type === 'select-entity') {
+      const refEntity = getEntity(f.entity);
+      const alias = 'j' + i;
+      const labelExpr = f.labelField === 'id' ? `${alias}.id::text` : `${alias}.${f.labelField}`;
+      selectCols.push(`${labelExpr} AS ${f.name}_label`);
+      joins.push(`LEFT JOIN ${refEntity.table} ${alias} ON ${alias}.id = t.${f.name}`);
+    } else if (f.type === 'select-catalogo') {
+      const alias = 'j' + i;
+      selectCols.push(`${alias}.descripcion AS ${f.name}_label`);
+      joins.push(`LEFT JOIN tz_catalogos ${alias} ON ${alias}.id = t.${f.name}`);
+    }
+  });
+
+  const sql = `SELECT ${selectCols.join(', ')} FROM ${entity.table} t ${joins.join(' ')} ORDER BY t.id DESC LIMIT 500`;
+  const result = await pool.query(sql);
+  res.json(result.rows);
+}));
+
+function buildInsertUpdate(entity, body) {
+  const cols = [];
+  const values = [];
+  entity.fields.forEach((f) => {
+    if (!(f.name in body)) return;
+    let v = body[f.name];
+    if (v === '' || v === undefined) v = null;
+    cols.push(f.name);
+    values.push(v);
+  });
+  return { cols, values };
+}
+
+// POST /trazabilidad/:entity -> crear
+router.post('/:entity', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+
+  const missing = entity.fields.filter((f) => f.required && !req.body[f.name]);
+  if (missing.length) {
+    return res.status(400).json({ error: 'Faltan campos obligatorios: ' + missing.map((f) => f.label).join(', ') });
+  }
+
+  const { cols, values } = buildInsertUpdate(entity, req.body);
+  const placeholders = cols.map((_, i) => `$${i + 1}`);
+  const sql = `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${placeholders.join(',')}) RETURNING id`;
+  const result = await pool.query(sql, values);
+  await logActivity(req.user.id, 'pruebas_trazabilidad_creado', { entity: req.params.entity, id: result.rows[0].id }, req.ip);
+  res.json({ id: result.rows[0].id });
+}));
+
+// PUT /trazabilidad/:entity/:id -> editar
+router.put('/:entity/:id', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+
+  const { cols, values } = buildInsertUpdate(entity, req.body);
+  if (cols.length === 0) return res.status(400).json({ error: 'Nada para actualizar.' });
+  const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
+  values.push(req.params.id);
+  const sql = `UPDATE ${entity.table} SET ${setClause} WHERE id = $${values.length} RETURNING id`;
+  const result = await pool.query(sql, values);
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado.' });
+  await logActivity(req.user.id, 'pruebas_trazabilidad_editado', { entity: req.params.entity, id: req.params.id }, req.ip);
+  res.json({ id: result.rows[0].id });
+}));
+
+// DELETE /trazabilidad/:entity/:id
+router.delete('/:entity/:id', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  await pool.query(`DELETE FROM ${entity.table} WHERE id = $1`, [req.params.id]);
+  await logActivity(req.user.id, 'pruebas_trazabilidad_eliminado', { entity: req.params.entity, id: req.params.id }, req.ip);
+  res.json({ message: 'Eliminado.' });
+}));
+
+module.exports = router;

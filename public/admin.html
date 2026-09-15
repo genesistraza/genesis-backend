@@ -34,6 +34,7 @@
     <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Sub-administradores</div>
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
     <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
+    <div class="side-link pro-only" data-tab="pruebas" onclick="showTab('pruebas')" style="color:var(--orange);">Pruebas</div>
     <a class="side-link" href="index.html">Ir a la web</a>
     <div class="side-spacer"></div>
     <div class="side-user">
@@ -331,7 +332,41 @@
         </div>
       </div>
     </section>
+
+    <!-- PRUEBAS: sandbox del modulo de trazabilidad nativa (tablas tz_*), aislado de las
+         asociaciones/recicladores reales. Un solo panel generico para las 15 entidades en
+         vez de una pantalla por formulario. -->
+    <section class="tab-panel pro-only" id="tab-pruebas" style="display:none;">
+      <div class="app-topbar"><div><h1>Pruebas — Trazabilidad nativa</h1><p>Sandbox para replicar los formularios del sistema de trazabilidad aparte (genesis-traza.com). No toca asociaciones, recicladores ni datos reales — es solo para ver cómo se vería.</p></div></div>
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="pruebasEntityTitle">Elige un módulo</h2>
+          <button type="button" class="btn btn-primary" onclick="openPruebasFormModal()">Nuevo registro</button>
+        </div>
+        <select id="pruebasEntitySelect" class="period-value-select" onchange="onPruebasEntityChange()" style="margin-bottom:16px;max-width:320px;"></select>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead id="pruebasTableHead"></thead>
+            <tbody id="pruebasTableBody"><tr><td class="empty-row">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
+</div>
+
+<!-- Modal: formulario dinamico del modulo Pruebas -->
+<div class="modal-overlay" id="pruebasFormModalOverlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closePruebasFormModal()">&times;</button>
+    <div class="modal-scroll">
+      <h3 id="pruebasFormModalTitle">Nuevo registro</h3>
+      <input type="hidden" id="pruebasFormId">
+      <div class="form-grid" id="pruebasFormFields" style="margin-top:18px;"></div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="savePruebasRecord()">Guardar</button>
+      <p id="pruebasFormError" style="display:none;color:#C0392B;font-size:13px;margin-top:10px;"></p>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: detalle de cliente (soporte) -->
@@ -465,6 +500,7 @@
     if(name === 'planes') loadPlanes();
     if(name === 'actividad') loadActividad();
     if(name === 'errores') loadErrores();
+    if(name === 'pruebas') loadPruebasTab();
   }
 
   function loadResumen(){
@@ -1527,6 +1563,162 @@
         loadPagos();
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  // ---- Pruebas: trazabilidad nativa (sandbox, tablas tz_*) ----
+  var pruebasEntities = null;
+  var pruebasCurrentEntity = null;
+  var pruebasCurrentRows = [];
+  var pruebasOptionsCache = {};
+
+  function loadPruebasTab(){
+    if(pruebasEntities){ renderPruebasEntitySelect(); return; }
+    gtApiFetch('/trazabilidad/entities').then(function(res){
+      if(!res.ok) return;
+      pruebasEntities = res.data;
+      renderPruebasEntitySelect();
+    });
+  }
+
+  function renderPruebasEntitySelect(){
+    var sel = document.getElementById('pruebasEntitySelect');
+    sel.innerHTML = '';
+    Object.keys(pruebasEntities).forEach(function(key){
+      var opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = pruebasEntities[key].label;
+      sel.appendChild(opt);
+    });
+    pruebasCurrentEntity = pruebasCurrentEntity || Object.keys(pruebasEntities)[0];
+    sel.value = pruebasCurrentEntity;
+    fetchAndRenderPruebasTable();
+  }
+
+  function onPruebasEntityChange(){
+    pruebasCurrentEntity = document.getElementById('pruebasEntitySelect').value;
+    fetchAndRenderPruebasTable();
+  }
+
+  function fetchAndRenderPruebasTable(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    document.getElementById('pruebasEntityTitle').textContent = entity.label;
+    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity).then(function(res){
+      var thead = document.getElementById('pruebasTableHead');
+      var tbody = document.getElementById('pruebasTableBody');
+      if(!res.ok){ tbody.innerHTML = '<tr><td class="empty-row">No se pudo cargar.</td></tr>'; return; }
+      pruebasCurrentRows = res.data;
+
+      var headHtml = '<tr>';
+      entity.fields.forEach(function(f){ headHtml += '<th>' + f.label + '</th>'; });
+      headHtml += '<th></th></tr>';
+      thead.innerHTML = headHtml;
+
+      if(res.data.length === 0){
+        tbody.innerHTML = '<tr><td class="empty-row" colspan="' + (entity.fields.length + 1) + '">Sin registros todavía.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = '';
+      res.data.forEach(function(row){
+        var tr = document.createElement('tr');
+        var html = '';
+        entity.fields.forEach(function(f){
+          var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
+          if(f.type === 'date' && val) val = gtFormatDate(val);
+          html += '<td>' + (val === null || val === undefined || val === '' ? '—' : String(val)) + '</td>';
+        });
+        html += '<td><button type="button" class="cell-action" style="margin-right:10px;">Editar</button><button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button></td>';
+        tr.innerHTML = html;
+        var actions = tr.lastElementChild.querySelectorAll('.cell-action');
+        actions[0].addEventListener('click', function(){ openPruebasFormModal(row); });
+        actions[1].addEventListener('click', function(){ deletePruebasRecord(row.id); });
+        tbody.appendChild(tr);
+      });
+    });
+  }
+
+  function deletePruebasRecord(id){
+    if(!confirm('¿Eliminar este registro de prueba?')) return;
+    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity + '/' + id, { method: 'DELETE' }).then(function(){ fetchAndRenderPruebasTable(); });
+  }
+
+  function getPruebasFieldOptions(field, callback){
+    var cacheKey = pruebasCurrentEntity + ':' + field.name;
+    if(pruebasOptionsCache[cacheKey]){ callback(pruebasOptionsCache[cacheKey]); return; }
+    var url = field.type === 'select-catalogo'
+      ? '/trazabilidad/catalogo-options/' + field.categoria
+      : '/trazabilidad/' + field.entity + '/options?labelField=' + encodeURIComponent(field.labelField);
+    gtApiFetch(url).then(function(res){
+      var opts = res.ok ? res.data : [];
+      pruebasOptionsCache[cacheKey] = opts;
+      callback(opts);
+    });
+  }
+
+  function openPruebasFormModal(existingRow){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    document.getElementById('pruebasFormModalTitle').textContent = (existingRow ? 'Editar — ' : 'Nuevo — ') + entity.label;
+    document.getElementById('pruebasFormId').value = existingRow ? existingRow.id : '';
+    document.getElementById('pruebasFormError').style.display = 'none';
+    var container = document.getElementById('pruebasFormFields');
+    container.innerHTML = '';
+
+    entity.fields.forEach(function(f){
+      var wrap = document.createElement('div');
+      wrap.className = 'form-field';
+      var label = document.createElement('label');
+      label.textContent = f.label + (f.required ? ' *' : '');
+      wrap.appendChild(label);
+
+      var inputId = 'pruebasField_' + f.name;
+      var input;
+      if(f.type === 'select-entity' || f.type === 'select-catalogo'){
+        input = document.createElement('select');
+        input.id = inputId;
+        input.innerHTML = '<option value="">Cargando…</option>';
+        getPruebasFieldOptions(f, function(opts){
+          input.innerHTML = '<option value="">— Ninguno —</option>' + opts.map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
+          if(existingRow && existingRow[f.name] !== null && existingRow[f.name] !== undefined){
+            input.value = existingRow[f.name];
+          }
+        });
+      } else {
+        input = document.createElement('input');
+        input.id = inputId;
+        input.type = f.type === 'date' ? 'date' : (f.type === 'number' || f.type === 'decimal' ? 'number' : 'text');
+        if(f.type === 'decimal') input.step = '0.0001';
+        if(existingRow && existingRow[f.name] !== null && existingRow[f.name] !== undefined){
+          input.value = f.type === 'date' ? String(existingRow[f.name]).slice(0, 10) : existingRow[f.name];
+        }
+      }
+      wrap.appendChild(input);
+      container.appendChild(wrap);
+    });
+
+    document.getElementById('pruebasFormModalOverlay').classList.add('open');
+  }
+
+  function closePruebasFormModal(){
+    document.getElementById('pruebasFormModalOverlay').classList.remove('open');
+  }
+
+  function savePruebasRecord(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    var id = document.getElementById('pruebasFormId').value;
+    var body = {};
+    entity.fields.forEach(function(f){
+      var el = document.getElementById('pruebasField_' + f.name);
+      body[f.name] = el.value === '' ? null : el.value;
+    });
+    var errorEl = document.getElementById('pruebasFormError');
+    errorEl.style.display = 'none';
+    gtApiFetch(id ? '/trazabilidad/' + pruebasCurrentEntity + '/' + id : '/trazabilidad/' + pruebasCurrentEntity, {
+      method: id ? 'PUT' : 'POST',
+      body: JSON.stringify(body)
+    }).then(function(res){
+      if(!res.ok){ errorEl.textContent = res.data.error || 'No se pudo guardar.'; errorEl.style.display = 'block'; return; }
+      closePruebasFormModal();
+      fetchAndRenderPruebasTable();
+    });
   }
 
   if(session){

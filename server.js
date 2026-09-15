@@ -9,6 +9,7 @@ const paymentsRoutes = require('./routes/payments');
 const subscriptionsRoutes = require('./routes/subscriptions');
 const newsRoutes = require('./routes/news');
 const massBalanceRoutes = require('./routes/massBalance');
+const trazabilidadRoutes = require('./routes/trazabilidad');
 const startPaymentReminders = require('./jobs/paymentReminders');
 const startNewsFetcher = require('./jobs/newsFetcher');
 
@@ -25,6 +26,7 @@ app.use('/payments', paymentsRoutes);
 app.use('/subscriptions', subscriptionsRoutes);
 app.use('/news', newsRoutes);
 app.use('/', massBalanceRoutes);
+app.use('/trazabilidad', trazabilidadRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
