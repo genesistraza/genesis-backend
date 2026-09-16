@@ -221,6 +221,53 @@ router.get('/catalogo-options/:categoria', asyncRoute(async (req, res) => {
   res.json(result.rows);
 }));
 
+// GET /trazabilidad/balance-masas-dia?id_reciclador=X&fecha=YYYY-MM-DD -> lo que ya está
+// guardado ese día para ese reciclador (una fila por material), para precargar la grilla.
+// Registrada ANTES de /:entity para que Express no la confunda con esa ruta genérica.
+router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
+  const { id_reciclador, fecha } = req.query;
+  if (!id_reciclador || !fecha) return res.status(400).json({ error: 'Falta id_reciclador o fecha.' });
+  const result = await pool.query(
+    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui
+     FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
+    [id_reciclador, fecha]
+  );
+  res.json(result.rows);
+}));
+
+// POST /trazabilidad/balance-masas-dia -> guarda de una vez todas las filas de material con
+// datos de un reciclador en un día (reemplaza lo que hubiera ese mismo reciclador+fecha),
+// igual a como se llena la grilla real: se escribe lo que aplica y se guarda una sola vez.
+router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
+  const { id_centro, id_reciclador, id_numacro, id_bodega, fecha, materiales } = req.body;
+  if (!id_centro || !id_reciclador || !fecha || !Array.isArray(materiales)) {
+    return res.status(400).json({ error: 'Faltan datos obligatorios.' });
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2', [id_reciclador, fecha]);
+    const filas = materiales.filter((m) => m.cantidad || m.valor || m.cantidad_rechazo || m.cantidad_nosui);
+    for (const m of filas) {
+      await client.query(
+        `INSERT INTO tz_formulario_balance_masas
+         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, fecha,
+          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0]
+      );
+    }
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'pruebas_balance_masas_dia_guardado', { id_reciclador, fecha, filas: filas.length }, req.ip);
+    res.json({ message: 'Guardado.', filas: filas.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}));
+
 // GET /trazabilidad/:entity/options?labelField=xxx -> opciones {value,label} para un select-entity
 router.get('/:entity/options', asyncRoute(async (req, res) => {
   const entity = getEntity(req.params.entity);
