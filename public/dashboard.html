@@ -412,9 +412,14 @@
                 ['N° documento', p.numero_documento],
                 ['Dirección inicio', p.direccion_inicio],
                 ['Dirección fin', p.direccion_fin],
-                ['Días de operación', p.dias_operacion],
+                ['Días de operación', p.dias_operacion || p.frecuencia],
                 ['Tipo de vehículo', p.tipo_vehiculo],
-                ['Placa', p.placa]
+                ['Placa', p.placa],
+                ['Ruta', p.ruta],
+                ['Localidad', p.localidad],
+                ['Barrios', p.barrios],
+                ['Distancia objetivo', p.distancia_km_objetivo ? (p.distancia_km_objetivo + ' km') : null],
+                ['Distancia recorrida', p.distancia_km_generada ? (p.distancia_km_generada + ' km') : null]
               ].filter(function(r){ return r[1]; });
               if(rows.length){
                 var html = '<strong>' + (feature.properties.name || label) + '</strong><br>' +
@@ -430,11 +435,13 @@
           }
 
           // Texto combinado para poder buscar por nombre/documento del reciclador, placa o
-          // días de operación, no solo por el nombre de la carpeta.
+          // días de operación, no solo por el nombre de la carpeta. Distintos KMZ usan
+          // distintos nombres de campo (p.ej. "frecuencia" en vez de "dias_operacion" para
+          // rutas con otras especificaciones), así que se incluyen ambos.
           var searchParts = [label];
           geojson.features.forEach(function(f){
             var p = f.properties || {};
-            ['nombre', 'numero_documento', 'dias_operacion', 'placa'].forEach(function(k){
+            ['nombre', 'numero_documento', 'dias_operacion', 'frecuencia', 'placa', 'ruta', 'barrios', 'localidad'].forEach(function(k){
               if(p[k]) searchParts.push(String(p[k]));
             });
           });
