@@ -641,3 +641,100 @@ INSERT INTO tz_tipos_material (cod_tipo_material, desc_familia, desc_tipo_materi
 ('3991','Plasticos','Plastico Manguera',40),
 ('3992','Plasticos','Plastico Negro',41)
 ON CONFLICT (cod_tipo_material) DO NOTHING;
+
+-- =====================================================================================
+-- Segunda pasada de correccion contra el Anexo A (instructivo de cargue de aprovechamiento
+-- al SUI): campos que la organizacion de recicladores (prestador) SI debe reportar y que
+-- este sandbox no tenia todavia, ademas de la misma correccion de "NUMACRO = macrorruta"
+-- que ya se hizo en Balance de Masas.
+-- =====================================================================================
+
+-- Area de Prestacion del Servicio (NUAP): un prestador puede operar varias; cada ECA y
+-- cada macrorruta pertenecen a una NUAP especifica, no directamente al centro/prestador.
+CREATE TABLE IF NOT EXISTS tz_areas_prestacion (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  cod_departamento_dane VARCHAR(2),
+  cod_municipio_dane VARCHAR(3),
+  nombre_area VARCHAR(255) NOT NULL,
+  fecha_entrada_operacion DATE,
+  id_estado INT REFERENCES tz_catalogos(id),
+  fecha_estado DATE
+);
+
+-- La ECA (aqui modelada como tz_bodegas) necesita mucho mas que un nombre: predio,
+-- coordenadas MAGNA-SIRGAS, propietario, contrato y capacidades, tal como lo pide el
+-- formulario "Registro de estaciones de clasificacion y aprovechamiento".
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_area_prestacion INT REFERENCES tz_areas_prestacion(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS fecha_inicio_operaciones DATE;
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS informacion_complementaria VARCHAR(255);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS longitud NUMERIC(10,6);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS latitud NUMERIC(10,6);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_propietario_predio INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_tipo_contrato INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS capacidad_operacion_ton_mes NUMERIC(12,2);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS capacidad_almacenamiento_m3 NUMERIC(12,2);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS capacidad_almacenamiento_ton NUMERIC(12,2);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_uso_suelo_compatible INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_uso_suelo INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS id_estado INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_bodegas ADD COLUMN IF NOT EXISTS fecha_estado DATE;
+
+-- Macrorrutas: pertenecen a una NUAP, y tienen su propio ciclo de fecha/estado.
+ALTER TABLE tz_macrorrutas ADD COLUMN IF NOT EXISTS id_area_prestacion INT REFERENCES tz_areas_prestacion(id);
+ALTER TABLE tz_macrorrutas ADD COLUMN IF NOT EXISTS fecha_inicio_operacion DATE;
+ALTER TABLE tz_macrorrutas ADD COLUMN IF NOT EXISTS id_estado INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_macrorrutas ADD COLUMN IF NOT EXISTS fecha_estado DATE;
+
+-- "Relacion de miembros de la organizacion": el SUI pide el departamento/municipio DANE
+-- donde el reciclador presta el servicio, para verificar el 80% de recicladores de oficio.
+ALTER TABLE tz_recicladores ADD COLUMN IF NOT EXISTS cod_departamento_dane VARCHAR(2);
+ALTER TABLE tz_recicladores ADD COLUMN IF NOT EXISTS cod_municipio_dane VARCHAR(3);
+
+-- "Base de datos de usuarios": el campo NUMACRO es el codigo de la MACRORRUTA (igual que en
+-- Balance de Masas), no tiene relacion con tz_numacros (zonas internas de este sandbox).
+ALTER TABLE tz_usuarios ADD COLUMN IF NOT EXISTS id_macrorruta INT REFERENCES tz_macrorrutas(id);
+
+-- "Suscriptores beneficiarios del incentivo DINC": el valor del incentivo a otorgar por
+-- suscriptor y periodo, ademas de las toneladas ya capturadas.
+ALTER TABLE tz_formulario_aprovechamiento ADD COLUMN IF NOT EXISTS dinc_incentivo NUMERIC(14,2);
+
+-- "Recepcion de recursos de aprovechamiento": el periodo que se esta pagando y la fecha en
+-- que se recibio el giro son dos datos distintos; antes solo habia un campo "fecha".
+ALTER TABLE tz_formulario_recursos ADD COLUMN IF NOT EXISTS periodo_pago VARCHAR(20);
+
+-- "Toneladas aprovechadas" (ventas): le faltaban los campos que exige la factura electronica
+-- DIAN y la trazabilidad del origen del residuo que pide el SUI.
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_bodega INT REFERENCES tz_bodegas(id);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS fecha_factura DATE;
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS digito_verificacion VARCHAR(5);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_entregado_otra_eca INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS codigo_cufe VARCHAR(120);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_origen_residuos_usuario INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_origen_residuos_area INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_aplica_decreto_596 INT REFERENCES tz_catalogos(id);
+
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
+('si_no','1','Sí',NULL,1),
+('si_no','2','No',NULL,2),
+('estado_operacion','1','En operación',NULL,1),
+('estado_operacion','2','Inactiva',NULL,2),
+('propietario_predio','1','Prestador',NULL,1),
+('propietario_predio','2','Municipio',NULL,2),
+('propietario_predio','3','Departamento',NULL,3),
+('propietario_predio','4','Otra persona natural o jurídica',NULL,4),
+('tipo_contrato_predio','1','Arrendamiento escrito',NULL,1),
+('tipo_contrato_predio','2','Convenio de arrendamiento verbal',NULL,2),
+('tipo_contrato_predio','3','Comodato',NULL,3),
+('tipo_contrato_predio','4','Propia',NULL,4),
+('tipo_contrato_predio','5','Otro',NULL,5),
+('uso_suelo_predio','1','Residencial',NULL,1),
+('uso_suelo_predio','2','Comercial',NULL,2),
+('uso_suelo_predio','3','Mixto',NULL,3),
+('uso_suelo_predio','4','Industrial',NULL,4),
+('origen_residuos_usuario','1','Suscriptores no aforados',NULL,1),
+('origen_residuos_usuario','2','Suscriptores aforados',NULL,2),
+('origen_residuos_usuario','3','Otro',NULL,3),
+('origen_residuos_area','1','Rural',NULL,1),
+('origen_residuos_area','2','Urbana',NULL,2)
+ON CONFLICT (categoria, codigo) DO NOTHING;

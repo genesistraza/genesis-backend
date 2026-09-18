@@ -32,14 +32,40 @@ const ENTITIES = {
       { name: 'eca_numero', label: 'Número ECA', type: 'text' }
     ]
   },
-  bodegas: {
-    table: 'tz_bodegas', label: 'Bodegas',
+  areas_prestacion: {
+    table: 'tz_areas_prestacion', label: 'Áreas de Prestación (NUAP)',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'cod_departamento_dane', label: 'Departamento (código DANE, 2 dígitos)', type: 'text' },
+      { name: 'cod_municipio_dane', label: 'Municipio (código DANE, 3 dígitos)', type: 'text' },
+      { name: 'nombre_area', label: 'Nombre del área de prestación', type: 'text', required: true },
+      { name: 'fecha_entrada_operacion', label: 'Fecha entrada en operación', type: 'date' },
+      { name: 'id_estado', label: 'Estado', type: 'select-catalogo', categoria: 'estado_operacion' },
+      { name: 'fecha_estado', label: 'Fecha del estado', type: 'date' }
+    ]
+  },
+  bodegas: {
+    table: 'tz_bodegas', label: 'Bodegas (ECA)',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_area_prestacion', label: 'Área de prestación (NUAP)', type: 'select-entity', entity: 'areas_prestacion', labelField: 'nombre_area' },
       { name: 'cod_bodega', label: 'Código', type: 'text' },
       { name: 'desc_bodega', label: 'Descripción', type: 'text' },
       { name: 'desc_ubicacion', label: 'Ubicación', type: 'text' },
-      { name: 'direccion', label: 'Dirección', type: 'text' }
+      { name: 'direccion', label: 'Dirección', type: 'text' },
+      { name: 'informacion_complementaria', label: 'Información complementaria del predio', type: 'text' },
+      { name: 'longitud', label: 'Longitud (MAGNA-SIRGAS)', type: 'decimal' },
+      { name: 'latitud', label: 'Latitud (MAGNA-SIRGAS)', type: 'decimal' },
+      { name: 'fecha_inicio_operaciones', label: 'Fecha inicio de operaciones', type: 'date' },
+      { name: 'id_propietario_predio', label: 'Propietario del predio', type: 'select-catalogo', categoria: 'propietario_predio' },
+      { name: 'id_tipo_contrato', label: 'Tipo de contrato', type: 'select-catalogo', categoria: 'tipo_contrato_predio' },
+      { name: 'capacidad_operacion_ton_mes', label: 'Capacidad de operación (Ton/mes)', type: 'decimal' },
+      { name: 'capacidad_almacenamiento_m3', label: 'Capacidad de almacenamiento (m³)', type: 'decimal' },
+      { name: 'capacidad_almacenamiento_ton', label: 'Capacidad de almacenamiento (Ton)', type: 'decimal' },
+      { name: 'id_uso_suelo_compatible', label: '¿Uso del suelo compatible con la actividad?', type: 'select-catalogo', categoria: 'si_no' },
+      { name: 'id_uso_suelo', label: 'Uso del suelo del predio', type: 'select-catalogo', categoria: 'uso_suelo_predio' },
+      { name: 'id_estado', label: 'Estado', type: 'select-catalogo', categoria: 'estado_operacion' },
+      { name: 'fecha_estado', label: 'Fecha del estado', type: 'date' }
     ]
   },
   localidades: {
@@ -74,6 +100,8 @@ const ENTITIES = {
       { name: 'nombre_completo', label: 'Nombre completo', type: 'text', required: true },
       { name: 'id_tipo_identificacion', label: 'Tipo de identificación', type: 'select-catalogo', categoria: 'tipos_identificacion', required: true },
       { name: 'nro_documento', label: 'Documento', type: 'text', required: true },
+      { name: 'cod_departamento_dane', label: 'Departamento donde opera (código DANE)', type: 'text' },
+      { name: 'cod_municipio_dane', label: 'Municipio donde opera (código DANE)', type: 'text' },
       { name: 'estado', label: 'Estado', type: 'text' },
       { name: 'fecha_exp_documento', label: 'Fecha expedición doc.', type: 'date' },
       { name: 'fecha_nacimiento', label: 'Fecha nacimiento', type: 'date' },
@@ -105,8 +133,12 @@ const ENTITIES = {
     table: 'tz_macrorrutas', label: 'Macrorrutas',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
-      { name: 'cod_macrorruta', label: 'Código', type: 'text' },
-      { name: 'desc_macrorruta', label: 'Descripción', type: 'text', required: true }
+      { name: 'id_area_prestacion', label: 'Área de prestación (NUAP)', type: 'select-entity', entity: 'areas_prestacion', labelField: 'nombre_area' },
+      { name: 'cod_macrorruta', label: 'Código (NUMACRO)', type: 'text' },
+      { name: 'desc_macrorruta', label: 'Descripción', type: 'text', required: true },
+      { name: 'fecha_inicio_operacion', label: 'Fecha inicio de operación', type: 'date' },
+      { name: 'id_estado', label: 'Estado', type: 'select-catalogo', categoria: 'estado_operacion' },
+      { name: 'fecha_estado', label: 'Fecha del estado', type: 'date' }
     ]
   },
   formalizacion_fases: {
@@ -179,7 +211,8 @@ const ENTITIES = {
     table: 'tz_usuarios', label: 'Usuarios del Servicio (SUI)',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
-      { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
+      { name: 'id_macrorruta', label: 'Macrorruta (NUMACRO)', type: 'select-entity', entity: 'macrorrutas', labelField: 'desc_macrorruta' },
+      { name: 'id_numacro', label: 'Zona interna', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
       { name: 'nuis_nuid', label: 'NUIS/NUID', type: 'text' },
       { name: 'direccion_usuario', label: 'Dirección', type: 'text' },
       { name: 'id_usuario_uso', label: 'Uso', type: 'select-catalogo', categoria: 'usuario_uso' },
@@ -197,41 +230,50 @@ const ENTITIES = {
       { name: 'id_usuario', label: 'Usuario', type: 'select-entity', entity: 'usuarios', labelField: 'nuis_nuid' },
       { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
       { name: 'periodo', label: 'Periodo', type: 'text' },
-      { name: 'toneladas', label: 'Toneladas', type: 'decimal' }
+      { name: 'toneladas', label: 'Toneladas (TAFA)', type: 'decimal' },
+      { name: 'dinc_incentivo', label: 'Incentivo DINC a otorgar', type: 'decimal' }
     ]
   },
   recursos: {
-    table: 'tz_formulario_recursos', label: 'Recursos',
+    table: 'tz_formulario_recursos', label: 'Recepción de Recursos',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
-      { name: 'fecha', label: 'Fecha', type: 'date' },
       { name: 'nuap', label: 'NUAP', type: 'text' },
-      { name: 'operador', label: 'Operador', type: 'text' },
-      { name: 'valor', label: 'Valor', type: 'decimal' }
+      { name: 'operador', label: 'ID prestador recolección y transporte RNA', type: 'text' },
+      { name: 'periodo_pago', label: 'Periodo del pago', type: 'text' },
+      { name: 'valor', label: 'Valor recibido', type: 'decimal' },
+      { name: 'fecha', label: 'Fecha de recepción de recursos', type: 'date' }
     ]
   },
   ventas: {
     table: 'tz_formulario_ventas', label: 'Ventas',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_bodega', label: 'ECA (NUECA)', type: 'select-entity', entity: 'bodegas', labelField: 'desc_bodega' },
       { name: 'anio', label: 'Año', type: 'number' },
       { name: 'periodo', label: 'Periodo', type: 'text' },
-      { name: 'fecha_habilitacion', label: 'Fecha habilitación', type: 'date' },
-      { name: 'fecha_certificacion', label: 'Fecha certificación', type: 'date' },
-      { name: 'tipo_identificacion', label: 'Tipo identificación', type: 'text' },
-      { name: 'nro_identificacion', label: 'Nro identificación', type: 'text' },
-      { name: 'nro_factura', label: 'Nro factura', type: 'text' },
-      { name: 'nombre_comprador', label: 'Comprador', type: 'text' },
-      { name: 'material', label: 'Material', type: 'text' },
-      { name: 'kg', label: 'Kg', type: 'decimal' },
+      { name: 'nro_factura', label: 'Número de factura', type: 'text' },
+      { name: 'fecha_factura', label: 'Fecha de factura', type: 'date' },
+      { name: 'tipo_identificacion', label: 'Tipo identificación comprador', type: 'select-catalogo', categoria: 'tipos_identificacion' },
+      { name: 'nro_identificacion', label: 'Nro identificación comprador', type: 'text' },
+      { name: 'digito_verificacion', label: 'Dígito de verificación (si NIT)', type: 'text' },
+      { name: 'nombre_comprador', label: 'Nombre o razón social del comprador', type: 'text' },
+      { name: 'id_entregado_otra_eca', label: '¿Material entregado a otra ECA?', type: 'select-catalogo', categoria: 'si_no' },
+      { name: 'material', label: 'Tipo de material (código)', type: 'text' },
+      { name: 'kg', label: 'Kilogramos facturados', type: 'decimal' },
       { name: 'toneladas', label: 'Toneladas', type: 'decimal' },
-      { name: 'valor_kilo', label: 'Valor/kg', type: 'decimal' },
-      { name: 'valor_sin_iva', label: 'Valor sin IVA', type: 'decimal' },
+      { name: 'valor_kilo', label: 'Valor por kilo (sin IVA)', type: 'decimal' },
+      { name: 'valor_sin_iva', label: 'Subtotal sin IVA', type: 'decimal' },
       { name: 'iva', label: 'IVA', type: 'decimal' },
-      { name: 'valor_con_iva', label: 'Valor con IVA', type: 'decimal' },
-      { name: 'depto_origen', label: 'Depto origen', type: 'text' },
-      { name: 'municipio_origen', label: 'Municipio origen', type: 'text' },
-      { name: 'origen_residuos', label: 'Origen residuos', type: 'text' }
+      { name: 'valor_con_iva', label: 'Total con IVA', type: 'decimal' },
+      { name: 'codigo_cufe', label: 'Código CUFE', type: 'text' },
+      { name: 'depto_origen', label: 'Departamento origen de residuos', type: 'text' },
+      { name: 'municipio_origen', label: 'Municipio origen de residuos', type: 'text' },
+      { name: 'id_origen_residuos_usuario', label: 'Origen residuos por usuario', type: 'select-catalogo', categoria: 'origen_residuos_usuario' },
+      { name: 'id_origen_residuos_area', label: 'Origen residuos por área', type: 'select-catalogo', categoria: 'origen_residuos_area' },
+      { name: 'id_aplica_decreto_596', label: '¿Aplica Decreto 596 de 2016?', type: 'select-catalogo', categoria: 'si_no' },
+      { name: 'fecha_habilitacion', label: 'Fecha habilitación (interno)', type: 'date' },
+      { name: 'fecha_certificacion', label: 'Fecha certificación (interno)', type: 'date' }
     ]
   },
   pago_seguridad: {

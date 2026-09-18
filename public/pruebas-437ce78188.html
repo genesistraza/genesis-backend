@@ -197,7 +197,7 @@
   // Agrupa los modulos en el desplegable para que sea facil de recorrer (mismo criterio que
   // el sistema de trazabilidad original: catalogos, recicladores, operacion, usuarios/cobro, PQR).
   var ENTITY_GROUPS = [
-    { label: 'Catálogos y estructura', keys: ['centros', 'bodegas', 'localidades', 'numacros', 'tipos_material'] },
+    { label: 'Catálogos y estructura', keys: ['centros', 'areas_prestacion', 'bodegas', 'localidades', 'numacros', 'tipos_material'] },
     { label: 'Recicladores y formalización', keys: ['recicladores', 'formalizacion_fases', 'seguridad_social'] },
     { label: 'Operación diaria', keys: ['balance_masas', 'macrorrutas', 'microrrutas', 'microrrutas_detalle'] },
     { label: 'Usuarios y aprovechamiento', keys: ['usuarios', 'aprovechamiento', 'recursos'] },
@@ -207,7 +207,8 @@
 
   var ENTITY_HINTS = {
     centros: 'Datos de la asociación/prestador: código, nombre y su registro RUP/ECA.',
-    bodegas: 'Sitios de acopio (NUECA) donde entra el material recolectado.',
+    areas_prestacion: 'Áreas de Prestación del Servicio (NUAP) que opera el prestador — departamento/municipio DANE. Cada ECA y macrorruta pertenece a una de estas.',
+    bodegas: 'Estaciones de Clasificación y Aprovechamiento (ECA): predio, coordenadas, propietario, contrato y capacidades.',
     localidades: 'Localidades de Bogotá usadas para ubicar numacros y usuarios.',
     numacros: 'Zonas operativas internas dentro de cada centro (agrupación propia, no es el NUMACRO oficial del SUI — ese es el código de la macrorruta).',
     tipos_material: 'Catálogo de materiales aprovechables y su familia.',
@@ -221,8 +222,8 @@
     microrrutas_detalle: 'Detalle operativo (horarios, distancias, tipo de barrido) de cada microrruta.',
     usuarios: 'Base de usuarios del servicio (SUI): NUIS/NUID, uso, tipo, ubicación.',
     aprovechamiento: 'Toneladas de aprovechamiento por usuario y periodo, para el cobro tarifario.',
-    recursos: 'Recursos/operadores asociados al NUAP.',
-    ventas: 'Ventas de material a compradores, con IVA y origen del residuo.',
+    recursos: 'Recursos que transfiere el prestador de recolección de no aprovechables (CCS/tarifa de aprovechamiento) por periodo.',
+    ventas: 'Toneladas aprovechadas: facturas de venta del material, con CUFE, comprador y origen del residuo.',
     pago_seguridad: 'Pagos hechos a recicladores por concepto de seguridad social.',
     pago_tarifa: 'Pagos hechos a recicladores por concepto de tarifa de aprovechamiento.'
   };
