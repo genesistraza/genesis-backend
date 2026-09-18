@@ -456,7 +456,7 @@
 
   function redirectToPanel(role){
     setTimeout(function(){
-      window.location.href = (role === 'pro' || role === 'admin') ? 'admin.html' : 'dashboard.html';
+      window.location.href = (role === 'pro' || role === 'admin') ? 'admin-1b98a0bb3a.html' : 'dashboard.html';
     }, 300);
   }
 
@@ -482,7 +482,7 @@
     if(loggedIn){
       var firstName = (authUser.fullName || '').split(' ').slice(0, 2).join(' ');
       document.getElementById('userBadgeName').textContent = 'Hola, ' + firstName + ' (' + authUser.role + ')';
-      document.getElementById('userBadgePanelLink').href = (authUser.role === 'pro' || authUser.role === 'admin') ? 'admin.html' : 'dashboard.html';
+      document.getElementById('userBadgePanelLink').href = (authUser.role === 'pro' || authUser.role === 'admin') ? 'admin-1b98a0bb3a.html' : 'dashboard.html';
     }
     if(typeof updatePagoAuthState === 'function') updatePagoAuthState();
   }

@@ -86,7 +86,7 @@
       <button type="button" data-vista="asociacion" onclick="onPruebasVistaChange('asociacion')">Asociación</button>
     </div>
     <span class="spacer"></span>
-    <a class="btn" href="admin.html">← Panel</a>
+    <a class="btn" href="admin-1b98a0bb3a.html">← Panel</a>
   </div>
   <div class="pm-bar pruebas-menu-row no-print" id="pruebasMenuBar"></div>
   <p class="pruebas-hint no-print" id="pruebasVistaHint"></p>
@@ -100,7 +100,6 @@
       <input type="date" id="bmExportDesde">
       <span class="sep">Hasta</span>
       <input type="date" id="bmExportHasta">
-      <button type="button" class="btn" onclick="printBmReporte()">Imprimir / PDF</button>
       <button type="button" class="btn" onclick="exportBmReporte('xlsx')">Excel</button>
       <button type="button" class="btn" onclick="exportBmReporte('csv-comma')">CSV</button>
       <button type="button" class="btn" onclick="exportBmReporte('csv-semicolon')">CSV (;)</button>
@@ -138,7 +137,7 @@
       </div>
       <div class="no-print" style="margin-top:10px;display:flex;gap:8px;">
         <button class="btn btn-primary" onclick="saveBmDia()">Guardar</button>
-        <button class="btn" onclick="printBmGrid()">Imprimir este día</button>
+        <button class="btn" onclick="printBmGrid()">Generar factura (PDF)</button>
       </div>
       <p class="pruebas-msg no-print" id="bmSaveMsg"></p>
     </div>
@@ -153,7 +152,6 @@
       <button type="button" class="btn" id="pruebasImportBtn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
       <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
       <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
-      <button type="button" class="btn" onclick="printPruebasGeneric()">Imprimir / PDF</button>
       <button type="button" class="btn" onclick="exportPruebasExcel()">Exportar Excel</button>
       <button type="button" class="btn" onclick="exportPruebasCsv()">Exportar CSV</button>
     </div>
@@ -799,56 +797,51 @@
     });
   }
 
-  function printBmReporte(){
-    var win = openPrintWindowAsync();
-    fetchBmReportRows(function(rows, desde, hasta){
-      if(!win) return;
-      var headers = Object.keys(rows[0]);
-      var subtitle = 'Periodo: ' + gtFormatDate(desde) + ' a ' + gtFormatDate(hasta) +
-        (pruebasVista === 'asociacion' && pruebasDemoCentro ? ' — ' + pruebasDemoCentro.label : ' — todas las asociaciones');
-      fillPrintWindow(win, 'Balance de Masas — Reporte de periodo', subtitle, headers, rows.map(function(r){ return headers.map(function(h){ return r[h]; }); }));
-    }, function(){ if(win) win.close(); });
+  // gtFormatDate hace "new Date(str)" y muestra en la hora local del navegador: para un valor
+  // 'YYYY-MM-DD' puro (como el de un <input type="date">, sin hora ni zona horaria) eso lo
+  // interpreta como medianoche UTC, y en cualquier huso detras de UTC (Bogota es UTC-5) se ve
+  // un dia antes. Esta version arma el texto directo desde el string, sin pasar por Date.
+  function formatDateStrLocal(dateStr){
+    if(!dateStr) return '—';
+    var parts = String(dateStr).slice(0, 10).split('-');
+    if(parts.length !== 3) return dateStr;
+    var meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    var mesIdx = Number(parts[1]) - 1;
+    return Number(parts[2]) + ' de ' + (meses[mesIdx] || parts[1]) + ' de ' + parts[0];
   }
 
+  // ---- Factura del dia: el PDF es solo para esto — un comprobante imprimible de lo que un
+  // reciclador entrego ese dia especifico, con el valor de cada material y el total a pagar.
+  // No aplica al reporte de periodo (ese solo se exporta a Excel/CSV, en el formato de la Super).
   function printBmGrid(){
     if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
-    var headers = ['Material', 'Cantidad (kg)', 'Valor', 'Cant. rechazo', 'Cant. no SUI'];
+    var headers = ['Material', 'Cantidad (kg)', 'Valor unitario', 'Valor total', 'Cant. rechazo', 'Cant. no SUI'];
     var rows = [];
+    var sumCantidad = 0, sumValorTotal = 0, sumRechazo = 0, sumNosui = 0;
     document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
       var material = tr.children[0].textContent;
-      var cantidad = tr.querySelector('[data-field="cantidad"]').value;
-      var valor = tr.querySelector('[data-field="valor"]').value;
-      var rechazo = tr.querySelector('[data-field="cantidad_rechazo"]').value;
-      var nosui = tr.querySelector('[data-field="cantidad_nosui"]').value;
+      var cantidad = Number(tr.querySelector('[data-field="cantidad"]').value || 0);
+      var valor = Number(tr.querySelector('[data-field="valor"]').value || 0);
+      var rechazo = Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
+      var nosui = Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
       if(!cantidad && !valor && !rechazo && !nosui) return;
-      rows.push([material, cantidad || 0, valor || 0, rechazo || 0, nosui || 0]);
+      var valorTotal = cantidad * valor;
+      rows.push([material, cantidad, valor, valorTotal, rechazo, nosui]);
+      sumCantidad += cantidad; sumValorTotal += valorTotal; sumRechazo += rechazo; sumNosui += nosui;
     });
     if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
     var subtitle = bmSelectedReciclador.nombre_completo + ' — Doc. ' + bmSelectedReciclador.nro_documento +
-      ' — Fecha: ' + gtFormatDate(document.getElementById('bmFecha').value);
-    openPrintWindowNow('Balance de Masas — Registro diario', subtitle, headers, rows);
+      ' — Fecha: ' + formatDateStrLocal(document.getElementById('bmFecha').value);
+    var totalsRow = ['TOTAL', sumCantidad, '', sumValorTotal, sumRechazo, sumNosui];
+    openPrintWindowNow('Factura — Balance de Masas', subtitle, headers, rows, totalsRow);
   }
 
-  // ---- Impresion / PDF con diseno propio (no solo el navegador imprimiendo la pantalla tal cual) ----
-  // Abre una ventana nueva con un documento HTML propio (encabezado, periodo, tabla, pie de pagina)
-  // y dispara el dialogo de impresion del navegador, que ya trae "Guardar como PDF" como destino.
-  // openPrintWindowNow() hace el window.open() de una vez (para los casos con datos ya en pantalla);
-  // openPrintWindowAsync() abre la ventana ANTES de pedir los datos por fetch, porque casi todos los
-  // navegadores solo permiten window.open() dentro del mismo gesto de clic — si se abre despues de
-  // que la promesa del fetch resuelve, el navegador lo bloquea como si fuera un popup no solicitado.
-  function openPrintWindowAsync(){
-    var win = window.open('', '_blank', 'width=1100,height=750');
-    if(win){
-      win.document.write('<!DOCTYPE html><html lang="es"><body style="font-family:Arial,sans-serif;padding:40px;color:#5B6B7C;">Generando reporte…</body></html>');
-    }
-    return win;
-  }
-  function openPrintWindowNow(title, subtitle, headers, rows){
-    var win = window.open('', '_blank', 'width=1100,height=750');
+  // ---- Ventana de impresion con diseno propio (no solo el navegador imprimiendo la pantalla tal
+  // cual): abre una ventana nueva con un documento HTML propio (encabezado, tabla, total, pie de
+  // pagina) y dispara el dialogo de impresion, que ya trae "Guardar como PDF" como destino.
+  function openPrintWindowNow(title, subtitle, headers, rows, totalsRow){
+    var win = window.open('', '_blank', 'width=900,height=700');
     if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
-    fillPrintWindow(win, title, subtitle, headers, rows);
-  }
-  function fillPrintWindow(win, title, subtitle, headers, rows){
     var generado = new Date().toLocaleString('es-CO');
     var esc = function(v){ return v === null || v === undefined ? '' : String(v); };
     var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>' +
@@ -858,10 +851,11 @@
       '.pf-brand{ font-size:11px;color:#5B6B7C;text-transform:uppercase;letter-spacing:.6px; }' +
       '.pf-header h1{ margin:4px 0 0;font-size:19px;color:#0A3369; }' +
       '.pf-meta{ font-size:11.5px;color:#5B6B7C;margin:0 0 14px; }' +
-      'table{ width:100%;border-collapse:collapse;font-size:10.5px; }' +
-      'th{ background:#0A3369;color:#fff;text-align:left;padding:5px 7px;white-space:nowrap; }' +
-      'td{ padding:4px 7px;border-bottom:1px solid #DCE3EA; }' +
+      'table{ width:100%;border-collapse:collapse;font-size:11px; }' +
+      'th{ background:#0A3369;color:#fff;text-align:left;padding:6px 8px;white-space:nowrap; }' +
+      'td{ padding:5px 8px;border-bottom:1px solid #DCE3EA; }' +
       'tr:nth-child(even) td{ background:#F7F9FB; }' +
+      '.pf-total td{ font-weight:700;border-top:2px solid #0A3369;background:#F3F5F8; }' +
       '.pf-footer{ margin-top:16px;font-size:9.5px;color:#9AA7B4;border-top:1px solid #DCE3EA;padding-top:6px; }' +
       '</style></head><body>' +
       '<div class="pf-header"><div><div class="pf-brand">Genesis Traza — Trazabilidad</div><h1>' + esc(title) + '</h1></div>' +
@@ -869,31 +863,16 @@
       (subtitle ? '<p class="pf-meta">' + esc(subtitle) + '</p>' : '') +
       '<table><thead><tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
       rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
-      '</tbody></table>' +
-      '<div class="pf-footer">Módulo Pruebas (sandbox de trazabilidad nativa) — ' + rows.length + ' registro' + (rows.length === 1 ? '' : 's') + '.</div>' +
+      '</tbody>' +
+      (totalsRow ? '<tfoot><tr class="pf-total">' + totalsRow.map(function(c){ return '<td>' + esc(c) + '</td>'; }).join('') + '</tr></tfoot>' : '') +
+      '</table>' +
+      '<div class="pf-footer">Módulo Pruebas (sandbox de trazabilidad nativa) — comprobante de prueba, no válido como factura real.</div>' +
       '</body></html>';
     win.document.open();
     win.document.write(html);
     win.document.close();
     win.focus();
     setTimeout(function(){ win.print(); }, 350);
-  }
-
-  function printPruebasGeneric(){
-    var entity = pruebasEntities[pruebasCurrentEntity];
-    if(!pruebasCurrentRows.length){ alert('No hay registros para imprimir.'); return; }
-    var headers = entity.fields.map(function(f){ return f.label; });
-    var rows = pruebasCurrentRows.map(function(row){
-      return entity.fields.map(function(f){
-        var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
-        if(f.type === 'date' && val) val = gtFormatDate(val);
-        return val;
-      });
-    });
-    var subtitle = (pruebasVista === 'asociacion' && pruebasDemoCentro)
-      ? 'Vista Asociación — ' + pruebasDemoCentro.label
-      : 'Vista Administrador — todas las asociaciones';
-    openPrintWindowNow(entity.label, subtitle, headers, rows);
   }
 
   if(session) initPruebasPage();
