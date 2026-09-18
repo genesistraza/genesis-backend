@@ -8,16 +8,32 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  .pruebas-shell{ max-width:1280px;margin:0 auto;padding:24px; }
-  .pruebas-toolbar{ display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px; }
-  .pruebas-toolbar button{
-    border:1px solid var(--line);background:#fff;color:var(--ink);font-family:inherit;font-weight:600;
-    font-size:13px;padding:9px 16px;border-radius:8px;cursor:pointer;transition:all .15s ease;
+  .pruebas-shell{ max-width:1280px;margin:0 auto;padding:20px 24px 40px; }
+  .pruebas-header{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding-bottom:14px;margin-bottom:18px;border-bottom:1px solid var(--line);
   }
-  .pruebas-toolbar button:hover{ border-color:var(--orange); }
-  .pruebas-toolbar button.active{ background:var(--orange);border-color:var(--orange);color:#fff; }
-  .pruebas-module-head{ display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:14px; }
-  .pruebas-module-head p{ margin:2px 0 0;color:var(--ink-soft);font-size:13px;max-width:640px; }
+  .pruebas-header h1{ margin:0;font-size:19px; }
+  .pruebas-header .tag{ display:inline-block;margin-left:10px;font-size:11px;font-weight:700;color:var(--orange);
+    background:rgba(242,148,31,.12);padding:2px 9px;border-radius:20px;vertical-align:middle; }
+  .pruebas-nav{
+    display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:18px;
+    background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+  }
+  .pruebas-nav .form-field{ margin:0;min-width:280px;flex:1; }
+  .pruebas-nav .form-field label{ font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft); }
+  .pruebas-hint{ margin:0;color:var(--ink-soft);font-size:12.5px;flex-basis:100%; }
+  .pruebas-toolbar{ display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px; }
+  .pruebas-toolbar .spacer{ flex:1; }
+  .pruebas-toolbar .btn{ font-size:12.5px;padding:8px 14px; }
+  .pruebas-badge{ font-size:11.5px;color:var(--ink-soft);background:var(--bg-soft, #F3F5F8);border-radius:20px;padding:4px 11px; }
+  .pruebas-msg{ font-size:12.5px;margin-top:8px; }
+  @media print{
+    body *{ visibility:hidden; }
+    .print-area, .print-area *{ visibility:visible; }
+    .print-area{ position:absolute;left:0;top:0;width:100%; }
+    .no-print{ display:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -30,67 +46,77 @@
 </div>
 
 <div class="pruebas-shell">
-  <div class="app-topbar">
-    <div>
-      <h1>Pruebas — Trazabilidad nativa</h1>
-      <p>Sandbox que replica los formularios del sistema de trazabilidad aparte (genesis-traza.com), pensado para dar cumplimiento a la normativa de aprovechamiento (Decreto 596/2016, Decreto 271/2026, Resoluciones CRA 1027, 1037 y 1040 de 2026). No toca asociaciones, recicladores ni datos reales de Genesis Traza.</p>
-    </div>
-    <a class="btn" href="admin.html" style="white-space:nowrap;">← Volver al panel</a>
+  <div class="pruebas-header no-print">
+    <h1>Trazabilidad nativa <span class="tag">Pruebas</span></h1>
+    <a class="btn" href="admin.html">← Volver al panel</a>
   </div>
 
-  <div class="pruebas-toolbar" id="pruebasToolbar"></div>
+  <div class="pruebas-nav no-print">
+    <div class="form-field">
+      <label>Módulo</label>
+      <select id="pruebasEntitySelect" onchange="onPruebasEntitySelectChange()"></select>
+    </div>
+    <p class="pruebas-hint" id="pruebasEntityHint"></p>
+  </div>
 
   <div class="panel" id="pruebasBalanceMasasEnv" style="display:none;">
-    <div class="pruebas-module-head">
-      <div>
-        <h2 style="margin:0;">Balance de Masas</h2>
-        <p>Busca al reciclador, elige la fecha y registra cuánto entregó de cada material — igual a como se llena en el sistema original.</p>
-      </div>
+    <div class="pruebas-toolbar no-print">
+      <h2 style="margin:0;font-size:16px;">Balance de Masas</h2>
+      <span class="spacer"></span>
+      <button type="button" class="btn" onclick="printCurrentView()">Imprimir / PDF</button>
+      <button type="button" class="btn" onclick="exportBmExcel()">Exportar Excel</button>
+      <button type="button" class="btn" onclick="exportBmCsv(',')">Exportar CSV</button>
+      <button type="button" class="btn" onclick="exportBmCsv(';')">Exportar CSV (;)</button>
     </div>
-    <div class="form-field" style="max-width:420px;">
+    <div class="form-field no-print" style="max-width:420px;">
       <label>Buscar reciclador (nombre o cédula)</label>
       <input id="bmBuscarReciclador" placeholder="Escribe para buscar…" oninput="onBmBuscarRecicladorInput()" autocomplete="off">
     </div>
-    <div id="bmRecicladorResultados" class="table-scroll" style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px;display:none;"></div>
+    <div id="bmRecicladorResultados" class="table-scroll no-print" style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px;display:none;"></div>
 
     <div id="bmRecicladorSeleccionado" style="display:none;margin-top:18px;">
-      <div class="form-grid">
-        <div class="form-field"><label>Nombre</label><input id="bmNombre" disabled></div>
-        <div class="form-field"><label>Cédula</label><input id="bmCedula" disabled></div>
-        <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
-        <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
-        <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Zona (NUMACRO)</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
-      </div>
+      <div class="print-area">
+        <div class="form-grid">
+          <div class="form-field"><label>Nombre</label><input id="bmNombre" disabled></div>
+          <div class="form-field"><label>Cédula</label><input id="bmCedula" disabled></div>
+          <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
+          <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
+          <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
+          <div class="form-field"><label>Zona (NUMACRO)</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
+          <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
+        </div>
 
-      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px;">
-        <h2 style="margin:0;">Materiales del día</h2>
-        <select id="bmFamiliaFilter" class="period-value-select" onchange="renderBmGrid()" style="max-width:240px;"></select>
-        <button type="button" class="btn" onclick="exportBmExcel()" style="margin-left:auto;">Exportar Excel</button>
-        <button type="button" class="btn" onclick="exportBmCsv(',')">Exportar CSV (coma)</button>
-        <button type="button" class="btn" onclick="exportBmCsv(';')">Exportar CSV (punto y coma)</button>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px;">
+          <h2 style="margin:0;font-size:15px;">Materiales del día</h2>
+          <select id="bmFamiliaFilter" class="period-value-select no-print" onchange="renderBmGrid()" style="max-width:240px;"></select>
+        </div>
+        <div class="table-scroll" style="margin-top:10px;">
+          <table class="data-table">
+            <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th></tr></thead>
+            <tbody id="bmGridBody"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="table-scroll" style="margin-top:10px;">
-        <table class="data-table">
-          <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th></tr></thead>
-          <tbody id="bmGridBody"></tbody>
-        </table>
-      </div>
-      <button class="btn btn-primary" style="margin-top:16px;" onclick="saveBmDia()">Guardar</button>
-      <p id="bmSaveMsg" style="margin-top:8px;font-size:13px;"></p>
+      <button class="btn btn-primary no-print" style="margin-top:16px;" onclick="saveBmDia()">Guardar</button>
+      <p class="pruebas-msg no-print" id="bmSaveMsg"></p>
     </div>
   </div>
 
   <div class="panel" id="pruebasGenericView">
-    <div class="pruebas-module-head">
-      <div>
-        <h2 id="pruebasEntityTitle" style="margin:0;">Elige un módulo</h2>
-        <p id="pruebasEntityHint"></p>
-      </div>
+    <div class="pruebas-toolbar no-print">
+      <h2 id="pruebasEntityTitle" style="margin:0;font-size:16px;">Elige un módulo</h2>
+      <span class="pruebas-badge" id="pruebasRowCount"></span>
+      <span class="spacer"></span>
       <button type="button" class="btn btn-primary" onclick="openPruebasFormModal()">Nuevo registro</button>
+      <button type="button" class="btn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
+      <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
+      <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
+      <button type="button" class="btn" onclick="printCurrentView()">Imprimir / PDF</button>
+      <button type="button" class="btn" onclick="exportPruebasExcel()">Exportar Excel</button>
+      <button type="button" class="btn" onclick="exportPruebasCsv()">Exportar CSV</button>
     </div>
-    <div class="table-scroll">
+    <p class="pruebas-msg no-print" id="pruebasImportMsg"></p>
+    <div class="table-scroll print-area">
       <table class="data-table">
         <thead id="pruebasTableHead"></thead>
         <tbody id="pruebasTableBody"><tr><td class="empty-row">Cargando…</td></tr></tbody>
@@ -117,6 +143,17 @@
 <script>
   var session = gtRequireAuth(['pro']);
 
+  // Agrupa los modulos en el desplegable para que sea facil de recorrer (mismo criterio que
+  // el sistema de trazabilidad original: catalogos, recicladores, operacion, usuarios/cobro, PQR).
+  var ENTITY_GROUPS = [
+    { label: 'Catálogos y estructura', keys: ['centros', 'bodegas', 'localidades', 'numacros', 'tipos_material'] },
+    { label: 'Recicladores y formalización', keys: ['recicladores', 'formalizacion_fases', 'seguridad_social'] },
+    { label: 'Operación diaria', keys: ['balance_masas', 'macrorrutas', 'microrrutas', 'microrrutas_detalle'] },
+    { label: 'Usuarios y aprovechamiento', keys: ['usuarios', 'aprovechamiento', 'recursos'] },
+    { label: 'Comercial y pagos', keys: ['ventas', 'pago_seguridad', 'pago_tarifa'] },
+    { label: 'Atención al usuario', keys: ['pqr'] }
+  ];
+
   var ENTITY_HINTS = {
     centros: 'Datos de la asociación/prestador: código, nombre y su registro RUP/ECA.',
     bodegas: 'Sitios de acopio (NUECA) donde entra el material recolectado.',
@@ -125,7 +162,7 @@
     tipos_material: 'Catálogo de materiales aprovechables y su familia.',
     recicladores: 'Base de datos de recicladores de oficio del centro.',
     balance_masas: 'Registro diario de material recibido por reciclador (tiene su propio entorno).',
-    macrorrutas: 'Macrorrutas de recolección — el Balance de Masas se asocia a una de estas para calcular el DINC.',
+    macrorrutas: 'Macrorrutas de recolección — Balance de Masas se asocia a una para calcular el DINC.',
     formalizacion_fases: 'Checklist de las 8 fases de formalización del Decreto 596/2016.',
     pqr: 'Registro de peticiones, quejas y reclamos de usuarios.',
     seguridad_social: 'Afiliación a EPS/ARL y aportes a BEPS de cada reciclador (Decreto 271/2026).',
@@ -145,6 +182,8 @@
     loadPruebasTab();
   }
 
+  function printCurrentView(){ window.print(); }
+
   // ---- Pruebas: trazabilidad nativa (sandbox, tablas tz_*) ----
   var pruebasEntities = null;
   var pruebasCurrentEntity = null;
@@ -152,34 +191,42 @@
   var pruebasOptionsCache = {};
 
   function loadPruebasTab(){
-    if(pruebasEntities){ renderPruebasToolbar(); return; }
+    if(pruebasEntities){ renderPruebasEntitySelect(); return; }
     gtApiFetch('/trazabilidad/entities').then(function(res){
       if(!res.ok) return;
       pruebasEntities = res.data;
-      renderPruebasToolbar();
+      renderPruebasEntitySelect();
     });
   }
 
-  function renderPruebasToolbar(){
-    var bar = document.getElementById('pruebasToolbar');
-    bar.innerHTML = '';
-    Object.keys(pruebasEntities).forEach(function(key){
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.textContent = pruebasEntities[key].label;
-      btn.dataset.entity = key;
-      btn.addEventListener('click', function(){ selectPruebasEntity(key); });
-      bar.appendChild(btn);
+  function renderPruebasEntitySelect(){
+    var sel = document.getElementById('pruebasEntitySelect');
+    sel.innerHTML = '';
+    ENTITY_GROUPS.forEach(function(group){
+      var keys = group.keys.filter(function(k){ return pruebasEntities[k]; });
+      if(keys.length === 0) return;
+      var optgroup = document.createElement('optgroup');
+      optgroup.label = group.label;
+      keys.forEach(function(key){
+        var opt = document.createElement('option');
+        opt.value = key;
+        opt.textContent = pruebasEntities[key].label;
+        optgroup.appendChild(opt);
+      });
+      sel.appendChild(optgroup);
     });
-    pruebasCurrentEntity = pruebasCurrentEntity || Object.keys(pruebasEntities)[0];
+    pruebasCurrentEntity = pruebasCurrentEntity || sel.querySelector('option').value;
+    sel.value = pruebasCurrentEntity;
     selectPruebasEntity(pruebasCurrentEntity);
+  }
+
+  function onPruebasEntitySelectChange(){
+    selectPruebasEntity(document.getElementById('pruebasEntitySelect').value);
   }
 
   function selectPruebasEntity(key){
     pruebasCurrentEntity = key;
-    document.querySelectorAll('#pruebasToolbar button').forEach(function(b){
-      b.classList.toggle('active', b.dataset.entity === key);
-    });
+    document.getElementById('pruebasEntityHint').textContent = ENTITY_HINTS[key] || '';
     var isBalanceMasas = key === 'balance_masas';
     document.getElementById('pruebasBalanceMasasEnv').style.display = isBalanceMasas ? 'block' : 'none';
     document.getElementById('pruebasGenericView').style.display = isBalanceMasas ? 'none' : 'block';
@@ -190,16 +237,17 @@
   function fetchAndRenderPruebasTable(){
     var entity = pruebasEntities[pruebasCurrentEntity];
     document.getElementById('pruebasEntityTitle').textContent = entity.label;
-    document.getElementById('pruebasEntityHint').textContent = ENTITY_HINTS[pruebasCurrentEntity] || '';
+    document.getElementById('pruebasImportMsg').textContent = '';
     gtApiFetch('/trazabilidad/' + pruebasCurrentEntity).then(function(res){
       var thead = document.getElementById('pruebasTableHead');
       var tbody = document.getElementById('pruebasTableBody');
       if(!res.ok){ tbody.innerHTML = '<tr><td class="empty-row">No se pudo cargar.</td></tr>'; return; }
       pruebasCurrentRows = res.data;
+      document.getElementById('pruebasRowCount').textContent = res.data.length + (res.data.length === 1 ? ' registro' : ' registros');
 
       var headHtml = '<tr>';
       entity.fields.forEach(function(f){ headHtml += '<th>' + f.label + '</th>'; });
-      headHtml += '<th></th></tr>';
+      headHtml += '<th class="no-print"></th></tr>';
       thead.innerHTML = headHtml;
 
       if(res.data.length === 0){
@@ -215,7 +263,7 @@
           if(f.type === 'date' && val) val = gtFormatDate(val);
           html += '<td>' + (val === null || val === undefined || val === '' ? '—' : String(val)) + '</td>';
         });
-        html += '<td><button type="button" class="cell-action" style="margin-right:10px;">Editar</button><button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button></td>';
+        html += '<td class="no-print"><button type="button" class="cell-action" style="margin-right:10px;">Editar</button><button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button></td>';
         tr.innerHTML = html;
         var actions = tr.lastElementChild.querySelectorAll('.cell-action');
         actions[0].addEventListener('click', function(){ openPruebasFormModal(row); });
@@ -308,6 +356,84 @@
       closePruebasFormModal();
       fetchAndRenderPruebasTable();
     });
+  }
+
+  // ---- Importar / exportar / plantilla para el modulo generico ----
+  function onPruebasImportFile(input){
+    var file = input.files[0];
+    if(!file) return;
+    var msg = document.getElementById('pruebasImportMsg');
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Importando…';
+    var formData = new FormData();
+    formData.append('file', file);
+    fetch(API_BASE + '/trazabilidad/' + pruebasCurrentEntity + '/import', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gtGetToken() },
+      body: formData
+    }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+      .then(function(res){
+        input.value = '';
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo importar.'; return; }
+        msg.style.color = 'var(--green)';
+        msg.textContent = 'Importados ' + res.data.importados + (res.data.omitidos ? ', omitidos ' + res.data.omitidos + ' (revisa el formato de esas filas).' : '.');
+        fetchAndRenderPruebasTable();
+      })
+      .catch(function(){ msg.style.color = '#C0392B'; msg.textContent = 'No se pudo importar.'; });
+  }
+
+  function downloadPruebasTemplate(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    var headers = entity.fields.map(function(f){ return f.label; });
+    var example = entity.fields.map(function(f){
+      if(f.type === 'select-entity' || f.type === 'select-catalogo') return 'texto exacto de la opción';
+      if(f.type === 'date') return '2026-01-31';
+      if(f.type === 'number' || f.type === 'decimal') return '0';
+      return 'texto';
+    });
+    var lines = [headers.join(','), example.join(',')];
+    downloadBlob(lines.join('\r\n'), 'plantilla_' + pruebasCurrentEntity + '.csv', 'text/csv;charset=utf-8;');
+  }
+
+  function exportPruebasCsv(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    if(pruebasCurrentRows.length === 0){ alert('No hay registros para exportar.'); return; }
+    var headers = entity.fields.map(function(f){ return f.label; });
+    var lines = [headers.join(',')];
+    pruebasCurrentRows.forEach(function(row){
+      lines.push(entity.fields.map(function(f){
+        var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
+        var v = val === null || val === undefined ? '' : String(val);
+        return v.indexOf(',') !== -1 ? '"' + v.replace(/"/g, '""') + '"' : v;
+      }).join(','));
+    });
+    downloadBlob(lines.join('\r\n'), pruebasCurrentEntity + '.csv', 'text/csv;charset=utf-8;');
+  }
+
+  function exportPruebasExcel(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    if(pruebasCurrentRows.length === 0){ alert('No hay registros para exportar.'); return; }
+    var headers = entity.fields.map(function(f){ return f.label; });
+    var html = '<table><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+      pruebasCurrentRows.map(function(row){
+        return '<tr>' + entity.fields.map(function(f){
+          var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
+          return '<td>' + (val === null || val === undefined ? '' : val) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</table>';
+    downloadBlob(html, pruebasCurrentEntity + '.xls', 'application/vnd.ms-excel');
+  }
+
+  function downloadBlob(content, filename, mime){
+    var blob = new Blob(['﻿' + content], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   // ---- Entorno propio: Balance de Masas (busca reciclador, llena la grilla del día, guarda) ----
@@ -492,18 +618,6 @@
       rows.map(function(r){ return '<tr>' + headers.map(function(h){ return '<td>' + r[h] + '</td>'; }).join('') + '</tr>'; }).join('') +
       '</table>';
     downloadBlob(html, 'balance_masas_' + bmSelectedReciclador.nro_documento + '_' + document.getElementById('bmFecha').value + '.xls', 'application/vnd.ms-excel');
-  }
-
-  function downloadBlob(content, filename, mime){
-    var blob = new Blob(['﻿' + content], { type: mime });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   }
 
   if(session) initPruebasPage();

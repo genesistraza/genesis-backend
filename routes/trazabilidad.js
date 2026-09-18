@@ -4,12 +4,15 @@
 // como el frontend, que arma tablas y formularios dinámicamente a partir de esa metadata.
 // Aislado del resto de la app: nunca toca associations/recicladores/mass_balance_entries.
 const express = require('express');
+const multer = require('multer');
+const XLSX = require('xlsx');
 const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('pro'));
+const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const ENTITIES = {
   centros: {
@@ -270,6 +273,138 @@ router.get('/catalogo-options/:categoria', asyncRoute(async (req, res) => {
     [req.params.categoria]
   );
   res.json(result.rows);
+}));
+
+// ---- Cargue masivo (Excel/CSV) para cualquier modulo: mismo patron que los cargues de Excel ----
+// que ya existen para el sistema real (mass_balance_entries/recicladores en routes/admin.js), pero
+// generico: mapea columnas por el nombre o la etiqueta del campo, sin necesitar una ruta por modulo.
+function normalizeHeader(s) {
+  return String(s === null || s === undefined ? '' : s).trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+}
+function normalizeRowKeys(row) {
+  const out = {};
+  for (const key in row) out[normalizeHeader(key)] = row[key];
+  return out;
+}
+function toDateValue(v) {
+  let d = null;
+  if (v instanceof Date) d = v;
+  else if (typeof v === 'string' && v.trim()) {
+    const parsed = new Date(v);
+    if (!isNaN(parsed)) d = parsed;
+  }
+  if (!d) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+function toNumberValue(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
+function toTextValue(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === '' ? null : s;
+}
+
+// POST /trazabilidad/:entity/import -> sube un Excel/CSV y crea filas nuevas (no reemplaza nada).
+// Las columnas del archivo pueden llamarse como el nombre interno del campo o como su etiqueta
+// (p.ej. "id_centro" o "Centro" son equivalentes); para select-entity/select-catalogo tambien
+// acepta el texto de la etiqueta en vez del id (se resuelve contra la tabla/catalogo referenciado).
+router.post('/:entity/import', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
+
+  const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: null });
+  if (rawRows.length === 0) return res.status(400).json({ error: 'El archivo no tiene filas.' });
+  const rows = rawRows.map(normalizeRowKeys);
+
+  const lookupMaps = {};
+  for (const f of entity.fields) {
+    if (f.type === 'select-entity') {
+      const refEntity = getEntity(f.entity);
+      const labelCol = f.labelField === 'id' ? 'id::text' : f.labelField;
+      const result = await pool.query(`SELECT id, ${labelCol} AS label FROM ${refEntity.table}`);
+      const map = {};
+      result.rows.forEach((r) => { map[normalizeHeader(r.label)] = r.id; });
+      lookupMaps[f.name] = map;
+    } else if (f.type === 'select-catalogo') {
+      const result = await pool.query('SELECT id, descripcion AS label FROM tz_catalogos WHERE categoria = $1', [f.categoria]);
+      const map = {};
+      result.rows.forEach((r) => { map[normalizeHeader(r.label)] = r.id; });
+      lookupMaps[f.name] = map;
+    }
+  }
+
+  function resolveFieldValue(f, rawValue) {
+    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    if (f.type === 'select-entity' || f.type === 'select-catalogo') {
+      if (typeof rawValue === 'number' || /^\d+$/.test(String(rawValue).trim())) return Number(rawValue);
+      const map = lookupMaps[f.name] || {};
+      return map[normalizeHeader(rawValue)] || null;
+    }
+    if (f.type === 'date') return toDateValue(rawValue);
+    if (f.type === 'number' || f.type === 'decimal') return toNumberValue(rawValue);
+    return toTextValue(rawValue);
+  }
+
+  const parsedRows = [];
+  const errores = [];
+  rows.forEach((row, idx) => {
+    const parsed = {};
+    let missingRequired = null;
+    entity.fields.forEach((f) => {
+      const byLabel = normalizeHeader(f.label);
+      const byName = normalizeHeader(f.name);
+      const rawValue = (byLabel in row) ? row[byLabel] : row[byName];
+      const value = resolveFieldValue(f, rawValue);
+      if (f.required && (value === null || value === undefined)) missingRequired = f.label;
+      parsed[f.name] = value;
+    });
+    if (missingRequired) {
+      errores.push('Fila ' + (idx + 2) + ': falta o no se pudo resolver "' + missingRequired + '".');
+      return;
+    }
+    parsedRows.push(parsed);
+  });
+
+  if (parsedRows.length === 0) {
+    return res.status(400).json({ error: 'Ninguna fila fue válida.', detalles: errores.slice(0, 20) });
+  }
+
+  const columns = entity.fields.map((f) => f.name);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const chunkSize = 500;
+    for (let i = 0; i < parsedRows.length; i += chunkSize) {
+      const chunk = parsedRows.slice(i, i + chunkSize);
+      const values = [];
+      const placeholders = chunk.map((row, cIdx) => {
+        const base = cIdx * columns.length;
+        columns.forEach((col) => values.push(row[col]));
+        return '(' + columns.map((_, k) => '$' + (base + k + 1)).join(',') + ')';
+      }).join(',');
+      await client.query(`INSERT INTO ${entity.table} (${columns.join(',')}) VALUES ${placeholders}`, values);
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  await logActivity(req.user.id, 'pruebas_trazabilidad_importado',
+    { entity: req.params.entity, filas: parsedRows.length, omitidas: errores.length }, req.ip);
+  res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: errores.length, detalles: errores.slice(0, 20) });
 }));
 
 // GET /trazabilidad/balance-masas-dia?id_reciclador=X&fecha=YYYY-MM-DD -> lo que ya está
