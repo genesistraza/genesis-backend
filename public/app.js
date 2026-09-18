@@ -13,12 +13,22 @@ function gtLogout(reason){
   window.location.href = 'index.html' + (reason ? '?session=' + reason : '');
 }
 
-// Redirige a index.html si no hay sesión, o si el rol no está permitido en esta página.
+// Redirige a index.html si no hay sesión, si el rol no está permitido en esta página, o si
+// ya pasaron mas de 30 min desde la ultima actividad registrada. Este ultimo chequeo es lo
+// que de verdad cierra la sesión cuando el usuario vuelve despues de dias: el temporizador de
+// gtStartInactivityWatch solo corre mientras la pestaña sigue abierta, asi que cerrar el
+// navegador (o el computador) lo detiene sin cerrar la sesión - por eso este chequeo tiene
+// que hacerse tambien al cargar la pagina, no solo en el intervalo.
 function gtRequireAuth(allowedRoles){
   var token = gtGetToken();
   var role = gtGetRole();
   if(!token || (allowedRoles && allowedRoles.indexOf(role) === -1)){
     window.location.href = 'index.html';
+    return null;
+  }
+  var last = Number(localStorage.getItem('gt_last_activity') || 0);
+  if(last && Date.now() - last > GT_INACTIVITY_LIMIT_MS){
+    gtLogout('inactivity');
     return null;
   }
   gtStartInactivityWatch();
