@@ -687,15 +687,15 @@
     };
   }
 
-  function fetchBmReportRows(callback){
+  function fetchBmReportRows(callback, onFail){
     var desde = document.getElementById('bmExportDesde').value;
     var hasta = document.getElementById('bmExportHasta').value;
-    if(!desde || !hasta){ alert('Elige el rango de fechas (desde y hasta).'); return; }
+    if(!desde || !hasta){ alert('Elige el rango de fechas (desde y hasta).'); if(onFail) onFail(); return; }
     var idCentro = (pruebasVista === 'asociacion' && pruebasDemoCentro) ? pruebasDemoCentro.id : '';
     var url = '/trazabilidad/balance-masas-export?desde=' + desde + '&hasta=' + hasta + (idCentro ? '&id_centro=' + idCentro : '');
     gtApiFetch(url).then(function(res){
-      if(!res.ok){ alert(res.data.error || 'No se pudo generar el reporte.'); return; }
-      if(res.data.length === 0){ alert('No hay datos de balance de masas en ese rango de fechas.'); return; }
+      if(!res.ok){ alert(res.data.error || 'No se pudo generar el reporte.'); if(onFail) onFail(); return; }
+      if(res.data.length === 0){ alert('No hay datos de balance de masas en ese rango de fechas.'); if(onFail) onFail(); return; }
       callback(res.data.map(bmReportRowToOldFormat), desde, hasta);
     });
   }
@@ -724,12 +724,14 @@
   }
 
   function printBmReporte(){
+    var win = openPrintWindowAsync();
     fetchBmReportRows(function(rows, desde, hasta){
+      if(!win) return;
       var headers = Object.keys(rows[0]);
       var subtitle = 'Periodo: ' + gtFormatDate(desde) + ' a ' + gtFormatDate(hasta) +
         (pruebasVista === 'asociacion' && pruebasDemoCentro ? ' — ' + pruebasDemoCentro.label : ' — todas las asociaciones');
-      openPrintWindow('Balance de Masas — Reporte de periodo', subtitle, headers, rows.map(function(r){ return headers.map(function(h){ return r[h]; }); }));
-    });
+      fillPrintWindow(win, 'Balance de Masas — Reporte de periodo', subtitle, headers, rows.map(function(r){ return headers.map(function(h){ return r[h]; }); }));
+    }, function(){ if(win) win.close(); });
   }
 
   function printBmGrid(){
@@ -748,15 +750,29 @@
     if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
     var subtitle = bmSelectedReciclador.nombre_completo + ' — Doc. ' + bmSelectedReciclador.nro_documento +
       ' — Fecha: ' + gtFormatDate(document.getElementById('bmFecha').value);
-    openPrintWindow('Balance de Masas — Registro diario', subtitle, headers, rows);
+    openPrintWindowNow('Balance de Masas — Registro diario', subtitle, headers, rows);
   }
 
   // ---- Impresion / PDF con diseno propio (no solo el navegador imprimiendo la pantalla tal cual) ----
   // Abre una ventana nueva con un documento HTML propio (encabezado, periodo, tabla, pie de pagina)
   // y dispara el dialogo de impresion del navegador, que ya trae "Guardar como PDF" como destino.
-  function openPrintWindow(title, subtitle, headers, rows){
-    var win = window.open('', '_blank', 'width=1100,height:750');
+  // openPrintWindowNow() hace el window.open() de una vez (para los casos con datos ya en pantalla);
+  // openPrintWindowAsync() abre la ventana ANTES de pedir los datos por fetch, porque casi todos los
+  // navegadores solo permiten window.open() dentro del mismo gesto de clic — si se abre despues de
+  // que la promesa del fetch resuelve, el navegador lo bloquea como si fuera un popup no solicitado.
+  function openPrintWindowAsync(){
+    var win = window.open('', '_blank', 'width=1100,height=750');
+    if(win){
+      win.document.write('<!DOCTYPE html><html lang="es"><body style="font-family:Arial,sans-serif;padding:40px;color:#5B6B7C;">Generando reporte…</body></html>');
+    }
+    return win;
+  }
+  function openPrintWindowNow(title, subtitle, headers, rows){
+    var win = window.open('', '_blank', 'width=1100,height=750');
     if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
+    fillPrintWindow(win, title, subtitle, headers, rows);
+  }
+  function fillPrintWindow(win, title, subtitle, headers, rows){
     var generado = new Date().toLocaleString('es-CO');
     var esc = function(v){ return v === null || v === undefined ? '' : String(v); };
     var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>' +
@@ -801,7 +817,7 @@
     var subtitle = (pruebasVista === 'asociacion' && pruebasDemoCentro)
       ? 'Vista Asociación — ' + pruebasDemoCentro.label
       : 'Vista Administrador — todas las asociaciones';
-    openPrintWindow(entity.label, subtitle, headers, rows);
+    openPrintWindowNow(entity.label, subtitle, headers, rows);
   }
 
   if(session) initPruebasPage();
