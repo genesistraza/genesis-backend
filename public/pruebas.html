@@ -20,6 +20,36 @@
   .pruebas-topbar a.btn{ font-size:12px;padding:5px 10px; }
   .pruebas-hint{ margin:0 0 10px;color:var(--ink-soft);font-size:11.5px; }
   .pruebas-hint.asociacion{ color:var(--orange);font-weight:600; }
+  .pm-vista{ display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden; }
+  .pm-vista button{
+    border:none;background:#fff;color:var(--ink-soft);font-family:inherit;font-weight:600;
+    font-size:11.5px;padding:6px 11px;cursor:pointer;
+  }
+  .pm-vista button.active{ background:var(--orange);color:#fff; }
+  .pm-bar{ display:flex;flex-wrap:wrap;gap:3px;margin-bottom:2px;position:relative;z-index:20; }
+  .pm-item{ position:relative;z-index:1; }
+  .pm-item.open{ z-index:50; }
+  .pm-title{
+    display:block;background:#fff;border:1px solid var(--line);color:var(--ink);
+    font-family:inherit;font-weight:700;font-size:11px;padding:7px 12px;cursor:pointer;
+    border-radius:7px 7px 0 0;white-space:nowrap;
+  }
+  .pm-title:hover{ background:#F3F5F8; }
+  .pm-item.has-active .pm-title{ color:var(--orange);border-color:var(--orange); }
+  .pm-item.open .pm-title{ background:var(--orange);color:#fff;border-color:var(--orange); }
+  .pm-dropdown{
+    display:none;position:absolute;top:calc(100% + 3px);left:0;min-width:230px;
+    background:#fff;border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 8px 22px rgba(10,51,105,.12);padding:5px;
+  }
+  .pm-item.open .pm-dropdown{ display:block; }
+  .pm-dropdown a{
+    display:block;padding:7px 10px;font-size:12px;color:var(--ink);text-decoration:none;
+    border-radius:5px;cursor:pointer;white-space:nowrap;
+  }
+  .pm-dropdown a:hover{ background:#F3F5F8; }
+  .pm-dropdown a.active{ background:var(--orange);color:#fff; }
+  .pruebas-menu-row{ border-bottom:1px solid var(--line);margin-bottom:8px;padding-bottom:0; }
   .pruebas-shell .panel{ padding:12px 14px;border-radius:10px;margin-bottom:14px; }
   .pruebas-toolbar{ display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px; }
   .pruebas-toolbar .spacer{ flex:1; }
@@ -51,14 +81,14 @@
 <div class="pruebas-shell">
   <div class="pruebas-topbar no-print">
     <h1>Trazabilidad — Pruebas</h1>
-    <select id="pruebasVistaSelect" onchange="onPruebasVistaChange()">
-      <option value="administrador">Administrador (Genesis Traza)</option>
-      <option value="asociacion">Asociación (cliente)</option>
-    </select>
-    <select id="pruebasEntitySelect" onchange="onPruebasEntitySelectChange()"></select>
+    <div class="pm-vista" id="pruebasVistaToggle">
+      <button type="button" data-vista="administrador" onclick="onPruebasVistaChange('administrador')">Administrador</button>
+      <button type="button" data-vista="asociacion" onclick="onPruebasVistaChange('asociacion')">Asociación</button>
+    </div>
     <span class="spacer"></span>
     <a class="btn" href="admin.html">← Panel</a>
   </div>
+  <div class="pm-bar pruebas-menu-row no-print" id="pruebasMenuBar"></div>
   <p class="pruebas-hint no-print" id="pruebasVistaHint"></p>
 
   <div class="panel" id="pruebasBalanceMasasEnv" style="display:none;">
@@ -208,14 +238,20 @@
   var pruebasRecicladorCentroMap = null;
   var pruebasMicrorrutaCentroMap = null;
 
-  function onPruebasVistaChange(){
-    pruebasVista = document.getElementById('pruebasVistaSelect').value;
+  function onPruebasVistaChange(vista){
+    pruebasVista = vista;
+    document.querySelectorAll('#pruebasVistaToggle button').forEach(function(b){
+      b.classList.toggle('active', b.dataset.vista === vista);
+    });
     updateVistaHint();
     if(pruebasCurrentEntity === 'balance_masas'){ initBmEnv(); }
     else if(pruebasCurrentEntity){ fetchAndRenderPruebasTable(); }
   }
 
   function updateVistaHint(){
+    document.querySelectorAll('#pruebasVistaToggle button').forEach(function(b){
+      b.classList.toggle('active', b.dataset.vista === pruebasVista);
+    });
     var hint = document.getElementById('pruebasVistaHint');
     hint.style.display = 'block';
     if(pruebasVista === 'asociacion'){
@@ -272,34 +308,74 @@
     });
   }
 
+  // Barra horizontal de titulos (uno por categoria) con un desplegable vertical debajo de cada
+  // uno — igual al menu del sistema de trazabilidad original, en vez de un <select> nativo.
   function renderPruebasEntitySelect(){
-    var sel = document.getElementById('pruebasEntitySelect');
-    sel.innerHTML = '';
+    var bar = document.getElementById('pruebasMenuBar');
+    bar.innerHTML = '';
+    var firstKey = null;
     ENTITY_GROUPS.forEach(function(group){
       var keys = group.keys.filter(function(k){ return pruebasEntities[k]; });
       if(keys.length === 0) return;
-      var optgroup = document.createElement('optgroup');
-      optgroup.label = group.label;
-      keys.forEach(function(key){
-        var opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = pruebasEntities[key].label;
-        optgroup.appendChild(opt);
+      if(!firstKey) firstKey = keys[0];
+
+      var item = document.createElement('div');
+      item.className = 'pm-item';
+
+      var title = document.createElement('button');
+      title.type = 'button';
+      title.className = 'pm-title';
+      title.textContent = group.label;
+      title.addEventListener('click', function(e){
+        e.stopPropagation();
+        var wasOpen = item.classList.contains('open');
+        closeAllPmDropdowns();
+        if(!wasOpen) item.classList.add('open');
       });
-      sel.appendChild(optgroup);
+
+      var dropdown = document.createElement('div');
+      dropdown.className = 'pm-dropdown';
+      keys.forEach(function(key){
+        var link = document.createElement('a');
+        link.textContent = pruebasEntities[key].label;
+        link.title = ENTITY_HINTS[key] || '';
+        link.dataset.entity = key;
+        link.addEventListener('click', function(){
+          selectPruebasEntity(key);
+          closeAllPmDropdowns();
+        });
+        dropdown.appendChild(link);
+      });
+
+      item.appendChild(title);
+      item.appendChild(dropdown);
+      bar.appendChild(item);
     });
-    pruebasCurrentEntity = pruebasCurrentEntity || sel.querySelector('option').value;
-    sel.value = pruebasCurrentEntity;
+
+    pruebasCurrentEntity = pruebasCurrentEntity || firstKey;
     selectPruebasEntity(pruebasCurrentEntity);
   }
 
-  function onPruebasEntitySelectChange(){
-    selectPruebasEntity(document.getElementById('pruebasEntitySelect').value);
+  function closeAllPmDropdowns(){
+    document.querySelectorAll('.pm-item.open').forEach(function(i){ i.classList.remove('open'); });
+  }
+  document.addEventListener('click', closeAllPmDropdowns);
+
+  function updatePmMenuActiveState(){
+    document.querySelectorAll('.pm-item').forEach(function(item){
+      var hasActive = false;
+      item.querySelectorAll('a').forEach(function(a){
+        var isActive = a.dataset.entity === pruebasCurrentEntity;
+        a.classList.toggle('active', isActive);
+        if(isActive) hasActive = true;
+      });
+      item.classList.toggle('has-active', hasActive);
+    });
   }
 
   function selectPruebasEntity(key){
     pruebasCurrentEntity = key;
-    document.getElementById('pruebasEntitySelect').title = ENTITY_HINTS[key] || '';
+    updatePmMenuActiveState();
     var isBalanceMasas = key === 'balance_masas';
     document.getElementById('pruebasBalanceMasasEnv').style.display = isBalanceMasas ? 'block' : 'none';
     document.getElementById('pruebasGenericView').style.display = isBalanceMasas ? 'none' : 'block';
