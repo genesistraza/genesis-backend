@@ -16,7 +16,10 @@ const ENTITIES = {
     table: 'tz_centros', label: 'Centros (Asociaciones)',
     fields: [
       { name: 'cod_centro', label: 'Código', type: 'text' },
-      { name: 'desc_centro', label: 'Nombre', type: 'text', required: true }
+      { name: 'desc_centro', label: 'Nombre', type: 'text', required: true },
+      { name: 'rup_numero', label: 'Número RUP', type: 'text' },
+      { name: 'rup_fecha_inscripcion', label: 'Fecha inscripción RUP', type: 'date' },
+      { name: 'eca_numero', label: 'Número ECA', type: 'text' }
     ]
   },
   bodegas: {
@@ -77,11 +80,59 @@ const ENTITIES = {
       { name: 'id_tipo_material', label: 'Material', type: 'select-entity', entity: 'tipos_material', labelField: 'desc_tipo_material', required: true },
       { name: 'id_numacro', label: 'Numacro', type: 'select-entity', entity: 'numacros', labelField: 'cod_numacro' },
       { name: 'id_bodega', label: 'Bodega', type: 'select-entity', entity: 'bodegas', labelField: 'desc_bodega' },
+      { name: 'id_macrorruta', label: 'Macrorruta', type: 'select-entity', entity: 'macrorrutas', labelField: 'desc_macrorruta' },
       { name: 'fecha', label: 'Fecha', type: 'date', required: true },
       { name: 'cantidad', label: 'Cantidad (kg)', type: 'decimal' },
       { name: 'valor', label: 'Valor/kg', type: 'decimal' },
       { name: 'cantidad_rechazo', label: 'Cantidad rechazo', type: 'decimal' },
       { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' }
+    ]
+  },
+  macrorrutas: {
+    table: 'tz_macrorrutas', label: 'Macrorrutas',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'cod_macrorruta', label: 'Código', type: 'text' },
+      { name: 'desc_macrorruta', label: 'Descripción', type: 'text', required: true }
+    ]
+  },
+  formalizacion_fases: {
+    table: 'tz_formalizacion_fases', label: 'Formalización (Decreto 596/2016)',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'fase', label: 'Fase (1-8)', type: 'number', required: true },
+      { name: 'descripcion_fase', label: 'Descripción de la fase', type: 'text' },
+      { name: 'estado', label: 'Estado (Pendiente/En proceso/Completada)', type: 'text' },
+      { name: 'fecha_completada', label: 'Fecha completada', type: 'date' },
+      { name: 'observaciones', label: 'Observaciones', type: 'text' }
+    ]
+  },
+  pqr: {
+    table: 'tz_pqr', label: 'PQR',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'tipo', label: 'Tipo (Peticion/Queja/Reclamo)', type: 'text' },
+      { name: 'fecha', label: 'Fecha', type: 'date' },
+      { name: 'nombre_solicitante', label: 'Nombre solicitante', type: 'text' },
+      { name: 'documento_solicitante', label: 'Documento solicitante', type: 'text' },
+      { name: 'descripcion', label: 'Descripción', type: 'text' },
+      { name: 'estado', label: 'Estado (Abierta/En proceso/Cerrada)', type: 'text' },
+      { name: 'fecha_respuesta', label: 'Fecha respuesta', type: 'date' },
+      { name: 'respuesta', label: 'Respuesta', type: 'text' }
+    ]
+  },
+  seguridad_social: {
+    table: 'tz_seguridad_social', label: 'Seguridad Social (Decreto 271/2026)',
+    fields: [
+      { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo', required: true },
+      { name: 'eps', label: 'EPS', type: 'text' },
+      { name: 'estado_afiliacion_eps', label: 'Estado afiliación EPS', type: 'text' },
+      { name: 'arl', label: 'ARL', type: 'text' },
+      { name: 'estado_afiliacion_arl', label: 'Estado afiliación ARL', type: 'text' },
+      { name: 'base_cotizacion_arl', label: 'Base cotización ARL', type: 'decimal' },
+      { name: 'beps_afiliado', label: 'Afiliado a BEPS (1 = sí, 0 = no)', type: 'text' },
+      { name: 'aporte_beps_mensual', label: 'Aporte BEPS mensual', type: 'decimal' },
+      { name: 'fecha_actualizacion', label: 'Fecha actualización', type: 'date' }
     ]
   },
   microrrutas: {

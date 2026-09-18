@@ -418,6 +418,102 @@ CREATE TABLE IF NOT EXISTS tz_formulario_pago_tarifa (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- =====================================================================================
+-- Modulos agregados tras el analisis del Decreto 596/2016, Decreto 271/2026 y las
+-- Resoluciones CRA 1027/1037/2026: cosas que la ley exige y el sistema original (y el
+-- nuestro) no cubrian todavia. Siguen siendo parte del sandbox "Pruebas" (tz_*).
+-- =====================================================================================
+
+-- RUP (Registro Unico de Prestadores) - inscripcion formal ante la SSPD, requisito de la
+-- Fase 1 de formalizacion del Decreto 596/2016. Es un dato del centro, no se repite.
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS rup_numero VARCHAR(60);
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS rup_fecha_inscripcion DATE;
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS eca_numero VARCHAR(60);
+
+-- Las 8 fases de formalizacion progresiva del Art. 2.3.2.5.3.2 (Decreto 596/2016): una
+-- fila por fase por centro, para llevar el checklist de cumplimiento en vez de tenerlo
+-- solo en la cabeza de alguien.
+CREATE TABLE IF NOT EXISTS tz_formalizacion_fases (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  fase INT NOT NULL,
+  descripcion_fase VARCHAR(255),
+  estado VARCHAR(30) DEFAULT 'Pendiente',
+  fecha_completada DATE,
+  observaciones TEXT,
+  UNIQUE (id_centro, fase)
+);
+
+-- Macrorrutas: agrupan formularios de balance de masas para poder calcular el % de
+-- aceptacion exigido por el DINC (Art. 2.3.2.5.2.2.4 - minimo 80% para no tener descuento).
+CREATE TABLE IF NOT EXISTS tz_macrorrutas (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  cod_macrorruta VARCHAR(30),
+  desc_macrorruta VARCHAR(255)
+);
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_macrorruta INT REFERENCES tz_macrorrutas(id);
+
+-- PQR (peticiones, quejas y reclamos) - obligatorio desde la Fase 7 de formalizacion.
+CREATE TABLE IF NOT EXISTS tz_pqr (
+  id SERIAL PRIMARY KEY,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  tipo VARCHAR(30) DEFAULT 'Peticion',
+  fecha DATE,
+  nombre_solicitante VARCHAR(255),
+  documento_solicitante VARCHAR(30),
+  descripcion TEXT,
+  estado VARCHAR(30) DEFAULT 'Abierta',
+  fecha_respuesta DATE,
+  respuesta TEXT
+);
+
+-- Seguridad social del reciclador (Decreto 271/2026, vigente desde el 1 de julio de 2026):
+-- afiliacion a salud, ARL y BEPS financiadas desde la remuneracion tarifaria, sin que exista
+-- relacion laboral con la organizacion.
+CREATE TABLE IF NOT EXISTS tz_seguridad_social (
+  id SERIAL PRIMARY KEY,
+  id_reciclador INT REFERENCES tz_recicladores(id) ON DELETE CASCADE,
+  eps VARCHAR(120),
+  estado_afiliacion_eps VARCHAR(30) DEFAULT 'Sin afiliar',
+  arl VARCHAR(120),
+  estado_afiliacion_arl VARCHAR(30) DEFAULT 'Sin afiliar',
+  base_cotizacion_arl NUMERIC(12,2),
+  beps_afiliado BOOLEAN DEFAULT false,
+  aporte_beps_mensual NUMERIC(12,2),
+  fecha_actualizacion DATE,
+  UNIQUE (id_reciclador)
+);
+
+-- Semilla de catalogos para los modulos nuevos
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
+('formalizacion_estado','pendiente','Pendiente',NULL,1),
+('formalizacion_estado','en_proceso','En proceso',NULL,2),
+('formalizacion_estado','completada','Completada',NULL,3),
+('pqr_tipo','peticion','Petición',NULL,1),
+('pqr_tipo','queja','Queja',NULL,2),
+('pqr_tipo','reclamo','Reclamo',NULL,3),
+('pqr_estado','abierta','Abierta',NULL,1),
+('pqr_estado','en_proceso','En proceso',NULL,2),
+('pqr_estado','cerrada','Cerrada',NULL,3),
+('afiliacion_estado','sin_afiliar','Sin afiliar',NULL,1),
+('afiliacion_estado','en_tramite','En trámite',NULL,2),
+('afiliacion_estado','afiliado','Afiliado',NULL,3)
+ON CONFLICT (categoria, codigo) DO NOTHING;
+
+-- Semilla de las 8 fases del Art. 2.3.2.5.3.2 (solo la descripcion; el estado por cada
+-- centro se crea cuando el admin registra el centro en el nuevo modulo).
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
+('fase_formalizacion','1','Fase 1 — Inscripción en el RUP',NULL,1),
+('fase_formalizacion','2','Fase 2 — Área de servicio, toneladas, ECA y vehículos',NULL,2),
+('fase_formalizacion','3','Fase 3 — Adopción del CCU',NULL,3),
+('fase_formalizacion','4','Fase 4 — Portafolio, plan de negocio, base de usuarios y web',NULL,4),
+('fase_formalizacion','5','Fase 5 — Calibración de básculas y supervisores',NULL,5),
+('fase_formalizacion','6','Fase 6 — Planta de personal y microrrutas',NULL,6),
+('fase_formalizacion','7','Fase 7 — Registro de PQR y planes de emergencia',NULL,7),
+('fase_formalizacion','8','Fase 8 — Estados financieros y área georreferenciada',NULL,8)
+ON CONFLICT (categoria, codigo) DO NOTHING;
+
 -- Semilla de catalogos (valores reales tomados del sistema original)
 INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
 ('estados','ac','Activo',NULL,1),
