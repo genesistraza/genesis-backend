@@ -1239,13 +1239,44 @@
       var materialCtx = document.getElementById('admChartByMaterial').getContext('2d');
       if(admMaterialChart) admMaterialChart.destroy();
       var topMaterials = d.byMaterial.slice(0, 8);
+      var admMaterialTotal = topMaterials.reduce(function(sum, m){ return sum + Number(m.toneladas); }, 0);
+      var admPct = function(value){ return admMaterialTotal > 0 ? Math.round((value / admMaterialTotal) * 100) : 0; };
       admMaterialChart = new Chart(materialCtx, {
         type: 'doughnut',
         data: {
           labels: topMaterials.map(function(m){ return m.material_desc; }),
           datasets: [{ data: topMaterials.map(function(m){ return Number(m.toneladas); }), backgroundColor: GT_MATERIAL_COLORS }]
         },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: window.innerWidth < 560 ? 'bottom' : 'right', labels: { boxWidth: 12, font: { size: 11.5 } } } } }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: window.innerWidth < 560 ? 'bottom' : 'right',
+              labels: {
+                boxWidth: 12,
+                font: { size: 11.5 },
+                generateLabels: function(chart){
+                  var data = chart.data;
+                  var ds = data.datasets[0];
+                  return data.labels.map(function(label, i){
+                    return {
+                      text: label + ' — ' + admPct(ds.data[i]) + '%',
+                      fillStyle: ds.backgroundColor[i],
+                      strokeStyle: ds.backgroundColor[i],
+                      index: i
+                    };
+                  });
+                }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx){ return ctx.label + ': ' + Number(ctx.raw).toLocaleString('es-CO', {maximumFractionDigits:2}) + ' t (' + admPct(ctx.raw) + '%)'; }
+              }
+            }
+          }
+        }
       });
       requestAnimationFrame(function(){ if(admMaterialChart) admMaterialChart.resize(); });
 
