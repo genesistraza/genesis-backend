@@ -516,6 +516,39 @@ router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
   }
 }));
 
+// GET /trazabilidad/balance-masas-export?desde=&hasta=&id_centro= -> todas las filas de balance
+// de masas en ese rango de fechas (sin el limite de 500 del listado generico), con las columnas
+// ya resueltas (reciclador, material, bodega, numacro, centro) para armar el reporte periodico
+// en el mismo formato que recibe la Superintendencia. Registrada antes de /:entity.
+router.get('/balance-masas-export', asyncRoute(async (req, res) => {
+  const { desde, hasta, id_centro } = req.query;
+  if (!desde || !hasta) return res.status(400).json({ error: 'Falta el rango de fechas (desde y hasta).' });
+  const params = [desde, hasta];
+  let where = 'bm.fecha BETWEEN $1 AND $2';
+  if (id_centro) {
+    params.push(id_centro);
+    where += ' AND bm.id_centro = $' + params.length;
+  }
+  const result = await pool.query(
+    `SELECT bm.fecha, bm.cantidad, bm.valor, bm.cantidad_rechazo, bm.cantidad_nosui,
+            c.desc_centro AS centro,
+            b.cod_bodega, b.desc_bodega,
+            n.cod_numacro,
+            r.nro_documento, r.nombre_completo, r.placa,
+            tm.desc_tipo_material
+     FROM tz_formulario_balance_masas bm
+     LEFT JOIN tz_centros c ON c.id = bm.id_centro
+     LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
+     LEFT JOIN tz_numacros n ON n.id = bm.id_numacro
+     LEFT JOIN tz_recicladores r ON r.id = bm.id_reciclador
+     LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+     WHERE ${where}
+     ORDER BY bm.fecha, r.nombre_completo`,
+    params
+  );
+  res.json(result.rows);
+}));
+
 // GET /trazabilidad/:entity/options?labelField=xxx -> opciones {value,label} para un select-entity
 router.get('/:entity/options', asyncRoute(async (req, res) => {
   const entity = getEntity(req.params.entity);

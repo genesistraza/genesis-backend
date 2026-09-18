@@ -8,32 +8,33 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <style>
-  .pruebas-shell{ max-width:1280px;margin:0 auto;padding:20px 24px 40px; }
-  .pruebas-header{
-    display:flex;align-items:center;justify-content:space-between;gap:16px;
-    padding-bottom:14px;margin-bottom:18px;border-bottom:1px solid var(--line);
+  body{ font-size:13px; }
+  .pruebas-shell{ max-width:1280px;margin:0 auto;padding:12px 18px 30px; }
+  .pruebas-topbar{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--line);
   }
-  .pruebas-header h1{ margin:0;font-size:19px; }
-  .pruebas-header .tag{ display:inline-block;margin-left:10px;font-size:11px;font-weight:700;color:var(--orange);
-    background:rgba(242,148,31,.12);padding:2px 9px;border-radius:20px;vertical-align:middle; }
-  .pruebas-nav{
-    display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:18px;
-    background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
-  }
-  .pruebas-nav .form-field{ margin:0;min-width:280px;flex:1; }
-  .pruebas-nav .form-field label{ font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--ink-soft); }
-  .pruebas-hint{ margin:0;color:var(--ink-soft);font-size:12.5px;flex-basis:100%; }
-  .pruebas-toolbar{ display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px; }
+  .pruebas-topbar h1{ margin:0;font-size:15px;font-weight:700;white-space:nowrap; }
+  .pruebas-topbar select{ font-size:12.5px;padding:5px 8px;height:auto; }
+  .pruebas-topbar .spacer{ flex:1; }
+  .pruebas-topbar a.btn{ font-size:12px;padding:5px 10px; }
+  .pruebas-hint{ margin:0 0 10px;color:var(--ink-soft);font-size:11.5px; }
+  .pruebas-hint.asociacion{ color:var(--orange);font-weight:600; }
+  .pruebas-shell .panel{ padding:12px 14px;border-radius:10px;margin-bottom:14px; }
+  .pruebas-toolbar{ display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px; }
   .pruebas-toolbar .spacer{ flex:1; }
-  .pruebas-toolbar .btn{ font-size:12.5px;padding:8px 14px; }
-  .pruebas-badge{ font-size:11.5px;color:var(--ink-soft);background:var(--bg-soft, #F3F5F8);border-radius:20px;padding:4px 11px; }
-  .pruebas-msg{ font-size:12.5px;margin-top:8px; }
-  #pruebasVistaHint.asociacion{ color:var(--orange);font-weight:600; }
-  #pruebasVistaHint.administrador{ color:var(--ink-soft); }
+  .pruebas-toolbar h2{ font-size:13px;font-weight:700; }
+  .pruebas-toolbar .btn{ font-size:11.5px;padding:5px 10px; }
+  .pruebas-toolbar input[type="date"]{ font-size:11.5px;padding:4px 6px;height:auto;width:128px; }
+  .pruebas-toolbar .sep{ font-size:11px;color:var(--ink-soft); }
+  .pruebas-badge{ font-size:11px;color:var(--ink-soft);background:var(--bg-soft, #F3F5F8);border-radius:20px;padding:3px 10px; }
+  .pruebas-msg{ font-size:11.5px;margin-top:6px; }
+  .pruebas-shell table.data-table th{ padding:6px 9px;font-size:10.5px; }
+  .pruebas-shell table.data-table td{ padding:6px 9px;font-size:12px; }
+  .pruebas-shell .form-field{ margin-bottom:8px; }
+  .pruebas-shell .form-field label{ font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft); }
   @media print{
     body *{ visibility:hidden; }
-    .print-area, .print-area *{ visibility:visible; }
-    .print-area{ position:absolute;left:0;top:0;width:100%; }
     .no-print{ display:none !important; }
   }
 </style>
@@ -48,85 +49,86 @@
 </div>
 
 <div class="pruebas-shell">
-  <div class="pruebas-header no-print">
-    <h1>Trazabilidad nativa <span class="tag">Pruebas</span></h1>
-    <a class="btn" href="admin.html">← Volver al panel</a>
+  <div class="pruebas-topbar no-print">
+    <h1>Trazabilidad — Pruebas</h1>
+    <select id="pruebasVistaSelect" onchange="onPruebasVistaChange()">
+      <option value="administrador">Administrador (Genesis Traza)</option>
+      <option value="asociacion">Asociación (cliente)</option>
+    </select>
+    <select id="pruebasEntitySelect" onchange="onPruebasEntitySelectChange()"></select>
+    <span class="spacer"></span>
+    <a class="btn" href="admin.html">← Panel</a>
   </div>
-
-  <div class="pruebas-nav no-print">
-    <div class="form-field" style="min-width:220px;flex:none;">
-      <label>Vista</label>
-      <select id="pruebasVistaSelect" onchange="onPruebasVistaChange()">
-        <option value="administrador">Administrador (Genesis Traza)</option>
-        <option value="asociacion">Asociación (cliente)</option>
-      </select>
-    </div>
-    <div class="form-field">
-      <label>Módulo</label>
-      <select id="pruebasEntitySelect" onchange="onPruebasEntitySelectChange()"></select>
-    </div>
-    <p class="pruebas-hint" id="pruebasEntityHint"></p>
-    <p class="pruebas-hint" id="pruebasVistaHint" style="display:none;"></p>
-  </div>
+  <p class="pruebas-hint no-print" id="pruebasVistaHint"></p>
 
   <div class="panel" id="pruebasBalanceMasasEnv" style="display:none;">
     <div class="pruebas-toolbar no-print">
-      <h2 style="margin:0;font-size:16px;">Balance de Masas</h2>
+      <h2>Balance de Masas — Reporte de periodo</h2>
+      <span class="pruebas-badge" title="Mismo formato de columnas que recibe la Superintendencia en el sistema de trazabilidad original">formato Superintendencia</span>
       <span class="spacer"></span>
-      <button type="button" class="btn" onclick="printCurrentView()">Imprimir / PDF</button>
-      <button type="button" class="btn" onclick="exportBmExcel()">Exportar Excel</button>
-      <button type="button" class="btn" onclick="exportBmCsv(',')">Exportar CSV</button>
-      <button type="button" class="btn" onclick="exportBmCsv(';')">Exportar CSV (;)</button>
+      <span class="sep">Desde</span>
+      <input type="date" id="bmExportDesde">
+      <span class="sep">Hasta</span>
+      <input type="date" id="bmExportHasta">
+      <button type="button" class="btn" onclick="printBmReporte()">Imprimir / PDF</button>
+      <button type="button" class="btn" onclick="exportBmReporte('xlsx')">Excel</button>
+      <button type="button" class="btn" onclick="exportBmReporte('csv-comma')">CSV</button>
+      <button type="button" class="btn" onclick="exportBmReporte('csv-semicolon')">CSV (;)</button>
     </div>
-    <div class="form-field no-print" style="max-width:420px;">
+
+    <div class="pruebas-toolbar no-print" style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;">
+      <h2>Captura diaria</h2>
+    </div>
+    <div class="form-field no-print" style="max-width:380px;">
       <label>Buscar reciclador (nombre o cédula)</label>
       <input id="bmBuscarReciclador" placeholder="Escribe para buscar…" oninput="onBmBuscarRecicladorInput()" autocomplete="off">
     </div>
     <div id="bmRecicladorResultados" class="table-scroll no-print" style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px;display:none;"></div>
 
-    <div id="bmRecicladorSeleccionado" style="display:none;margin-top:18px;">
-      <div class="print-area">
-        <div class="form-grid">
-          <div class="form-field"><label>Nombre</label><input id="bmNombre" disabled></div>
-          <div class="form-field"><label>Cédula</label><input id="bmCedula" disabled></div>
-          <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
-          <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
-          <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
-          <div class="form-field"><label>Zona (NUMACRO)</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
-          <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
-        </div>
-
-        <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px;">
-          <h2 style="margin:0;font-size:15px;">Materiales del día</h2>
-          <select id="bmFamiliaFilter" class="period-value-select no-print" onchange="renderBmGrid()" style="max-width:240px;"></select>
-        </div>
-        <div class="table-scroll" style="margin-top:10px;">
-          <table class="data-table">
-            <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th></tr></thead>
-            <tbody id="bmGridBody"></tbody>
-          </table>
-        </div>
+    <div id="bmRecicladorSeleccionado" style="display:none;margin-top:10px;">
+      <div class="form-grid">
+        <div class="form-field"><label>Nombre</label><input id="bmNombre" disabled></div>
+        <div class="form-field"><label>Cédula</label><input id="bmCedula" disabled></div>
+        <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
+        <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
+        <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
+        <div class="form-field"><label>Zona (NUMACRO)</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
+        <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
       </div>
-      <button class="btn btn-primary no-print" style="margin-top:16px;" onclick="saveBmDia()">Guardar</button>
+
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
+        <h2 style="margin:0;font-size:13px;font-weight:700;">Materiales del día</h2>
+        <select id="bmFamiliaFilter" class="period-value-select no-print" onchange="renderBmGrid()" style="max-width:220px;"></select>
+      </div>
+      <div class="table-scroll" style="margin-top:6px;">
+        <table class="data-table">
+          <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th></tr></thead>
+          <tbody id="bmGridBody"></tbody>
+        </table>
+      </div>
+      <div class="no-print" style="margin-top:10px;display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="saveBmDia()">Guardar</button>
+        <button class="btn" onclick="printBmGrid()">Imprimir este día</button>
+      </div>
       <p class="pruebas-msg no-print" id="bmSaveMsg"></p>
     </div>
   </div>
 
   <div class="panel" id="pruebasGenericView">
     <div class="pruebas-toolbar no-print">
-      <h2 id="pruebasEntityTitle" style="margin:0;font-size:16px;">Elige un módulo</h2>
+      <h2 id="pruebasEntityTitle">Elige un módulo</h2>
       <span class="pruebas-badge" id="pruebasRowCount"></span>
       <span class="spacer"></span>
       <button type="button" class="btn btn-primary" id="pruebasNewBtn" onclick="openPruebasFormModal()">Nuevo registro</button>
       <button type="button" class="btn" id="pruebasImportBtn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
       <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
       <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
-      <button type="button" class="btn" onclick="printCurrentView()">Imprimir / PDF</button>
+      <button type="button" class="btn" onclick="printPruebasGeneric()">Imprimir / PDF</button>
       <button type="button" class="btn" onclick="exportPruebasExcel()">Exportar Excel</button>
       <button type="button" class="btn" onclick="exportPruebasCsv()">Exportar CSV</button>
     </div>
     <p class="pruebas-msg no-print" id="pruebasImportMsg"></p>
-    <div class="table-scroll print-area">
+    <div class="table-scroll">
       <table class="data-table">
         <thead id="pruebasTableHead"></thead>
         <tbody id="pruebasTableBody"><tr><td class="empty-row">Cargando…</td></tr></tbody>
@@ -197,8 +199,6 @@
       loadPruebasTab();
     });
   }
-
-  function printCurrentView(){ window.print(); }
 
   // ---- Vista: Administrador (Genesis Traza, todo) vs Asociacion (cliente, solo su centro demo) ----
   // Es una simulacion visual dentro del sandbox (el rol real de backend sigue siendo "pro" para
@@ -299,7 +299,7 @@
 
   function selectPruebasEntity(key){
     pruebasCurrentEntity = key;
-    document.getElementById('pruebasEntityHint').textContent = ENTITY_HINTS[key] || '';
+    document.getElementById('pruebasEntitySelect').title = ENTITY_HINTS[key] || '';
     var isBalanceMasas = key === 'balance_masas';
     document.getElementById('pruebasBalanceMasasEnv').style.display = isBalanceMasas ? 'block' : 'none';
     document.getElementById('pruebasGenericView').style.display = isBalanceMasas ? 'none' : 'block';
@@ -543,6 +543,14 @@
     document.getElementById('bmBuscarReciclador').value = '';
     var fechaInput = document.getElementById('bmFecha');
     if(!fechaInput.value) fechaInput.value = new Date().toISOString().slice(0, 10);
+    var desdeInput = document.getElementById('bmExportDesde');
+    var hastaInput = document.getElementById('bmExportHasta');
+    if(!hastaInput.value) hastaInput.value = new Date().toISOString().slice(0, 10);
+    if(!desdeInput.value){
+      var d = new Date();
+      d.setDate(d.getDate() - 30);
+      desdeInput.value = d.toISOString().slice(0, 10);
+    }
 
     var loadRecicladores = bmAllRecicladores ? Promise.resolve() : gtApiFetch('/trazabilidad/recicladores').then(function(res){ bmAllRecicladores = res.ok ? res.data : []; });
     var loadMateriales = bmAllMateriales ? Promise.resolve() : gtApiFetch('/trazabilidad/tipos_material').then(function(res){ bmAllMateriales = res.ok ? res.data : []; });
@@ -657,63 +665,143 @@
     });
   }
 
-  // ---- Exportar Balance de Masas: mismas columnas que el sistema de trazabilidad original ----
-  function buildBmExportRows(){
-    if(!bmSelectedReciclador) return [];
-    var fecha = document.getElementById('bmFecha').value;
-    var bodegaSel = document.getElementById('bmBodega');
-    var numacroSel = document.getElementById('bmNumacro');
-    var nueca = bodegaSel.options[bodegaSel.selectedIndex] ? bodegaSel.options[bodegaSel.selectedIndex].textContent : '';
-    var numacro = numacroSel.options[numacroSel.selectedIndex] ? numacroSel.options[numacroSel.selectedIndex].textContent : '';
-    var d = new Date(fecha + 'T00:00:00');
+  // ---- Reporte de periodo de Balance de Masas: mismas columnas que el sistema de trazabilidad
+  // original (el que recibe la Superintendencia), pero por rango de fechas y para toda la
+  // asociacion (o todas, en vista Administrador) en vez de un solo reciclador/dia.
+  function bmReportRowToOldFormat(row){
+    var d = new Date(row.fecha + (String(row.fecha).length <= 10 ? 'T00:00:00' : ''));
     var oneJan = new Date(d.getFullYear(), 0, 1);
     var numeroSemana = Math.ceil((((d - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+    var fechaStr = typeof row.fecha === 'string' ? row.fecha.slice(0, 10) : gtFormatDate(row.fecha);
+    var nueca = (row.cod_bodega || '') + (row.desc_bodega ? ' - ' + row.desc_bodega : '');
+    return {
+      NUECA: nueca, NUMACRO: row.cod_numacro || '', 'Numero de semana': numeroSemana,
+      'Tipo ident.': 'CC', 'Nro ident.': row.nro_documento || '',
+      placa: row.placa || '', toneladas: (Number(row.cantidad) / 1000),
+      'Tipo Material': row.desc_tipo_material || '', Toneladas_rechazo: (Number(row.cantidad_rechazo) / 1000),
+      'Tipo de destino': 'ECA', 'Número único del sitio de destino': row.cod_bodega || '',
+      Asociacion: row.centro || '', fecha: fechaStr,
+      nombre_completo: row.nombre_completo || '',
+      valor_kilogramo: Number(row.valor), valor_total: Number(row.valor) * Number(row.cantidad),
+      cantidad_rechazo: Number(row.cantidad_rechazo), cantidad_nosui: Number(row.cantidad_nosui)
+    };
+  }
 
+  function fetchBmReportRows(callback){
+    var desde = document.getElementById('bmExportDesde').value;
+    var hasta = document.getElementById('bmExportHasta').value;
+    if(!desde || !hasta){ alert('Elige el rango de fechas (desde y hasta).'); return; }
+    var idCentro = (pruebasVista === 'asociacion' && pruebasDemoCentro) ? pruebasDemoCentro.id : '';
+    var url = '/trazabilidad/balance-masas-export?desde=' + desde + '&hasta=' + hasta + (idCentro ? '&id_centro=' + idCentro : '');
+    gtApiFetch(url).then(function(res){
+      if(!res.ok){ alert(res.data.error || 'No se pudo generar el reporte.'); return; }
+      if(res.data.length === 0){ alert('No hay datos de balance de masas en ese rango de fechas.'); return; }
+      callback(res.data.map(bmReportRowToOldFormat), desde, hasta);
+    });
+  }
+
+  function exportBmReporte(kind){
+    fetchBmReportRows(function(rows, desde, hasta){
+      var headers = Object.keys(rows[0]);
+      var filenameBase = 'balance_masas_' + desde + '_a_' + hasta;
+      if(kind === 'xlsx'){
+        var html = '<table><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+          rows.map(function(r){ return '<tr>' + headers.map(function(h){ return '<td>' + r[h] + '</td>'; }).join('') + '</tr>'; }).join('') +
+          '</table>';
+        downloadBlob(html, filenameBase + '.xls', 'application/vnd.ms-excel');
+      } else {
+        var sep = kind === 'csv-semicolon' ? ';' : ',';
+        var lines = [headers.join(sep)];
+        rows.forEach(function(r){
+          lines.push(headers.map(function(h){
+            var v = r[h] === null || r[h] === undefined ? '' : String(r[h]);
+            return v.indexOf(sep) !== -1 ? '"' + v.replace(/"/g, '""') + '"' : v;
+          }).join(sep));
+        });
+        downloadBlob(lines.join('\r\n'), filenameBase + '.csv', 'text/csv;charset=utf-8;');
+      }
+    });
+  }
+
+  function printBmReporte(){
+    fetchBmReportRows(function(rows, desde, hasta){
+      var headers = Object.keys(rows[0]);
+      var subtitle = 'Periodo: ' + gtFormatDate(desde) + ' a ' + gtFormatDate(hasta) +
+        (pruebasVista === 'asociacion' && pruebasDemoCentro ? ' — ' + pruebasDemoCentro.label : ' — todas las asociaciones');
+      openPrintWindow('Balance de Masas — Reporte de periodo', subtitle, headers, rows.map(function(r){ return headers.map(function(h){ return r[h]; }); }));
+    });
+  }
+
+  function printBmGrid(){
+    if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
+    var headers = ['Material', 'Cantidad (kg)', 'Valor', 'Cant. rechazo', 'Cant. no SUI'];
     var rows = [];
     document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
       var material = tr.children[0].textContent;
-      var cantidad = Number(tr.querySelector('[data-field="cantidad"]').value || 0);
-      var valor = Number(tr.querySelector('[data-field="valor"]').value || 0);
-      var rechazo = Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
-      var nosui = Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
+      var cantidad = tr.querySelector('[data-field="cantidad"]').value;
+      var valor = tr.querySelector('[data-field="valor"]').value;
+      var rechazo = tr.querySelector('[data-field="cantidad_rechazo"]').value;
+      var nosui = tr.querySelector('[data-field="cantidad_nosui"]').value;
       if(!cantidad && !valor && !rechazo && !nosui) return;
-      rows.push({
-        NUECA: nueca, NUMACRO: numacro, 'Numero de semana': numeroSemana,
-        'Tipo ident.': 'CC', 'Nro ident.': bmSelectedReciclador.nro_documento || '',
-        placa: bmSelectedReciclador.placa || '', toneladas: (cantidad / 1000),
-        'Tipo Material': material, Toneladas_rechazo: (rechazo / 1000),
-        'Tipo de destino': 'ECA', 'Número único del sitio de destino': nueca,
-        Asociacion: bmSelectedReciclador.id_centro_label || '', fecha: fecha,
-        nombre_completo: bmSelectedReciclador.nombre_completo || '',
-        valor_kilogramo: valor, valor_total: (valor * cantidad),
-        cantidad_rechazo: rechazo, cantidad_nosui: nosui
+      rows.push([material, cantidad || 0, valor || 0, rechazo || 0, nosui || 0]);
+    });
+    if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
+    var subtitle = bmSelectedReciclador.nombre_completo + ' — Doc. ' + bmSelectedReciclador.nro_documento +
+      ' — Fecha: ' + gtFormatDate(document.getElementById('bmFecha').value);
+    openPrintWindow('Balance de Masas — Registro diario', subtitle, headers, rows);
+  }
+
+  // ---- Impresion / PDF con diseno propio (no solo el navegador imprimiendo la pantalla tal cual) ----
+  // Abre una ventana nueva con un documento HTML propio (encabezado, periodo, tabla, pie de pagina)
+  // y dispara el dialogo de impresion del navegador, que ya trae "Guardar como PDF" como destino.
+  function openPrintWindow(title, subtitle, headers, rows){
+    var win = window.open('', '_blank', 'width=1100,height:750');
+    if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
+    var generado = new Date().toLocaleString('es-CO');
+    var esc = function(v){ return v === null || v === undefined ? '' : String(v); };
+    var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>' +
+      '@page{ margin:14mm; }' +
+      'body{ font-family: Arial, Helvetica, sans-serif; color:#1B2733; margin:0; padding:22px; }' +
+      '.pf-header{ display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #F2941F;padding-bottom:10px;margin-bottom:14px; }' +
+      '.pf-brand{ font-size:11px;color:#5B6B7C;text-transform:uppercase;letter-spacing:.6px; }' +
+      '.pf-header h1{ margin:4px 0 0;font-size:19px;color:#0A3369; }' +
+      '.pf-meta{ font-size:11.5px;color:#5B6B7C;margin:0 0 14px; }' +
+      'table{ width:100%;border-collapse:collapse;font-size:10.5px; }' +
+      'th{ background:#0A3369;color:#fff;text-align:left;padding:5px 7px;white-space:nowrap; }' +
+      'td{ padding:4px 7px;border-bottom:1px solid #DCE3EA; }' +
+      'tr:nth-child(even) td{ background:#F7F9FB; }' +
+      '.pf-footer{ margin-top:16px;font-size:9.5px;color:#9AA7B4;border-top:1px solid #DCE3EA;padding-top:6px; }' +
+      '</style></head><body>' +
+      '<div class="pf-header"><div><div class="pf-brand">Genesis Traza — Trazabilidad</div><h1>' + esc(title) + '</h1></div>' +
+      '<div class="pf-brand">' + esc(generado) + '</div></div>' +
+      (subtitle ? '<p class="pf-meta">' + esc(subtitle) + '</p>' : '') +
+      '<table><thead><tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
+      '</tbody></table>' +
+      '<div class="pf-footer">Módulo Pruebas (sandbox de trazabilidad nativa) — ' + rows.length + ' registro' + (rows.length === 1 ? '' : 's') + '.</div>' +
+      '</body></html>';
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(function(){ win.print(); }, 350);
+  }
+
+  function printPruebasGeneric(){
+    var entity = pruebasEntities[pruebasCurrentEntity];
+    if(!pruebasCurrentRows.length){ alert('No hay registros para imprimir.'); return; }
+    var headers = entity.fields.map(function(f){ return f.label; });
+    var rows = pruebasCurrentRows.map(function(row){
+      return entity.fields.map(function(f){
+        var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
+        if(f.type === 'date' && val) val = gtFormatDate(val);
+        return val;
       });
     });
-    return rows;
-  }
-
-  function exportBmCsv(sep){
-    var rows = buildBmExportRows();
-    if(rows.length === 0){ alert('No hay cantidades registradas para exportar.'); return; }
-    var headers = Object.keys(rows[0]);
-    var lines = [headers.join(sep)];
-    rows.forEach(function(r){
-      lines.push(headers.map(function(h){
-        var v = r[h] === null || r[h] === undefined ? '' : String(r[h]);
-        return v.indexOf(sep) !== -1 ? '"' + v.replace(/"/g, '""') + '"' : v;
-      }).join(sep));
-    });
-    downloadBlob(lines.join('\r\n'), 'balance_masas_' + bmSelectedReciclador.nro_documento + '_' + document.getElementById('bmFecha').value + '.csv', 'text/csv;charset=utf-8;');
-  }
-
-  function exportBmExcel(){
-    var rows = buildBmExportRows();
-    if(rows.length === 0){ alert('No hay cantidades registradas para exportar.'); return; }
-    var headers = Object.keys(rows[0]);
-    var html = '<table><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>' +
-      rows.map(function(r){ return '<tr>' + headers.map(function(h){ return '<td>' + r[h] + '</td>'; }).join('') + '</tr>'; }).join('') +
-      '</table>';
-    downloadBlob(html, 'balance_masas_' + bmSelectedReciclador.nro_documento + '_' + document.getElementById('bmFecha').value + '.xls', 'application/vnd.ms-excel');
+    var subtitle = (pruebasVista === 'asociacion' && pruebasDemoCentro)
+      ? 'Vista Asociación — ' + pruebasDemoCentro.label
+      : 'Vista Administrador — todas las asociaciones';
+    openPrintWindow(entity.label, subtitle, headers, rows);
   }
 
   if(session) initPruebasPage();
