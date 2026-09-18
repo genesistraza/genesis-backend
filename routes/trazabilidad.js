@@ -407,6 +407,68 @@ router.post('/:entity/import', uploadExcel.single('file'), asyncRoute(async (req
   res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: errores.length, detalles: errores.slice(0, 20) });
 }));
 
+// GET /trazabilidad/:entity/template -> plantilla .xlsx con 2 hojas: "Plantilla" (encabezados +
+// una fila de ejemplo, lista para llenar y volver a importar) e "Instrucciones" (que va en cada
+// columna, en qué formato, y para los campos por código/catálogo, cuáles son los valores válidos).
+router.get('/:entity/template', asyncRoute(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+
+  const headers = entity.fields.map((f) => f.label);
+  const exampleRow = {};
+  const instructions = [['Columna', 'Obligatorio', 'Tipo de dato', 'Formato / valores permitidos']];
+
+  for (const f of entity.fields) {
+    let formato = '';
+    let ejemplo = '';
+    if (f.type === 'text') {
+      formato = 'Texto libre.';
+      ejemplo = 'Texto de ejemplo';
+    } else if (f.type === 'number') {
+      formato = 'Número entero.';
+      ejemplo = '1';
+    } else if (f.type === 'decimal') {
+      formato = 'Número decimal, usa punto (no coma). Ejemplo: 12.5';
+      ejemplo = '12.5';
+    } else if (f.type === 'date') {
+      formato = 'Fecha en formato AAAA-MM-DD. Ejemplo: 2026-01-31';
+      ejemplo = '2026-01-31';
+    } else if (f.type === 'select-entity') {
+      const refEntity = getEntity(f.entity);
+      const labelCol = f.labelField === 'id' ? 'id::text' : f.labelField;
+      const sample = await pool.query(`SELECT ${labelCol} AS label FROM ${refEntity.table} ORDER BY 1 LIMIT 5`);
+      const nombres = sample.rows.map((r) => r.label).filter(Boolean);
+      formato = 'Escribe el nombre exacto de "' + refEntity.label + '" (como aparece en ese módulo), o su número de ID.' +
+        (nombres.length ? ' Ejemplos ya cargados: ' + nombres.join(', ') + '.' : '');
+      ejemplo = nombres[0] || '';
+    } else if (f.type === 'select-catalogo') {
+      const options = await pool.query(
+        'SELECT descripcion FROM tz_catalogos WHERE categoria = $1 ORDER BY orden, descripcion',
+        [f.categoria]
+      );
+      const valores = options.rows.map((r) => r.descripcion);
+      formato = 'Debe ser uno de estos valores exactos: ' + valores.join(' | ') + '.';
+      ejemplo = valores[0] || '';
+    }
+    exampleRow[f.label] = ejemplo;
+    instructions.push([f.label, f.required ? 'Sí' : 'No', f.type, formato]);
+  }
+
+  const wb = XLSX.utils.book_new();
+  const wsPlantilla = XLSX.utils.json_to_sheet([exampleRow], { header: headers });
+  wsPlantilla['!cols'] = headers.map(() => ({ wch: 28 }));
+  XLSX.utils.book_append_sheet(wb, wsPlantilla, 'Plantilla');
+
+  const wsInstrucciones = XLSX.utils.aoa_to_sheet(instructions);
+  wsInstrucciones['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 16 }, { wch: 80 }];
+  XLSX.utils.book_append_sheet(wb, wsInstrucciones, 'Instrucciones');
+
+  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_' + req.params.entity + '.xlsx"');
+  res.send(buffer);
+}));
+
 // GET /trazabilidad/balance-masas-dia?id_reciclador=X&fecha=YYYY-MM-DD -> lo que ya está
 // guardado ese día para ese reciclador (una fila por material), para precargar la grilla.
 // Registrada ANTES de /:entity para que Express no la confunda con esa ruta genérica.

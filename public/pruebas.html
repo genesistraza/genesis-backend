@@ -28,6 +28,8 @@
   .pruebas-toolbar .btn{ font-size:12.5px;padding:8px 14px; }
   .pruebas-badge{ font-size:11.5px;color:var(--ink-soft);background:var(--bg-soft, #F3F5F8);border-radius:20px;padding:4px 11px; }
   .pruebas-msg{ font-size:12.5px;margin-top:8px; }
+  #pruebasVistaHint.asociacion{ color:var(--orange);font-weight:600; }
+  #pruebasVistaHint.administrador{ color:var(--ink-soft); }
   @media print{
     body *{ visibility:hidden; }
     .print-area, .print-area *{ visibility:visible; }
@@ -52,11 +54,19 @@
   </div>
 
   <div class="pruebas-nav no-print">
+    <div class="form-field" style="min-width:220px;flex:none;">
+      <label>Vista</label>
+      <select id="pruebasVistaSelect" onchange="onPruebasVistaChange()">
+        <option value="administrador">Administrador (Genesis Traza)</option>
+        <option value="asociacion">Asociación (cliente)</option>
+      </select>
+    </div>
     <div class="form-field">
       <label>Módulo</label>
       <select id="pruebasEntitySelect" onchange="onPruebasEntitySelectChange()"></select>
     </div>
     <p class="pruebas-hint" id="pruebasEntityHint"></p>
+    <p class="pruebas-hint" id="pruebasVistaHint" style="display:none;"></p>
   </div>
 
   <div class="panel" id="pruebasBalanceMasasEnv" style="display:none;">
@@ -107,8 +117,8 @@
       <h2 id="pruebasEntityTitle" style="margin:0;font-size:16px;">Elige un módulo</h2>
       <span class="pruebas-badge" id="pruebasRowCount"></span>
       <span class="spacer"></span>
-      <button type="button" class="btn btn-primary" onclick="openPruebasFormModal()">Nuevo registro</button>
-      <button type="button" class="btn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
+      <button type="button" class="btn btn-primary" id="pruebasNewBtn" onclick="openPruebasFormModal()">Nuevo registro</button>
+      <button type="button" class="btn" id="pruebasImportBtn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
       <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
       <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
       <button type="button" class="btn" onclick="printCurrentView()">Imprimir / PDF</button>
@@ -178,11 +188,73 @@
 
   function initPruebasPage(){
     var loader = document.getElementById('gtPageLoader');
-    if(loader) loader.classList.add('hidden');
-    loadPruebasTab();
+    gtApiFetch('/trazabilidad/centros').then(function(res){
+      if(res.ok){
+        var found = res.data.find(function(c){ return c.cod_centro === 'DEMO-01'; });
+        if(found) pruebasDemoCentro = { id: found.id, label: found.desc_centro };
+      }
+      if(loader) loader.classList.add('hidden');
+      loadPruebasTab();
+    });
   }
 
   function printCurrentView(){ window.print(); }
+
+  // ---- Vista: Administrador (Genesis Traza, todo) vs Asociacion (cliente, solo su centro demo) ----
+  // Es una simulacion visual dentro del sandbox (el rol real de backend sigue siendo "pro" para
+  // poder hacer las pruebas); sirve para ver como se veria cada modulo desde la otra perspectiva.
+  var pruebasVista = 'administrador';
+  var pruebasDemoCentro = null; // {id, label}, se resuelve una vez al cargar la pagina
+  var pruebasRecicladorCentroMap = null;
+  var pruebasMicrorrutaCentroMap = null;
+
+  function onPruebasVistaChange(){
+    pruebasVista = document.getElementById('pruebasVistaSelect').value;
+    updateVistaHint();
+    if(pruebasCurrentEntity === 'balance_masas'){ initBmEnv(); }
+    else if(pruebasCurrentEntity){ fetchAndRenderPruebasTable(); }
+  }
+
+  function updateVistaHint(){
+    var hint = document.getElementById('pruebasVistaHint');
+    hint.style.display = 'block';
+    if(pruebasVista === 'asociacion'){
+      hint.className = 'pruebas-hint asociacion';
+      hint.textContent = pruebasDemoCentro
+        ? 'Viendo como cliente de "' + pruebasDemoCentro.label + '" — solo sus propios datos (ficticios, de prueba).'
+        : 'No hay una asociación demo cargada todavía (corre "npm run seed:demo" en el backend).';
+    } else {
+      hint.className = 'pruebas-hint administrador';
+      hint.textContent = 'Viendo como Genesis Traza: todas las asociaciones, sin restricciones.';
+    }
+  }
+
+  function rowMatchesVista(entityKey, row){
+    if(pruebasVista !== 'asociacion') return true;
+    if(!pruebasDemoCentro) return false;
+    if(entityKey === 'localidades' || entityKey === 'tipos_material') return true;
+    if(entityKey === 'centros') return row.id === pruebasDemoCentro.id;
+    if(entityKey === 'seguridad_social') return pruebasRecicladorCentroMap && pruebasRecicladorCentroMap[row.id_reciclador] === pruebasDemoCentro.id;
+    if(entityKey === 'microrrutas_detalle') return pruebasMicrorrutaCentroMap && pruebasMicrorrutaCentroMap[row.id_formulario_microrruta] === pruebasDemoCentro.id;
+    return row.id_centro === pruebasDemoCentro.id;
+  }
+
+  function ensureVistaLookups(entityKey){
+    if(pruebasVista !== 'asociacion') return Promise.resolve();
+    if(entityKey === 'seguridad_social' && !pruebasRecicladorCentroMap){
+      return gtApiFetch('/trazabilidad/recicladores').then(function(res){
+        pruebasRecicladorCentroMap = {};
+        (res.ok ? res.data : []).forEach(function(r){ pruebasRecicladorCentroMap[r.id] = r.id_centro; });
+      });
+    }
+    if(entityKey === 'microrrutas_detalle' && !pruebasMicrorrutaCentroMap){
+      return gtApiFetch('/trazabilidad/microrrutas').then(function(res){
+        pruebasMicrorrutaCentroMap = {};
+        (res.ok ? res.data : []).forEach(function(r){ pruebasMicrorrutaCentroMap[r.id] = r.id_centro; });
+      });
+    }
+    return Promise.resolve();
+  }
 
   // ---- Pruebas: trazabilidad nativa (sandbox, tablas tz_*) ----
   var pruebasEntities = null;
@@ -191,6 +263,7 @@
   var pruebasOptionsCache = {};
 
   function loadPruebasTab(){
+    updateVistaHint();
     if(pruebasEntities){ renderPruebasEntitySelect(); return; }
     gtApiFetch('/trazabilidad/entities').then(function(res){
       if(!res.ok) return;
@@ -238,24 +311,33 @@
     var entity = pruebasEntities[pruebasCurrentEntity];
     document.getElementById('pruebasEntityTitle').textContent = entity.label;
     document.getElementById('pruebasImportMsg').textContent = '';
+
+    var isCentrosAsCliente = pruebasCurrentEntity === 'centros' && pruebasVista === 'asociacion';
+    document.getElementById('pruebasNewBtn').style.display = isCentrosAsCliente ? 'none' : '';
+    document.getElementById('pruebasImportBtn').style.display = isCentrosAsCliente ? 'none' : '';
+
+    ensureVistaLookups(pruebasCurrentEntity).then(function(){
     gtApiFetch('/trazabilidad/' + pruebasCurrentEntity).then(function(res){
       var thead = document.getElementById('pruebasTableHead');
       var tbody = document.getElementById('pruebasTableBody');
       if(!res.ok){ tbody.innerHTML = '<tr><td class="empty-row">No se pudo cargar.</td></tr>'; return; }
-      pruebasCurrentRows = res.data;
-      document.getElementById('pruebasRowCount').textContent = res.data.length + (res.data.length === 1 ? ' registro' : ' registros');
+      var rows = pruebasVista === 'asociacion'
+        ? res.data.filter(function(row){ return rowMatchesVista(pruebasCurrentEntity, row); })
+        : res.data;
+      pruebasCurrentRows = rows;
+      document.getElementById('pruebasRowCount').textContent = rows.length + (rows.length === 1 ? ' registro' : ' registros');
 
       var headHtml = '<tr>';
       entity.fields.forEach(function(f){ headHtml += '<th>' + f.label + '</th>'; });
       headHtml += '<th class="no-print"></th></tr>';
       thead.innerHTML = headHtml;
 
-      if(res.data.length === 0){
+      if(rows.length === 0){
         tbody.innerHTML = '<tr><td class="empty-row" colspan="' + (entity.fields.length + 1) + '">Sin registros todavía.</td></tr>';
         return;
       }
       tbody.innerHTML = '';
-      res.data.forEach(function(row){
+      rows.forEach(function(row){
         var tr = document.createElement('tr');
         var html = '';
         entity.fields.forEach(function(f){
@@ -270,6 +352,7 @@
         actions[1].addEventListener('click', function(){ deletePruebasRecord(row.id); });
         tbody.appendChild(tr);
       });
+    });
     });
   }
 
@@ -383,16 +466,28 @@
   }
 
   function downloadPruebasTemplate(){
-    var entity = pruebasEntities[pruebasCurrentEntity];
-    var headers = entity.fields.map(function(f){ return f.label; });
-    var example = entity.fields.map(function(f){
-      if(f.type === 'select-entity' || f.type === 'select-catalogo') return 'texto exacto de la opción';
-      if(f.type === 'date') return '2026-01-31';
-      if(f.type === 'number' || f.type === 'decimal') return '0';
-      return 'texto';
+    var msg = document.getElementById('pruebasImportMsg');
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Generando plantilla…';
+    fetch(API_BASE + '/trazabilidad/' + pruebasCurrentEntity + '/template', {
+      headers: { 'Authorization': 'Bearer ' + gtGetToken() }
+    }).then(function(r){
+      if(!r.ok) throw new Error('No se pudo generar la plantilla.');
+      return r.blob();
+    }).then(function(blob){
+      msg.textContent = '';
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'plantilla_' + pruebasCurrentEntity + '.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }).catch(function(){
+      msg.style.color = '#C0392B';
+      msg.textContent = 'No se pudo generar la plantilla.';
     });
-    var lines = [headers.join(','), example.join(',')];
-    downloadBlob(lines.join('\r\n'), 'plantilla_' + pruebasCurrentEntity + '.csv', 'text/csv;charset=utf-8;');
   }
 
   function exportPruebasCsv(){
@@ -463,6 +558,7 @@
     var box = document.getElementById('bmRecicladorResultados');
     if(!q || !bmAllRecicladores){ box.style.display = 'none'; return; }
     var matches = bmAllRecicladores.filter(function(r){
+      if(pruebasVista === 'asociacion' && (!pruebasDemoCentro || r.id_centro !== pruebasDemoCentro.id)) return false;
       return (r.nombre_completo || '').toLowerCase().indexOf(q) !== -1 || (r.nro_documento || '').toLowerCase().indexOf(q) !== -1;
     }).slice(0, 20);
     if(matches.length === 0){ box.innerHTML = '<p style="padding:10px;color:var(--ink-soft);font-size:13px;">Sin resultados.</p>'; box.style.display = 'block'; return; }
