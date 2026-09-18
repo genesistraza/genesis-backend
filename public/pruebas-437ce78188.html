@@ -121,17 +121,19 @@
         <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
         <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
         <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Zona (NUMACRO)</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
+        <div class="form-field"><label>Macrorruta (NUMACRO)</label><select id="bmMacrorruta"><option value="">— Ninguna —</option></select></div>
+        <div class="form-field"><label>Zona interna</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
         <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
       </div>
 
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
         <h2 style="margin:0;font-size:13px;font-weight:700;">Materiales del día</h2>
         <select id="bmFamiliaFilter" class="period-value-select no-print" onchange="renderBmGrid()" style="max-width:220px;"></select>
+        <span class="sep">El destino solo aplica si hay cantidad de rechazo</span>
       </div>
       <div class="table-scroll" style="margin-top:6px;">
         <table class="data-table">
-          <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th></tr></thead>
+          <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th><th>Tipo destino</th><th>N° sitio destino</th></tr></thead>
           <tbody id="bmGridBody"></tbody>
         </table>
       </div>
@@ -198,7 +200,7 @@
     centros: 'Datos de la asociación/prestador: código, nombre y su registro RUP/ECA.',
     bodegas: 'Sitios de acopio (NUECA) donde entra el material recolectado.',
     localidades: 'Localidades de Bogotá usadas para ubicar numacros y usuarios.',
-    numacros: 'Zonas operativas (NUMACRO) dentro de cada centro.',
+    numacros: 'Zonas operativas internas dentro de cada centro (agrupación propia, no es el NUMACRO oficial del SUI — ese es el código de la macrorruta).',
     tipos_material: 'Catálogo de materiales aprovechables y su familia.',
     recicladores: 'Base de datos de recicladores de oficio del centro.',
     balance_masas: 'Registro diario de material recibido por reciclador (tiene su propio entorno).',
@@ -610,6 +612,7 @@
   var bmAllMateriales = null;
   var bmSelectedReciclador = null;
   var bmExistingByMaterial = {};
+  var bmDestinoOptions = null;
 
   function initBmEnv(){
     document.getElementById('bmRecicladorSeleccionado').style.display = 'none';
@@ -628,7 +631,8 @@
 
     var loadRecicladores = bmAllRecicladores ? Promise.resolve() : gtApiFetch('/trazabilidad/recicladores').then(function(res){ bmAllRecicladores = res.ok ? res.data : []; });
     var loadMateriales = bmAllMateriales ? Promise.resolve() : gtApiFetch('/trazabilidad/tipos_material').then(function(res){ bmAllMateriales = res.ok ? res.data : []; });
-    Promise.all([loadRecicladores, loadMateriales]).then(function(){
+    var loadDestinos = bmDestinoOptions ? Promise.resolve() : gtApiFetch('/trazabilidad/catalogo-options/destinos_rechazo').then(function(res){ bmDestinoOptions = res.ok ? res.data : []; });
+    Promise.all([loadRecicladores, loadMateriales, loadDestinos]).then(function(){
       var familias = ['--Todos los materiales'].concat(Array.from(new Set(bmAllMateriales.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       var sel = document.getElementById('bmFamiliaFilter');
       sel.innerHTML = familias.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('');
@@ -666,14 +670,18 @@
 
     Promise.all([
       gtApiFetch('/trazabilidad/bodegas'),
-      gtApiFetch('/trazabilidad/numacros')
+      gtApiFetch('/trazabilidad/numacros'),
+      gtApiFetch('/trazabilidad/macrorrutas')
     ]).then(function(results){
       var bodegas = (results[0].ok ? results[0].data : []).filter(function(b){ return b.id_centro === bmSelectedReciclador.id_centro; });
       var numacros = (results[1].ok ? results[1].data : []).filter(function(n){ return n.id_centro === bmSelectedReciclador.id_centro; });
+      var macrorrutas = (results[2].ok ? results[2].data : []).filter(function(m){ return m.id_centro === bmSelectedReciclador.id_centro; });
       var bodegaSel = document.getElementById('bmBodega');
       bodegaSel.innerHTML = '<option value="">— Ninguna —</option>' + bodegas.map(function(b){ return '<option value="' + b.id + '">' + (b.cod_bodega || '') + ' - ' + (b.desc_bodega || '') + '</option>'; }).join('');
       var numacroSel = document.getElementById('bmNumacro');
       numacroSel.innerHTML = '<option value="">— Ninguna —</option>' + numacros.map(function(n){ return '<option value="' + n.id + '">' + (n.id_localidad_label || n.cod_numacro || '') + '</option>'; }).join('');
+      var macrorrutaSel = document.getElementById('bmMacrorruta');
+      macrorrutaSel.innerHTML = '<option value="">— Ninguna —</option>' + macrorrutas.map(function(m){ return '<option value="' + m.id + '">' + (m.cod_macrorruta || '') + ' - ' + (m.desc_macrorruta || '') + '</option>'; }).join('');
       loadBmDia();
     });
   }
@@ -694,6 +702,7 @@
     var list = familia === '--Todos los materiales' ? ordenados : ordenados.filter(function(m){ return m.desc_familia === familia; });
     var tbody = document.getElementById('bmGridBody');
     tbody.innerHTML = '';
+    var destinoOpts = '<option value="">— Ninguno —</option>' + (bmDestinoOptions || []).map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
     list.forEach(function(m){
       var existing = bmExistingByMaterial[m.id] || {};
       var tr = document.createElement('tr');
@@ -702,20 +711,28 @@
         '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad" value="' + (existing.cantidad || '') + '"></td>' +
         '<td><input type="number" step="0.01" style="width:100%;" data-mat="' + m.id + '" data-field="valor" value="' + (existing.valor || '') + '"></td>' +
         '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad_rechazo" value="' + (existing.cantidad_rechazo || '') + '"></td>' +
-        '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"></td>';
+        '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"></td>' +
+        '<td><select style="width:100%;" data-mat="' + m.id + '" data-field="id_tipo_destino">' + destinoOpts + '</select></td>' +
+        '<td><input type="text" style="width:100%;" data-mat="' + m.id + '" data-field="numero_sitio_destino" value="' + (existing.numero_sitio_destino || '') + '"></td>';
       tbody.appendChild(tr);
+      if(existing.id_tipo_destino) tr.querySelector('[data-field="id_tipo_destino"]').value = existing.id_tipo_destino;
     });
   }
 
+  var BM_TEXT_FIELDS = ['numero_sitio_destino'];
+  var BM_CATALOG_FIELDS = ['id_tipo_destino'];
+
   function saveBmDia(){
     if(!bmSelectedReciclador) return;
-    var inputs = document.querySelectorAll('#bmGridBody input');
+    var inputs = document.querySelectorAll('#bmGridBody input, #bmGridBody select');
     var byMaterial = {};
     inputs.forEach(function(inp){
       var matId = inp.getAttribute('data-mat');
       var field = inp.getAttribute('data-field');
       byMaterial[matId] = byMaterial[matId] || { id_tipo_material: Number(matId) };
-      byMaterial[matId][field] = inp.value === '' ? 0 : Number(inp.value);
+      if(BM_TEXT_FIELDS.indexOf(field) !== -1) byMaterial[matId][field] = inp.value || null;
+      else if(BM_CATALOG_FIELDS.indexOf(field) !== -1) byMaterial[matId][field] = inp.value ? Number(inp.value) : null;
+      else byMaterial[matId][field] = inp.value === '' ? 0 : Number(inp.value);
     });
     var materiales = Object.values(byMaterial);
     var msg = document.getElementById('bmSaveMsg');
@@ -728,6 +745,7 @@
         id_reciclador: bmSelectedReciclador.id,
         id_numacro: document.getElementById('bmNumacro').value || null,
         id_bodega: document.getElementById('bmBodega').value || null,
+        id_macrorruta: document.getElementById('bmMacrorruta').value || null,
         fecha: document.getElementById('bmFecha').value,
         materiales: materiales
       })
@@ -742,22 +760,28 @@
   // ---- Reporte de periodo de Balance de Masas: mismas columnas que el sistema de trazabilidad
   // original (el que recibe la Superintendencia), pero por rango de fechas y para toda la
   // asociacion (o todas, en vista Administrador) en vez de un solo reciclador/dia.
+  // Las 11 columnas EXACTAS del formato "Balance de Masas" que valida el SUI (Anexo A del
+  // Instructivo de cargue de aprovechamiento), en el mismo orden, con los codigos numericos
+  // que exige el validador (no texto libre): tipo de identificacion 1=CC/2=CE/3=Pasaporte/4=NIT,
+  // tipo de sitio de destino 1=Relleno sanitario/2=Estacion de transferencia. La cantidad y el
+  // rechazo se capturan en kg pero el formato pide toneladas, por eso se dividen entre 1000.
+  // El "numero de semana" es la semana DENTRO DEL MES (1 a 5), no la semana del año.
   function bmReportRowToOldFormat(row){
-    var d = new Date(row.fecha + (String(row.fecha).length <= 10 ? 'T00:00:00' : ''));
-    var oneJan = new Date(d.getFullYear(), 0, 1);
-    var numeroSemana = Math.ceil((((d - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
-    var fechaStr = typeof row.fecha === 'string' ? row.fecha.slice(0, 10) : gtFormatDate(row.fecha);
-    var nueca = (row.cod_bodega || '') + (row.desc_bodega ? ' - ' + row.desc_bodega : '');
+    var fechaStr = String(row.fecha).slice(0, 10);
+    var diaDelMes = Number(fechaStr.split('-')[2]);
+    var numeroSemana = Math.min(5, Math.ceil(diaDelMes / 7));
     return {
-      NUECA: nueca, NUMACRO: row.cod_numacro || '', 'Numero de semana': numeroSemana,
-      'Tipo ident.': 'CC', 'Nro ident.': row.nro_documento || '',
-      placa: row.placa || '', toneladas: (Number(row.cantidad) / 1000),
-      'Tipo Material': row.desc_tipo_material || '', Toneladas_rechazo: (Number(row.cantidad_rechazo) / 1000),
-      'Tipo de destino': 'ECA', 'Número único del sitio de destino': row.cod_bodega || '',
-      Asociacion: row.centro || '', fecha: fechaStr,
-      nombre_completo: row.nombre_completo || '',
-      valor_kilogramo: Number(row.valor), valor_total: Number(row.valor) * Number(row.cantidad),
-      cantidad_rechazo: Number(row.cantidad_rechazo), cantidad_nosui: Number(row.cantidad_nosui)
+      NUECA: row.cod_bodega || '',
+      NUMACRO: row.cod_macrorruta || '',
+      'Numero de semana': numeroSemana,
+      'Tipo identificacion reciclador': row.codigo_tipo_identificacion || '',
+      'Numero identificacion reciclador': row.nro_documento || '',
+      Placa: row.placa || '',
+      'Cantidad material entrante (Ton)': (Number(row.cantidad) / 1000),
+      'Tipo material entrante': row.cod_tipo_material || '',
+      'Rechazo material entrante (Ton)': (Number(row.cantidad_rechazo) / 1000),
+      'Tipo sitio destino': row.codigo_tipo_destino || '',
+      'Numero sitio destino': row.numero_sitio_destino || ''
     };
   }
 

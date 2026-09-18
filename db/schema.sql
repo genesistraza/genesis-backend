@@ -485,6 +485,18 @@ CREATE TABLE IF NOT EXISTS tz_seguridad_social (
   UNIQUE (id_reciclador)
 );
 
+-- Correccion de formato: el cargue real de "Balance de Masas" que recibe el validador del SUI
+-- (Anexo A del Instructivo de cargue de aprovechamiento) tiene exactamente 11 columnas con
+-- codigos numericos fijos (no texto libre): NUECA, NUMACRO, numero de semana del MES (1-5, no
+-- semana del año), tipo/numero de identificacion del reciclador, placa, cantidad entrante,
+-- tipo de material (codigo DTGA vigente, no la descripcion), rechazo, tipo de sitio de destino
+-- (1=Relleno sanitario, 2=Estacion de transferencia) y el numero unico de ese sitio de destino.
+-- Los catalogos 'tipos_identificacion' y 'destinos_rechazo' ya existian con los codigos
+-- correctos (1/2/3/4 y 1/2) pero no estaban conectados a ninguna tabla; se conectan aqui.
+ALTER TABLE tz_recicladores ADD COLUMN IF NOT EXISTS id_tipo_identificacion INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_tipo_destino INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS numero_sitio_destino VARCHAR(60);
+
 -- Semilla de catalogos para los modulos nuevos
 INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
 ('formalizacion_estado','pendiente','Pendiente',NULL,1),

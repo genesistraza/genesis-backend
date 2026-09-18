@@ -65,6 +65,7 @@ const ENTITIES = {
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
       { name: 'nombre_completo', label: 'Nombre completo', type: 'text', required: true },
+      { name: 'id_tipo_identificacion', label: 'Tipo de identificación', type: 'select-catalogo', categoria: 'tipos_identificacion', required: true },
       { name: 'nro_documento', label: 'Documento', type: 'text', required: true },
       { name: 'estado', label: 'Estado', type: 'text' },
       { name: 'fecha_exp_documento', label: 'Fecha expedición doc.', type: 'date' },
@@ -88,7 +89,9 @@ const ENTITIES = {
       { name: 'cantidad', label: 'Cantidad (kg)', type: 'decimal' },
       { name: 'valor', label: 'Valor/kg', type: 'decimal' },
       { name: 'cantidad_rechazo', label: 'Cantidad rechazo', type: 'decimal' },
-      { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' }
+      { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' },
+      { name: 'id_tipo_destino', label: 'Tipo de sitio de destino', type: 'select-catalogo', categoria: 'destinos_rechazo' },
+      { name: 'numero_sitio_destino', label: 'Número único del sitio de destino', type: 'text' }
     ]
   },
   macrorrutas: {
@@ -476,7 +479,7 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
   const { id_reciclador, fecha } = req.query;
   if (!id_reciclador || !fecha) return res.status(400).json({ error: 'Falta id_reciclador o fecha.' });
   const result = await pool.query(
-    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui
+    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
     [id_reciclador, fecha]
   );
@@ -486,8 +489,10 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
 // POST /trazabilidad/balance-masas-dia -> guarda de una vez todas las filas de material con
 // datos de un reciclador en un día (reemplaza lo que hubiera ese mismo reciclador+fecha),
 // igual a como se llena la grilla real: se escribe lo que aplica y se guarda una sola vez.
+// id_tipo_destino/numero_sitio_destino son por material (el rechazo de cada material puede ir
+// a un sitio de destino distinto), tal como lo exige el formato real de Balance de Masas.
 router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
-  const { id_centro, id_reciclador, id_numacro, id_bodega, fecha, materiales } = req.body;
+  const { id_centro, id_reciclador, id_numacro, id_bodega, id_macrorruta, fecha, materiales } = req.body;
   if (!id_centro || !id_reciclador || !fecha || !Array.isArray(materiales)) {
     return res.status(400).json({ error: 'Faltan datos obligatorios.' });
   }
@@ -499,10 +504,11 @@ router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
     for (const m of filas) {
       await client.query(
         `INSERT INTO tz_formulario_balance_masas
-         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, fecha,
-          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0]
+         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, id_macrorruta || null, fecha,
+          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0,
+          m.id_tipo_destino || null, m.numero_sitio_destino || null]
       );
     }
     await client.query('COMMIT');
@@ -531,17 +537,22 @@ router.get('/balance-masas-export', asyncRoute(async (req, res) => {
   }
   const result = await pool.query(
     `SELECT bm.fecha, bm.cantidad, bm.valor, bm.cantidad_rechazo, bm.cantidad_nosui,
+            bm.numero_sitio_destino,
             c.desc_centro AS centro,
             b.cod_bodega, b.desc_bodega,
-            n.cod_numacro,
+            m.cod_macrorruta,
             r.nro_documento, r.nombre_completo, r.placa,
-            tm.desc_tipo_material
+            tid.codigo AS codigo_tipo_identificacion,
+            tm.cod_tipo_material, tm.desc_tipo_material,
+            tdes.codigo AS codigo_tipo_destino
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_centros c ON c.id = bm.id_centro
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
-     LEFT JOIN tz_numacros n ON n.id = bm.id_numacro
+     LEFT JOIN tz_macrorrutas m ON m.id = bm.id_macrorruta
      LEFT JOIN tz_recicladores r ON r.id = bm.id_reciclador
+     LEFT JOIN tz_catalogos tid ON tid.id = r.id_tipo_identificacion
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+     LEFT JOIN tz_catalogos tdes ON tdes.id = bm.id_tipo_destino
      WHERE ${where}
      ORDER BY bm.fecha, r.nombre_completo`,
     params
