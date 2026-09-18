@@ -485,6 +485,13 @@ CREATE TABLE IF NOT EXISTS tz_seguridad_social (
   UNIQUE (id_reciclador)
 );
 
+-- Datos de encabezado del centro/asociacion, para membretar documentos imprimibles
+-- (planillas de recepcion, facturas) igual a como los usa la asociacion en la vida real.
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS nit VARCHAR(30);
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS direccion VARCHAR(255);
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS telefono VARCHAR(60);
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS correo VARCHAR(120);
+
 -- Correccion de formato: el cargue real de "Balance de Masas" que recibe el validador del SUI
 -- (Anexo A del Instructivo de cargue de aprovechamiento) tiene exactamente 11 columnas con
 -- codigos numericos fijos (no texto libre): NUECA, NUMACRO, numero de semana del MES (1-5, no

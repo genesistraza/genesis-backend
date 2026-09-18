@@ -106,6 +106,15 @@
     </div>
 
     <div class="pruebas-toolbar no-print" style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;">
+      <h2>Planillas de recepción (por reciclador)</h2>
+      <span class="spacer"></span>
+      <select id="bmPlanillaMes" style="width:120px;"></select>
+      <input type="number" id="bmPlanillaAnio" style="width:80px;" placeholder="Año">
+      <button type="button" class="btn btn-primary" onclick="descargarPlanillasZip()">Descargar todas (.zip)</button>
+    </div>
+    <p class="pruebas-msg no-print" id="bmPlanillaMsg"></p>
+
+    <div class="pruebas-toolbar no-print" style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;">
       <h2>Captura diaria</h2>
     </div>
     <div class="form-field no-print" style="max-width:380px;">
@@ -636,6 +645,46 @@
       var familias = ['--Todos los materiales'].concat(Array.from(new Set(bmAllMateriales.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       var sel = document.getElementById('bmFamiliaFilter');
       sel.innerHTML = familias.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('');
+    });
+
+    var mesSel = document.getElementById('bmPlanillaMes');
+    if(!mesSel.options.length){
+      var meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+      var hoy = new Date();
+      mesSel.innerHTML = meses.map(function(m, i){ return '<option value="' + (i + 1) + '">' + m + '</option>'; }).join('');
+      mesSel.value = hoy.getMonth() + 1;
+      document.getElementById('bmPlanillaAnio').value = hoy.getFullYear();
+    }
+  }
+
+  // ---- Planillas de recepcion mensuales por reciclador (comprobante de lo entregado por
+  // semana), descargadas como un .zip con un PDF por reciclador que tuvo entregas ese mes. ----
+  function descargarPlanillasZip(){
+    var idCentro = pruebasVista === 'asociacion' && pruebasDemoCentro ? pruebasDemoCentro.id : '';
+    if(!idCentro){ alert('Elige la vista "Asociación" (o selecciona un centro) para saber de qué asociación generar las planillas.'); return; }
+    var mes = document.getElementById('bmPlanillaMes').value;
+    var anio = document.getElementById('bmPlanillaAnio').value;
+    if(!anio){ alert('Escribe el año.'); return; }
+    var msg = document.getElementById('bmPlanillaMsg');
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Generando planillas…';
+    var url = API_BASE + '/trazabilidad/planillas-recepcion?anio=' + anio + '&mes=' + mes + '&id_centro=' + idCentro;
+    fetch(url, { headers: { 'Authorization': 'Bearer ' + gtGetToken() } }).then(function(r){
+      if(!r.ok) return r.json().then(function(data){ throw new Error(data.error || 'No se pudo generar.'); });
+      return r.blob();
+    }).then(function(blob){
+      msg.textContent = '';
+      var blobUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = 'Planillas_Recepcion_' + document.getElementById('bmPlanillaMes').selectedOptions[0].textContent + anio + '.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    }).catch(function(err){
+      msg.style.color = '#C0392B';
+      msg.textContent = err.message;
     });
   }
 

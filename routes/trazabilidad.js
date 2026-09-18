@@ -6,9 +6,12 @@
 const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
+const PDFDocument = require('pdfkit');
+const archiver = require('archiver');
 const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
+const { drawPlanilla, weekBucketRanges, bucketForDay, slugName } = require('../utils/planillaPdf');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('pro'));
@@ -20,6 +23,10 @@ const ENTITIES = {
     fields: [
       { name: 'cod_centro', label: 'Código', type: 'text' },
       { name: 'desc_centro', label: 'Nombre', type: 'text', required: true },
+      { name: 'nit', label: 'NIT', type: 'text' },
+      { name: 'direccion', label: 'Dirección', type: 'text' },
+      { name: 'telefono', label: 'Teléfono', type: 'text' },
+      { name: 'correo', label: 'Correo', type: 'text' },
       { name: 'rup_numero', label: 'Número RUP', type: 'text' },
       { name: 'rup_fecha_inscripcion', label: 'Fecha inscripción RUP', type: 'date' },
       { name: 'eca_numero', label: 'Número ECA', type: 'text' }
@@ -558,6 +565,103 @@ router.get('/balance-masas-export', asyncRoute(async (req, res) => {
     params
   );
   res.json(result.rows);
+}));
+
+// GET /trazabilidad/planillas-recepcion?anio=&mes=&id_centro=[&id_reciclador=] -> planilla(s)
+// mensual(es) de recepcion de material por reciclador (comprobante de lo entregado esa semana,
+// agrupado en 4 bloques dentro del mes), en el mismo formato que ya se usaba en la asociacion.
+// Sin id_reciclador devuelve un .zip con una planilla por cada reciclador que tuvo entregas ese
+// mes; con id_reciclador devuelve un solo PDF. Registrada antes de /:entity.
+router.get('/planillas-recepcion', asyncRoute(async (req, res) => {
+  const { anio, mes, id_centro, id_reciclador } = req.query;
+  if (!anio || !mes || !id_centro) return res.status(400).json({ error: 'Falta anio, mes o id_centro.' });
+  const anioNum = Number(anio);
+  const mesNum = Number(mes);
+  if (!anioNum || !mesNum || mesNum < 1 || mesNum > 12) return res.status(400).json({ error: 'Mes o año inválido.' });
+
+  const centroRes = await pool.query('SELECT desc_centro, nit, direccion, telefono, correo FROM tz_centros WHERE id = $1', [id_centro]);
+  if (centroRes.rows.length === 0) return res.status(404).json({ error: 'Centro no encontrado.' });
+  const centro = centroRes.rows[0];
+
+  const desde = `${anio}-${String(mesNum).padStart(2, '0')}-01`;
+  const lastDay = new Date(anioNum, mesNum, 0).getDate();
+  const hasta = `${anio}-${String(mesNum).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+  const params = [id_centro, desde, hasta];
+  let recFilter = '';
+  if (id_reciclador) {
+    params.push(id_reciclador);
+    recFilter = ' AND bm.id_reciclador = $4';
+  }
+
+  const rowsRes = await pool.query(
+    `SELECT bm.fecha, bm.cantidad, bm.id_reciclador,
+            r.nombre_completo, r.nro_documento, r.tipo_de_vehiculo, r.placa,
+            b.desc_bodega, mr.cod_macrorruta,
+            tm.desc_tipo_material, tm.secuencia_orden
+     FROM tz_formulario_balance_masas bm
+     JOIN tz_recicladores r ON r.id = bm.id_reciclador
+     LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
+     LEFT JOIN tz_macrorrutas mr ON mr.id = bm.id_macrorruta
+     LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+     WHERE bm.id_centro = $1 AND bm.fecha BETWEEN $2 AND $3${recFilter}
+     ORDER BY r.nombre_completo, tm.secuencia_orden`,
+    params
+  );
+  if (rowsRes.rows.length === 0) return res.status(404).json({ error: 'No hay datos de balance de masas para ese periodo.' });
+
+  const ranges = weekBucketRanges(anioNum, mesNum);
+  const porReciclador = new Map();
+  for (const r of rowsRes.rows) {
+    if (!porReciclador.has(r.id_reciclador)) {
+      porReciclador.set(r.id_reciclador, { reciclador: r, materiales: new Map(), bodega: r.desc_bodega, macrorruta: r.cod_macrorruta });
+    }
+    const entry = porReciclador.get(r.id_reciclador);
+    const matKey = r.desc_tipo_material || 'Sin material';
+    if (!entry.materiales.has(matKey)) entry.materiales.set(matKey, [0, 0, 0, 0]);
+    const dia = Number(String(r.fecha).slice(8, 10));
+    entry.materiales.get(matKey)[bucketForDay(dia, ranges)] += Number(r.cantidad);
+  }
+
+  const periodoLabel = `${desde} a ${hasta}`;
+  function buildData(entry) {
+    const materiales = [...entry.materiales.entries()].map(([nombre, vals]) => ({ nombre, vals, total: vals.reduce((a, b) => a + b, 0) }));
+    const totalPorSemana = [0, 0, 0, 0];
+    materiales.forEach((m) => m.vals.forEach((v, i) => { totalPorSemana[i] += v; }));
+    const totalPeriodo = totalPorSemana.reduce((a, b) => a + b, 0);
+    return { centro, reciclador: entry.reciclador, bodega: entry.bodega, macrorruta: entry.macrorruta, periodoLabel, ranges, materiales, totalPorSemana, totalPeriodo };
+  }
+
+  await logActivity(req.user.id, 'pruebas_planillas_generadas', { id_centro, anio: anioNum, mes: mesNum, id_reciclador: id_reciclador || null, recicladores: porReciclador.size }, req.ip);
+
+  if (id_reciclador) {
+    const entry = [...porReciclador.values()][0];
+    if (!entry) return res.status(404).json({ error: 'No hay datos para ese reciclador en el periodo.' });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="planilla_${entry.reciclador.nro_documento}_${slugName(entry.reciclador.nombre_completo)}.pdf"`);
+    const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+    doc.pipe(res);
+    drawPlanilla(doc, buildData(entry));
+    doc.end();
+    return;
+  }
+
+  const mesesLargo = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="Planillas_Recepcion_${mesesLargo[mesNum - 1]}${anio}.zip"`);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.pipe(res);
+  for (const entry of porReciclador.values()) {
+    const doc = new PDFDocument({ size: 'LETTER', margin: 40 });
+    const chunks = [];
+    doc.on('data', (c) => chunks.push(c));
+    const done = new Promise((resolve) => doc.on('end', resolve));
+    drawPlanilla(doc, buildData(entry));
+    doc.end();
+    await done;
+    archive.append(Buffer.concat(chunks), { name: `Planillas_Individuales/planilla_${entry.reciclador.nro_documento}_${slugName(entry.reciclador.nombre_completo)}.pdf` });
+  }
+  await archive.finalize();
 }));
 
 // GET /trazabilidad/:entity/options?labelField=xxx -> opciones {value,label} para un select-entity
