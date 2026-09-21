@@ -528,7 +528,8 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
   const { id_reciclador, fecha } = req.query;
   if (!id_reciclador || !fecha) return res.status(400).json({ error: 'Falta id_reciclador o fecha.' });
   const result = await pool.query(
-    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino
+    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino,
+            id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
     [id_reciclador, fecha]
   );
@@ -541,7 +542,7 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
 // id_tipo_destino/numero_sitio_destino son por material (el rechazo de cada material puede ir
 // a un sitio de destino distinto), tal como lo exige el formato real de Balance de Masas.
 router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
-  const { id_centro, id_reciclador, id_numacro, id_bodega, id_macrorruta, fecha, materiales } = req.body;
+  const { id_centro, id_reciclador, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, materiales } = req.body;
   if (!id_centro || !id_reciclador || !fecha || !Array.isArray(materiales)) {
     return res.status(400).json({ error: 'Faltan datos obligatorios.' });
   }
@@ -553,9 +554,10 @@ router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
     for (const m of filas) {
       await client.query(
         `INSERT INTO tz_formulario_balance_masas
-         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, id_macrorruta || null, fecha,
+         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, id_macrorruta || null,
+          id_microrruta_1 || null, id_microrruta_2 || null, fecha,
           m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0,
           m.id_tipo_destino || null, m.numero_sitio_destino || null]
       );

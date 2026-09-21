@@ -63,6 +63,47 @@
   .pruebas-shell table.data-table td{ padding:6px 9px;font-size:12px; }
   .pruebas-shell .form-field{ margin-bottom:8px; }
   .pruebas-shell .form-field label{ font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft); }
+  .bm-bar{ display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding-bottom:6px;margin-bottom:8px;border-bottom:1px solid var(--line); }
+  .bm-bar h2{ margin:0 12px 0 0;font-size:14px;font-weight:700;color:var(--ink-soft); }
+  .bm-bar input[type="date"]{ font-size:12px;padding:3px 6px;height:28px;width:132px; }
+  .bm-ic{ width:34px;height:34px;border:none;background:transparent;color:#4A6FA5;cursor:pointer;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;padding:0; }
+  .bm-ic:hover{ background:#EAF0F8; }
+  .bm-ic svg{ width:22px;height:22px;fill:currentColor; }
+  .bm-sep{ width:14px; }
+  .bm-reportes{ background:#F7F9FB;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px; }
+  .bm-rep-row{ display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;padding:3px 0; }
+  .bm-rep-row strong{ min-width:150px;font-size:12px; }
+  .bm-rep-row input[type="date"], .bm-rep-row select, .bm-rep-row input[type="number"]{ font-size:12px;padding:3px 6px;height:28px; }
+  .bm-rep-row .btn{ font-size:11.5px;padding:4px 10px; }
+  .bm-form{ display:grid;grid-template-columns:110px minmax(0,1fr) 90px minmax(0,1fr);gap:6px 12px;align-items:center;margin-bottom:8px; }
+  .bm-form label{ font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft); }
+  .bm-form input, .bm-form select{ height:27px;padding:2px 7px;font-size:12px;border:1px solid #C5CFDB;border-radius:3px;background:#fff;width:100%;box-sizing:border-box; }
+  .bm-form input:disabled, .bm-form select:disabled{ background:#F1F3F5;color:#6B7785; }
+  .bm-gridwrap{ max-height:58vh;overflow:auto;border:1px solid #23408E; }
+  .bm-grid{ width:100%;border-collapse:collapse;font-size:11.5px; }
+  .bm-grid th, .bm-grid td{ border:1px solid #D6DDE6;padding:0 6px;height:24px; }
+  .bm-grid thead th{ background:#fff;color:#23408E;font-weight:700;text-align:center;position:sticky;z-index:2; }
+  .bm-grid thead tr:nth-child(1) th{ top:0; }
+  .bm-grid thead tr:nth-child(2) th{ top:24px; }
+  .bm-grid thead tr:nth-child(3) th{ top:48px;font-size:10.5px;font-weight:600;color:var(--ink-soft); }
+  .bm-grid .bm-c1{ width:170px;text-align:left; }
+  .bm-grid thead select{ font-size:11px;height:20px;width:100%;padding:0 2px; }
+  .bm-grid tbody td:first-child{ color:var(--ink-soft);white-space:nowrap; }
+  .bm-grid tbody input, .bm-grid tbody select{ width:100%;height:22px;border:none;background:transparent;font-size:11.5px;text-align:right;box-sizing:border-box;padding:0 2px; }
+  .bm-grid tbody select{ text-align:left; }
+  .bm-grid tbody input:disabled, .bm-grid tbody select:disabled{ background:#F3F3F3;cursor:not-allowed; }
+  .bm-grid tbody input:focus, .bm-grid tbody select:focus{ outline:2px solid #4A6FA5;background:#fff; }
+  .bm-grid td.bm-tot{ text-align:right;background:#F7F8FA;color:#23408E; }
+  .bm-grid tfoot{ position:sticky;bottom:0; }
+  .bm-grid tfoot th, .bm-grid tfoot td{ background:#EEF2F8;font-weight:700;color:#23408E;text-align:right;border-top:2px solid #23408E; }
+  .bm-note{ margin:6px 0 0;font-size:11px;color:var(--ink-soft); }
+  .bm-pick-filters{ display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px;margin:4px 0 8px; }
+  .bm-pick-filters input{ height:30px;padding:2px 8px;font-size:12px;border:1px solid #C5CFDB;border-radius:4px; }
+  .bm-pick-list{ max-height:52vh;overflow:auto;border-top:1px solid var(--line); }
+  .bm-pick-row{ display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px;padding:7px 6px;font-size:12px;color:#23408E;border-bottom:1px solid #EEF1F5;cursor:pointer; }
+  .bm-pick-row:nth-child(odd){ background:#FBF8F8; }
+  .bm-pick-row:hover{ background:#E8D5CE; }
+  @media (max-width:640px){ .bm-form{ grid-template-columns:90px minmax(0,1fr); } .bm-pick-filters{ grid-template-columns:1fr; } .bm-pick-row{ grid-template-columns:1fr; } }
   @media print{
     body *{ visibility:hidden; }
     .no-print{ display:none !important; }
@@ -91,66 +132,73 @@
   <div class="pm-bar pruebas-menu-row no-print" id="pruebasMenuBar"></div>
   <p class="pruebas-hint no-print" id="pruebasVistaHint"></p>
 
-  <div class="panel" id="pruebasBalanceMasasEnv" style="display:none;">
-    <div class="pruebas-toolbar no-print">
-      <h2>Balance de Masas — Reporte de periodo</h2>
-      <span class="pruebas-badge" title="Mismo formato de columnas que recibe la Superintendencia en el sistema de trazabilidad original">formato Superintendencia</span>
-      <span class="spacer"></span>
-      <span class="sep">Desde</span>
-      <input type="date" id="bmExportDesde">
-      <span class="sep">Hasta</span>
-      <input type="date" id="bmExportHasta">
-      <button type="button" class="btn" onclick="exportBmReporte('xlsx')">Excel</button>
-      <button type="button" class="btn" onclick="exportBmReporte('csv-comma')">CSV</button>
-      <button type="button" class="btn" onclick="exportBmReporte('csv-semicolon')">CSV (;)</button>
+  <div class="panel bm-panel" id="pruebasBalanceMasasEnv" style="display:none;">
+    <div class="bm-bar no-print">
+      <h2>Balance de Masas</h2>
+      <button type="button" class="bm-ic" title="Buscar reciclador" onclick="openBmPicker()"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="4.2"/><path d="M3.5 21c0-4.7 3.8-7.5 8.5-7.5s8.5 2.8 8.5 7.5z"/></svg></button>
+      <input type="date" id="bmFecha" title="Fecha" onchange="loadBmDia()">
+      <button type="button" class="bm-ic" title="Guardar el día" onclick="saveBmDia()"><svg viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4z M7 3v5h9V3 M7 13h10v8H7z" fill-rule="evenodd"/></svg></button>
+      <button type="button" class="bm-ic" title="Borrar el día de este reciclador" onclick="deleteBmDia()"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"/></svg></button>
+      <span class="bm-sep"></span>
+      <button type="button" class="bm-ic" title="Imprimir factura del día (PDF)" onclick="printBmGrid()"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7z M4 8h16a1 1 0 0 1 1 1v8h-4v4H7v-4H3V9a1 1 0 0 1 1-1z M9 15h6v4H9z" fill-rule="evenodd"/></svg></button>
+      <button type="button" class="bm-ic" id="bmReportesBtn" title="Reportes: exportar al formato de la Super y planillas" onclick="toggleBmReportes()"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5z M13 3v6h6 M11 12v5l-2-2-1.4 1.4L12 20.8l4.4-4.4L15 15l-2 2v-5z" fill-rule="evenodd"/></svg></button>
+      <span class="pruebas-msg" id="bmSaveMsg"></span>
     </div>
 
-    <div class="pruebas-toolbar no-print" style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;">
-      <h2>Planillas de recepción (por reciclador)</h2>
-      <span class="spacer"></span>
-      <select id="bmPlanillaMes" style="width:120px;"></select>
-      <input type="number" id="bmPlanillaAnio" style="width:80px;" placeholder="Año">
-      <button type="button" class="btn btn-primary" onclick="descargarPlanillasZip()">Descargar todas (.zip)</button>
+    <div class="bm-reportes no-print" id="bmReportes" style="display:none;">
+      <div class="bm-rep-row">
+        <strong>Formato Superintendencia</strong>
+        <span class="sep">Desde</span><input type="date" id="bmExportDesde">
+        <span class="sep">Hasta</span><input type="date" id="bmExportHasta">
+        <button type="button" class="btn" onclick="exportBmReporte('xlsx')">Excel</button>
+        <button type="button" class="btn" onclick="exportBmReporte('csv-comma')">CSV</button>
+        <button type="button" class="btn" onclick="exportBmReporte('csv-semicolon')">CSV (;)</button>
+      </div>
+      <div class="bm-rep-row">
+        <strong>Planillas de recepción</strong>
+        <select id="bmPlanillaMes" style="width:110px;"></select>
+        <input type="number" id="bmPlanillaAnio" style="width:70px;" placeholder="Año">
+        <button type="button" class="btn" onclick="descargarPlanillasZip()">Descargar todas (.zip)</button>
+        <span class="pruebas-msg" id="bmPlanillaMsg"></span>
+      </div>
     </div>
-    <p class="pruebas-msg no-print" id="bmPlanillaMsg"></p>
 
-    <div class="pruebas-toolbar no-print" style="border-top:1px solid var(--line);padding-top:8px;margin-top:2px;">
-      <h2>Captura diaria</h2>
+    <div class="bm-form">
+      <label>Nombre</label><input id="bmNombre" readonly placeholder="Clic en el ícono de persona para buscar…" onclick="openBmPicker()" style="cursor:pointer;">
+      <label>Cédula</label><input id="bmCedula" disabled>
+      <label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled>
+      <label>Placa</label><input id="bmPlaca" disabled>
+      <label>NUECA</label><select id="bmBodega" disabled><option value="">— Seleccionar —</option></select>
+      <label>NUMACRO</label><select id="bmMacrorruta" disabled><option value="">— Seleccionar —</option></select>
+      <label>Microruta 1</label><select id="bmMicrorruta1" disabled><option value="">— Seleccionar —</option></select>
+      <label>Microruta 2</label><select id="bmMicrorruta2" disabled><option value="">— Seleccionar —</option></select>
     </div>
-    <div class="form-field no-print" style="max-width:380px;">
-      <label>Buscar reciclador (nombre o cédula)</label>
-      <input id="bmBuscarReciclador" placeholder="Escribe para buscar…" oninput="onBmBuscarRecicladorInput()" autocomplete="off">
+
+    <div class="bm-gridwrap">
+      <table class="bm-grid">
+        <thead>
+          <tr><th class="bm-c1" rowspan="1"></th><th colspan="7" id="bmFechaTitulo">—</th></tr>
+          <tr><th class="bm-c1"><select id="bmFamiliaFilter" class="no-print" onchange="renderBmGrid()"></select></th><th colspan="7" id="bmDiaSemana"></th></tr>
+          <tr><th class="bm-c1"></th><th>Cantidad (Kilogramos)</th><th>Valor</th><th>Total</th><th>Cantidad rechazo</th><th>Cantidad no SUI</th><th>Tipo destino</th><th>N° sitio destino</th></tr>
+        </thead>
+        <tbody id="bmGridBody"></tbody>
+        <tfoot><tr><th class="bm-c1" style="text-align:left;">Total</th><td id="bmTotCantidad">0,00</td><td></td><td id="bmTotValor">0,00</td><td id="bmTotRechazo">0,00</td><td id="bmTotNoSui">0,00</td><td></td><td></td></tr></tfoot>
+      </table>
     </div>
-    <div id="bmRecicladorResultados" class="table-scroll no-print" style="max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;margin-top:6px;display:none;"></div>
+    <p class="bm-note no-print">El tipo y el número del sitio de destino solo aplican si hay cantidad de rechazo.</p>
 
-    <div id="bmRecicladorSeleccionado" style="display:none;margin-top:10px;">
-      <div class="form-grid">
-        <div class="form-field"><label>Nombre</label><input id="bmNombre" disabled></div>
-        <div class="form-field"><label>Cédula</label><input id="bmCedula" disabled></div>
-        <div class="form-field"><label>Tipo vehículo</label><input id="bmTipoVehiculo" disabled></div>
-        <div class="form-field"><label>Placa</label><input id="bmPlaca" disabled></div>
-        <div class="form-field"><label>Bodega (NUECA)</label><select id="bmBodega"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Macrorruta (NUMACRO)</label><select id="bmMacrorruta"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Zona interna</label><select id="bmNumacro"><option value="">— Ninguna —</option></select></div>
-        <div class="form-field"><label>Fecha</label><input type="date" id="bmFecha" onchange="loadBmDia()"></div>
+    <div class="modal-overlay" id="bmPickerOverlay">
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeBmPicker()" title="Cerrar">&times;</button>
+        <div class="modal-scroll">
+          <div class="bm-pick-filters">
+            <input id="bmPickDoc" placeholder="Nro. Doc." oninput="renderBmPicker()" autocomplete="off">
+            <input id="bmPickNombre" placeholder="Nombre completo" oninput="renderBmPicker()" autocomplete="off">
+            <input id="bmPickAsoc" placeholder="Asociación" oninput="renderBmPicker()" autocomplete="off">
+          </div>
+          <div class="bm-pick-list" id="bmPickList"></div>
+        </div>
       </div>
-
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;">
-        <h2 style="margin:0;font-size:13px;font-weight:700;">Materiales del día</h2>
-        <select id="bmFamiliaFilter" class="period-value-select no-print" onchange="renderBmGrid()" style="max-width:220px;"></select>
-        <span class="sep">El destino solo aplica si hay cantidad de rechazo</span>
-      </div>
-      <div class="table-scroll" style="margin-top:6px;">
-        <table class="data-table">
-          <thead><tr><th>Material</th><th>Cantidad (kg)</th><th>Valor</th><th>Cant. rechazo</th><th>Cant. no SUI</th><th>Tipo destino</th><th>N° sitio destino</th></tr></thead>
-          <tbody id="bmGridBody"></tbody>
-        </table>
-      </div>
-      <div class="no-print" style="margin-top:10px;display:flex;gap:8px;">
-        <button class="btn btn-primary" onclick="saveBmDia()">Guardar</button>
-        <button class="btn" onclick="printBmGrid()">Generar factura (PDF)</button>
-      </div>
-      <p class="pruebas-msg no-print" id="bmSaveMsg"></p>
     </div>
   </div>
 
@@ -624,10 +672,39 @@
   var bmExistingByMaterial = {};
   var bmDestinoOptions = null;
 
+  var BM_MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var BM_DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+
+  function toggleBmReportes(){
+    var box = document.getElementById('bmReportes');
+    box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function fmtNum(n){
+    return Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // Titulo de la grilla: fecha larga + dia de la semana, armados desde los digitos del string
+  // (sin pasar por Date/zona horaria) para que nunca se corra un dia en Colombia.
+  function updateBmFechaTitulo(){
+    var f = document.getElementById('bmFecha').value;
+    if(!f){ document.getElementById('bmFechaTitulo').textContent = '—'; document.getElementById('bmDiaSemana').textContent = ''; return; }
+    var p = f.split('-').map(Number);
+    var dia = BM_DIAS[new Date(p[0], p[1] - 1, p[2]).getDay()];
+    document.getElementById('bmFechaTitulo').textContent = p[2] + ' de ' + BM_MESES_LARGO[p[1] - 1] + ' de ' + p[0];
+    document.getElementById('bmDiaSemana').textContent = dia;
+  }
+
+  function setBmFormEnabled(on){
+    ['bmBodega', 'bmMacrorruta', 'bmMicrorruta1', 'bmMicrorruta2'].forEach(function(id){ document.getElementById(id).disabled = !on; });
+  }
+
   function initBmEnv(){
-    document.getElementById('bmRecicladorSeleccionado').style.display = 'none';
-    document.getElementById('bmRecicladorResultados').style.display = 'none';
-    document.getElementById('bmBuscarReciclador').value = '';
+    bmSelectedReciclador = null;
+    bmExistingByMaterial = {};
+    ['bmNombre', 'bmCedula', 'bmTipoVehiculo', 'bmPlaca'].forEach(function(id){ document.getElementById(id).value = ''; });
+    ['bmBodega', 'bmMacrorruta', 'bmMicrorruta1', 'bmMicrorruta2'].forEach(function(id){ document.getElementById(id).innerHTML = '<option value="">— Seleccionar —</option>'; });
+    setBmFormEnabled(false);
     var fechaInput = document.getElementById('bmFecha');
     if(!fechaInput.value) fechaInput.value = new Date().toISOString().slice(0, 10);
     var desdeInput = document.getElementById('bmExportDesde');
@@ -646,7 +723,9 @@
       var familias = ['--Todos los materiales'].concat(Array.from(new Set(bmAllMateriales.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       var sel = document.getElementById('bmFamiliaFilter');
       sel.innerHTML = familias.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('');
+      renderBmGrid();
     });
+    updateBmFechaTitulo();
 
     var mesSel = document.getElementById('bmPlanillaMes');
     if(!mesSel.options.length){
@@ -689,83 +768,148 @@
     });
   }
 
-  function onBmBuscarRecicladorInput(){
-    var q = document.getElementById('bmBuscarReciclador').value.trim().toLowerCase();
-    var box = document.getElementById('bmRecicladorResultados');
-    if(!q || !bmAllRecicladores){ box.style.display = 'none'; return; }
-    var matches = bmAllRecicladores.filter(function(r){
+  // ---- Ventana de busqueda de reciclador (filtros por documento, nombre y asociacion) ----
+  function openBmPicker(){
+    if(!bmAllRecicladores){ return; }
+    ['bmPickDoc', 'bmPickNombre', 'bmPickAsoc'].forEach(function(id){ document.getElementById(id).value = ''; });
+    renderBmPicker();
+    document.getElementById('bmPickerOverlay').classList.add('open');
+    document.getElementById('bmPickNombre').focus();
+  }
+  function closeBmPicker(){ document.getElementById('bmPickerOverlay').classList.remove('open'); }
+
+  function renderBmPicker(){
+    var doc = document.getElementById('bmPickDoc').value.trim().toLowerCase();
+    var nombre = document.getElementById('bmPickNombre').value.trim().toLowerCase();
+    var asoc = document.getElementById('bmPickAsoc').value.trim().toLowerCase();
+    var list = bmAllRecicladores.filter(function(r){
       if(pruebasVista === 'asociacion' && (!pruebasDemoCentro || r.id_centro !== pruebasDemoCentro.id)) return false;
-      return (r.nombre_completo || '').toLowerCase().indexOf(q) !== -1 || (r.nro_documento || '').toLowerCase().indexOf(q) !== -1;
-    }).slice(0, 20);
-    if(matches.length === 0){ box.innerHTML = '<p style="padding:10px;color:var(--ink-soft);font-size:13px;">Sin resultados.</p>'; box.style.display = 'block'; return; }
-    box.innerHTML = '<table class="data-table"><thead><tr><th>Documento</th><th>Nombre</th><th>Centro</th></tr></thead><tbody>' +
-      matches.map(function(r){ return '<tr class="bm-result-row" data-id="' + r.id + '" style="cursor:pointer;"><td>' + r.nro_documento + '</td><td>' + r.nombre_completo + '</td><td>' + (r.id_centro_label || '—') + '</td></tr>'; }).join('') +
-      '</tbody></table>';
-    box.style.display = 'block';
-    box.querySelectorAll('.bm-result-row').forEach(function(row){
+      return (r.nro_documento || '').toLowerCase().indexOf(doc) !== -1 &&
+        (r.nombre_completo || '').toLowerCase().indexOf(nombre) !== -1 &&
+        (r.id_centro_label || '').toLowerCase().indexOf(asoc) !== -1;
+    }).sort(function(a, b){ return (a.nombre_completo || '').localeCompare(b.nombre_completo || ''); }).slice(0, 200);
+    var box = document.getElementById('bmPickList');
+    if(list.length === 0){ box.innerHTML = '<p style="padding:12px;color:var(--ink-soft);font-size:12px;">Sin resultados.</p>'; return; }
+    box.innerHTML = list.map(function(r){
+      return '<div class="bm-pick-row" data-id="' + r.id + '"><span>' + (r.nro_documento || '') + '</span><span>' + (r.nombre_completo || '') + '</span><span>' + (r.id_centro_label || '') + '</span></div>';
+    }).join('');
+    box.querySelectorAll('.bm-pick-row').forEach(function(row){
       row.addEventListener('click', function(){ selectBmReciclador(Number(row.getAttribute('data-id'))); });
     });
+  }
+
+  function fillBmSelect(id, rows, labelFn){
+    var sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">— Seleccionar —</option>' + rows.map(function(r){ return '<option value="' + r.id + '">' + labelFn(r) + '</option>'; }).join('');
   }
 
   function selectBmReciclador(id){
     bmSelectedReciclador = bmAllRecicladores.find(function(r){ return r.id === id; });
     if(!bmSelectedReciclador) return;
-    document.getElementById('bmBuscarReciclador').value = bmSelectedReciclador.nombre_completo;
-    document.getElementById('bmRecicladorResultados').style.display = 'none';
+    closeBmPicker();
     document.getElementById('bmNombre').value = bmSelectedReciclador.nombre_completo || '';
     document.getElementById('bmCedula').value = bmSelectedReciclador.nro_documento || '';
     document.getElementById('bmTipoVehiculo').value = bmSelectedReciclador.tipo_de_vehiculo || '';
     document.getElementById('bmPlaca').value = bmSelectedReciclador.placa || '';
-    document.getElementById('bmRecicladorSeleccionado').style.display = 'block';
+    setBmFormEnabled(true);
 
     Promise.all([
       gtApiFetch('/trazabilidad/bodegas'),
-      gtApiFetch('/trazabilidad/numacros'),
-      gtApiFetch('/trazabilidad/macrorrutas')
+      gtApiFetch('/trazabilidad/macrorrutas'),
+      gtApiFetch('/trazabilidad/microrrutas'),
+      gtApiFetch('/trazabilidad/microrrutas_detalle')
     ]).then(function(results){
-      var bodegas = (results[0].ok ? results[0].data : []).filter(function(b){ return b.id_centro === bmSelectedReciclador.id_centro; });
-      var numacros = (results[1].ok ? results[1].data : []).filter(function(n){ return n.id_centro === bmSelectedReciclador.id_centro; });
-      var macrorrutas = (results[2].ok ? results[2].data : []).filter(function(m){ return m.id_centro === bmSelectedReciclador.id_centro; });
-      var bodegaSel = document.getElementById('bmBodega');
-      bodegaSel.innerHTML = '<option value="">— Ninguna —</option>' + bodegas.map(function(b){ return '<option value="' + b.id + '">' + (b.cod_bodega || '') + ' - ' + (b.desc_bodega || '') + '</option>'; }).join('');
-      var numacroSel = document.getElementById('bmNumacro');
-      numacroSel.innerHTML = '<option value="">— Ninguna —</option>' + numacros.map(function(n){ return '<option value="' + n.id + '">' + (n.id_localidad_label || n.cod_numacro || '') + '</option>'; }).join('');
-      var macrorrutaSel = document.getElementById('bmMacrorruta');
-      macrorrutaSel.innerHTML = '<option value="">— Ninguna —</option>' + macrorrutas.map(function(m){ return '<option value="' + m.id + '">' + (m.cod_macrorruta || '') + ' - ' + (m.desc_macrorruta || '') + '</option>'; }).join('');
+      var idc = bmSelectedReciclador.id_centro;
+      var bodegas = (results[0].ok ? results[0].data : []).filter(function(b){ return b.id_centro === idc; });
+      var macrorrutas = (results[1].ok ? results[1].data : []).filter(function(m){ return m.id_centro === idc; });
+      var misMicro = (results[2].ok ? results[2].data : []).filter(function(m){ return m.id_reciclador === bmSelectedReciclador.id; }).map(function(m){ return m.id; });
+      var detalles = (results[3].ok ? results[3].data : []).filter(function(d){ return misMicro.indexOf(d.id_formulario_microrruta) !== -1; });
+      fillBmSelect('bmBodega', bodegas, function(b){ return (b.cod_bodega || '') + ' - ' + (b.desc_bodega || ''); });
+      fillBmSelect('bmMacrorruta', macrorrutas, function(m){ return (m.cod_macrorruta || '') + ' - ' + (m.desc_macrorruta || ''); });
+      var microLabel = function(d){ return d.desc_microrruta || ('Microrruta ' + d.id); };
+      fillBmSelect('bmMicrorruta1', detalles, microLabel);
+      fillBmSelect('bmMicrorruta2', detalles, microLabel);
       loadBmDia();
     });
   }
 
   function loadBmDia(){
-    if(!bmSelectedReciclador) return;
+    updateBmFechaTitulo();
+    if(!bmSelectedReciclador){ renderBmGrid(); return; }
     var fecha = document.getElementById('bmFecha').value;
     gtApiFetch('/trazabilidad/balance-masas-dia?id_reciclador=' + bmSelectedReciclador.id + '&fecha=' + fecha).then(function(res){
       bmExistingByMaterial = {};
-      (res.ok ? res.data : []).forEach(function(row){ bmExistingByMaterial[row.id_tipo_material] = row; });
+      var rows = res.ok ? res.data : [];
+      rows.forEach(function(row){ bmExistingByMaterial[row.id_tipo_material] = row; });
+      // Los selectores del encabezado son del dia completo: se restauran desde la primera fila guardada.
+      var first = rows[0] || {};
+      document.getElementById('bmBodega').value = first.id_bodega || '';
+      document.getElementById('bmMacrorruta').value = first.id_macrorruta || '';
+      document.getElementById('bmMicrorruta1').value = first.id_microrruta_1 || '';
+      document.getElementById('bmMicrorruta2').value = first.id_microrruta_2 || '';
       renderBmGrid();
     });
   }
 
+  function updateBmTotals(){
+    var sc = 0, sv = 0, sr = 0, sn = 0;
+    document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
+      var q = Number(tr.querySelector('[data-field="cantidad"]').value || 0);
+      var v = Number(tr.querySelector('[data-field="valor"]').value || 0);
+      var t = q * v;
+      tr.querySelector('.bm-tot').textContent = t ? fmtNum(t) : '';
+      sc += q; sv += t;
+      sr += Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
+      sn += Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
+    });
+    document.getElementById('bmTotCantidad').textContent = fmtNum(sc);
+    document.getElementById('bmTotValor').textContent = fmtNum(sv);
+    document.getElementById('bmTotRechazo').textContent = fmtNum(sr);
+    document.getElementById('bmTotNoSui').textContent = fmtNum(sn);
+  }
+
   function renderBmGrid(){
-    var familia = document.getElementById('bmFamiliaFilter').value;
+    if(!bmAllMateriales) return;
+    var familia = document.getElementById('bmFamiliaFilter').value || '--Todos los materiales';
     var ordenados = bmAllMateriales.slice().sort(function(a,b){ return (a.secuencia_orden || 0) - (b.secuencia_orden || 0); });
     var list = familia === '--Todos los materiales' ? ordenados : ordenados.filter(function(m){ return m.desc_familia === familia; });
     var tbody = document.getElementById('bmGridBody');
     tbody.innerHTML = '';
-    var destinoOpts = '<option value="">— Ninguno —</option>' + (bmDestinoOptions || []).map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
+    var dis = bmSelectedReciclador ? '' : ' disabled';
+    var destinoOpts = '<option value="">—</option>' + (bmDestinoOptions || []).map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
     list.forEach(function(m){
       var existing = bmExistingByMaterial[m.id] || {};
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td>' + m.desc_tipo_material + '</td>' +
-        '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad" value="' + (existing.cantidad || '') + '"></td>' +
-        '<td><input type="number" step="0.01" style="width:100%;" data-mat="' + m.id + '" data-field="valor" value="' + (existing.valor || '') + '"></td>' +
-        '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad_rechazo" value="' + (existing.cantidad_rechazo || '') + '"></td>' +
-        '<td><input type="number" step="0.0001" style="width:100%;" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"></td>' +
-        '<td><select style="width:100%;" data-mat="' + m.id + '" data-field="id_tipo_destino">' + destinoOpts + '</select></td>' +
-        '<td><input type="text" style="width:100%;" data-mat="' + m.id + '" data-field="numero_sitio_destino" value="' + (existing.numero_sitio_destino || '') + '"></td>';
+        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad" value="' + (existing.cantidad || '') + '"' + dis + '></td>' +
+        '<td><input type="number" step="0.01" data-mat="' + m.id + '" data-field="valor" value="' + (existing.valor || '') + '"' + dis + '></td>' +
+        '<td class="bm-tot"></td>' +
+        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_rechazo" value="' + (existing.cantidad_rechazo || '') + '"' + dis + '></td>' +
+        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"' + dis + '></td>' +
+        '<td><select data-mat="' + m.id + '" data-field="id_tipo_destino"' + dis + '>' + destinoOpts + '</select></td>' +
+        '<td><input type="text" data-mat="' + m.id + '" data-field="numero_sitio_destino" value="' + (existing.numero_sitio_destino || '') + '"' + dis + '></td>';
       tbody.appendChild(tr);
       if(existing.id_tipo_destino) tr.querySelector('[data-field="id_tipo_destino"]').value = existing.id_tipo_destino;
+    });
+    updateBmTotals();
+  }
+
+  document.addEventListener('input', function(e){
+    if(e.target.closest && e.target.closest('#bmGridBody')) updateBmTotals();
+  });
+
+  function deleteBmDia(){
+    if(!bmSelectedReciclador){ alert('Primero busca y selecciona un reciclador.'); return; }
+    if(!confirm('¿Borrar todo lo registrado de ' + bmSelectedReciclador.nombre_completo + ' el ' + formatDateStrLocal(document.getElementById('bmFecha').value) + '?')) return;
+    var msg = document.getElementById('bmSaveMsg');
+    gtApiFetch('/trazabilidad/balance-masas-dia', {
+      method: 'POST',
+      body: JSON.stringify({ id_centro: bmSelectedReciclador.id_centro, id_reciclador: bmSelectedReciclador.id, fecha: document.getElementById('bmFecha').value, materiales: [] })
+    }).then(function(res){
+      msg.style.color = res.ok ? 'var(--green)' : '#C0392B';
+      msg.textContent = res.ok ? 'Día borrado.' : (res.data.error || 'No se pudo borrar.');
+      if(res.ok) loadBmDia();
     });
   }
 
@@ -793,9 +937,10 @@
       body: JSON.stringify({
         id_centro: bmSelectedReciclador.id_centro,
         id_reciclador: bmSelectedReciclador.id,
-        id_numacro: document.getElementById('bmNumacro').value || null,
         id_bodega: document.getElementById('bmBodega').value || null,
         id_macrorruta: document.getElementById('bmMacrorruta').value || null,
+        id_microrruta_1: document.getElementById('bmMicrorruta1').value || null,
+        id_microrruta_2: document.getElementById('bmMicrorruta2').value || null,
         fecha: document.getElementById('bmFecha').value,
         materiales: materiales
       })

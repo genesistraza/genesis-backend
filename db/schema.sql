@@ -485,6 +485,11 @@ CREATE TABLE IF NOT EXISTS tz_seguridad_social (
   UNIQUE (id_reciclador)
 );
 
+-- El formulario de Balance de Masas del sistema original tiene dos selectores "Microruta 1" y
+-- "Microruta 2" por reciclador/dia; se guardan aqui (apuntan al detalle de la microrruta).
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_microrruta_1 INT REFERENCES tz_formulario_microrrutas_detalle(id) ON DELETE SET NULL;
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_microrruta_2 INT REFERENCES tz_formulario_microrrutas_detalle(id) ON DELETE SET NULL;
+
 -- Datos de encabezado del centro/asociacion, para membretar documentos imprimibles
 -- (planillas de recepcion, facturas) igual a como los usa la asociacion en la vida real.
 ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS nit VARCHAR(30);
