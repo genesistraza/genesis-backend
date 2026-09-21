@@ -517,7 +517,7 @@
           '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
           '<td><button type="button" class="cell-action" style="margin-right:12px;">Ver detalle</button>' +
           (isPro ? '<button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button>' : '') + '</td>';
-        tr.children[0].textContent = a.name;
+        tr.children[0].innerHTML = '<span style="display:inline-flex;align-items:center;gap:10px;">' + gtAssocLogoHtml(a, 'sm') + '<span>' + gtEscapeHtml(a.name) + '</span></span>';
         tr.children[1].textContent = a.nit || '—';
         tr.children[2].textContent = a.recycler_count || 0;
         tr.children[3].textContent = a.plan_name || '—';
@@ -714,7 +714,15 @@
       var d = res.data;
       var esc = function(v){ return (v || '').toString().replace(/"/g, '&quot;'); };
       var html = '';
-      html += '<h4 style="margin-top:4px;font-size:14px;">Datos de la asociación</h4>';
+      html += '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:2px 0 4px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#FAFCFF;">';
+      html += gtAssocLogoHtml(d.association, 'lg');
+      html += '<div style="flex:1;min-width:220px;"><h4 style="margin:0 0 4px;font-size:14px;">Logo de la asociación</h4>';
+      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 10px;">Se ve en el dashboard del cliente y en sus facturas y planillas impresas. PNG, JPG o WEBP de hasta 3 MB; queda mejor cuadrado o apaisado y con fondo transparente.</p>';
+      html += '<input id="assocLogoFile" type="file" accept="image/png,image/jpeg,image/webp" style="max-width:100%;">';
+      html += '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" onclick="uploadAssociationLogo(' + d.association.id + ')">Subir logo</button>';
+      if(d.association.logo_url) html += '<button class="btn btn-outline" style="border-color:#C0392B;color:#C0392B;" onclick="removeAssociationLogo(' + d.association.id + ')">Quitar logo</button>';
+      html += '</div><p id="assocLogoMsg" style="margin:8px 0 0;font-size:13px;"></p></div></div>';
+      html += '<h4 style="margin-top:18px;font-size:14px;">Datos de la asociación</h4>';
       html += '<div class="form-grid" style="margin-top:10px;">';
       html += '<div class="form-field"><label>Nombre</label><input id="editAssocName" value="' + esc(d.association.name) + '"></div>';
       html += '<div class="form-field"><label>NIT</label><input id="editAssocNit" value="' + esc(d.association.nit) + '"></div>';
@@ -1449,6 +1457,42 @@
       .then(function(res){
         if(!res.ok) throw new Error(res.data.error || 'No se pudo quitar.');
         loadRutas();
+      })
+      .catch(function(err){ alert(err.message); });
+  }
+
+  function uploadAssociationLogo(associationId){
+    var msgEl = document.getElementById('assocLogoMsg');
+    var file = document.getElementById('assocLogoFile').files[0];
+    msgEl.style.color = '#C0392B';
+    if(!file){ msgEl.textContent = 'Elige una imagen PNG, JPG o WEBP.'; return; }
+    if(['image/png', 'image/jpeg', 'image/webp'].indexOf(file.type) === -1){ msgEl.textContent = 'Solo se aceptan imágenes PNG, JPG o WEBP.'; return; }
+    if(file.size > 3 * 1024 * 1024){ msgEl.textContent = 'La imagen pesa más de 3 MB.'; return; }
+    msgEl.style.color = 'var(--ink-soft)';
+    msgEl.textContent = 'Subiendo…';
+    var formData = new FormData();
+    formData.append('logo', file);
+    fetch(API_BASE + '/admin/associations/' + associationId + '/logo', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + gtGetToken() },
+      body: formData
+    })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo subir el logo.');
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+        loadAsociaciones();
+      })
+      .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  function removeAssociationLogo(associationId){
+    if(!confirm('¿Quitar el logo de esta asociación?')) return;
+    gtApiFetch('/admin/associations/' + associationId + '/logo', { method: 'DELETE' })
+      .then(function(res){
+        if(!res.ok) throw new Error(res.data.error || 'No se pudo quitar.');
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+        loadAsociaciones();
       })
       .catch(function(err){ alert(err.message); });
   }

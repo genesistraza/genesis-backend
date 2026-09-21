@@ -77,6 +77,29 @@ function gtApiFetch(path, options){
     });
 }
 
+function gtEscapeHtml(v){
+  return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c){
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// Iniciales de la asociacion (maximo 2 letras) para el avatar cuando todavia no tiene logo.
+function gtAssocInitials(name){
+  var words = String(name || '').replace(/[^A-Za-zÁÉÍÓÚÑáéíóúñ0-9 ]/g, ' ').split(/\s+/).filter(function(w){ return w.length > 2 || /^\d/.test(w); });
+  var letters = (words.length ? words : String(name || '?').split(/\s+/)).slice(0, 2).map(function(w){ return w.charAt(0); }).join('');
+  return (letters || '?').toUpperCase();
+}
+
+// HTML del logo de una asociacion ({name, logo_url}) o, sin logo, un avatar con sus iniciales.
+// size: '' (52px), 'sm' (32px) o 'lg' (96px). Se usa igual en el dashboard, el panel admin y Pruebas.
+function gtAssocLogoHtml(assoc, size){
+  var cls = 'assoc-logo' + (size ? ' ' + size : '');
+  if(assoc && assoc.logo_url){
+    return '<span class="' + cls + '"><img src="' + gtEscapeHtml(assoc.logo_url) + '" alt="Logo de ' + gtEscapeHtml(assoc.name) + '" loading="lazy"></span>';
+  }
+  return '<span class="' + cls + ' initials" aria-hidden="true">' + gtEscapeHtml(gtAssocInitials(assoc && assoc.name)) + '</span>';
+}
+
 function gtFormatCOP(value){
   return '$' + Number(value || 0).toLocaleString('es-CO');
 }

@@ -37,6 +37,7 @@
     <div class="brand">
       <span class="brand-text">Genesis <span>Traza</span></span>
     </div>
+    <div class="assoc-card" id="sideAssocCard" style="display:none;"></div>
     <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen de mi cuenta</div>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
     <div class="side-link side-group-toggle" id="dashboardGroupToggle" onclick="gtToggleDashboardGroup()">
@@ -59,9 +60,12 @@
   <main class="app-main">
     <button type="button" class="mobile-menu-btn" onclick="gtToggleSidebar()">☰</button>
     <div class="app-topbar">
-      <div>
-        <h1>Hola, <span id="topUserName">—</span></h1>
-        <p id="topAssociation">Cargando información de tu asociación…</p>
+      <div class="topbar-with-logo">
+        <span id="topAssocLogo"></span>
+        <div>
+          <h1>Hola, <span id="topUserName">—</span></h1>
+          <p id="topAssociation">Cargando información de tu asociación…</p>
+        </div>
       </div>
     </div>
 
@@ -311,6 +315,14 @@
       }
 
       document.getElementById('topAssociation').textContent = 'Asociación: ' + meData.association.name;
+
+      // Logo de la asociacion (o avatar con iniciales si todavia no tiene) en la barra lateral y en el encabezado
+      var assocCard = document.getElementById('sideAssocCard');
+      assocCard.innerHTML = gtAssocLogoHtml(meData.association) +
+        '<div><div class="assoc-name">' + gtEscapeHtml(meData.association.name) + '</div>' +
+        (meData.association.nit ? '<div class="assoc-sub">NIT ' + gtEscapeHtml(meData.association.nit) + '</div>' : '') + '</div>';
+      assocCard.style.display = 'flex';
+      document.getElementById('topAssocLogo').innerHTML = gtAssocLogoHtml(meData.association, 'lg');
 
       if(meData.association.facturacion_url){
         document.getElementById('facturacionPanel').style.display = 'block';

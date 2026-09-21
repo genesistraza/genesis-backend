@@ -12,6 +12,12 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 // Los exportes de balance de masas de un año completo pueden pesar bastante mas que un PDF/KML normal.
 const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 60 * 1024 * 1024 } });
+// Logos: solo imagenes rasterizadas (nada de SVG, que puede llevar scripts y los PDF no lo leen).
+const uploadLogo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 3 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype))
+});
 
 function normalizeRowKeys(row) {
   const out = {};
@@ -56,6 +62,14 @@ async function bulkInsert(client, table, columns, rows) {
     }).join(',');
     await client.query(`INSERT INTO ${table} (${columns.join(',')}) VALUES ${placeholders}`, values);
   }
+}
+
+// Borra de Cloudinary una imagen ya reemplazada o quitada (best-effort: si falla, no rompe nada).
+async function destroyCloudinaryImage(url) {
+  if (!url) return;
+  const m = String(url).match(/\/upload\/(?:v\d+\/)?(.+)\.[a-z0-9]+$/i);
+  if (!m) return;
+  try { await cloudinary.uploader.destroy(m[1], { resource_type: 'image' }); } catch (e) { /* imagen huerfana, no es critico */ }
 }
 
 function uploadToCloudinary(fileBuffer, folder) {
@@ -112,7 +126,7 @@ router.post('/associations', asyncRoute(async (req, res) => {
 // devolvia una fila por cada suscripcion y la asociacion se veia "duplicada" en la tabla.
 router.get('/associations', asyncRoute(async (req, res) => {
   const result = await pool.query(`
-    SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url,
+    SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url, a.logo_url,
            s.status AS subscription_status, s.next_due_date, p.name AS plan_name
     FROM associations a
     LEFT JOIN LATERAL (
@@ -125,6 +139,43 @@ router.get('/associations', asyncRoute(async (req, res) => {
     ORDER BY a.created_at DESC
   `);
   res.json(result.rows);
+}));
+
+// POST /admin/associations/:id/logo -> sube el logo de la asociacion (png/jpg/webp, hasta 3 MB).
+// Cloudinary lo reduce a maximo 600x600 y lo guarda como PNG (conserva transparencia y es un
+// formato que tambien pueden incrustar los PDF de facturas y planillas).
+router.post('/associations/:id/logo', uploadLogo.single('logo'), asyncRoute(async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Sube una imagen PNG, JPG o WEBP de hasta 3 MB.' });
+  }
+  const logoUrl = await new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: `genesis-traza/associations/${req.params.id}/logo`,
+        resource_type: 'image',
+        format: 'png',
+        transformation: [{ width: 600, height: 600, crop: 'limit' }]
+      },
+      (err, result) => (err ? reject(err) : resolve(result.secure_url))
+    );
+    stream.end(req.file.buffer);
+  });
+  const previous = await pool.query('SELECT logo_url FROM associations WHERE id = $1', [req.params.id]);
+  const result = await pool.query('UPDATE associations SET logo_url = $1 WHERE id = $2 RETURNING id, name, logo_url', [logoUrl, req.params.id]);
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Asociación no encontrada.' });
+  await destroyCloudinaryImage(previous.rows[0] && previous.rows[0].logo_url);
+  await logActivity(req.user.id, 'logo_asociacion_subido', { associationId: Number(req.params.id) }, req.ip);
+  res.json(result.rows[0]);
+}));
+
+// DELETE /admin/associations/:id/logo -> quita el logo (vuelve a mostrarse el avatar con iniciales)
+router.delete('/associations/:id/logo', asyncRoute(async (req, res) => {
+  const previous = await pool.query('SELECT logo_url FROM associations WHERE id = $1', [req.params.id]);
+  const result = await pool.query('UPDATE associations SET logo_url = NULL WHERE id = $1 RETURNING id', [req.params.id]);
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Asociación no encontrada.' });
+  await destroyCloudinaryImage(previous.rows[0] && previous.rows[0].logo_url);
+  await logActivity(req.user.id, 'logo_asociacion_eliminado', { associationId: Number(req.params.id) }, req.ip);
+  res.json({ message: 'Logo eliminado.' });
 }));
 
 // POST /admin/associations/:id/routes-map -> sube el KML/KMZ con todas las rutas de la asociación (un solo archivo)

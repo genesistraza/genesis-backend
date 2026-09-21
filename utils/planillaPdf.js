@@ -19,16 +19,29 @@ function drawPlanilla(doc, data) {
   const width = right - left;
   let y = doc.page.margins.top;
 
+  // Logo a la izquierda (como en la planilla original) y los datos de la asociacion a la derecha.
+  let logoBottom = y;
+  let textLeft = left;
+  let textWidth = width;
+  if (data.centro.logoBuffer) {
+    try {
+      doc.image(data.centro.logoBuffer, left, y, { fit: [130, 62] });
+      logoBottom = y + 62;
+      textLeft = left + 145;
+      textWidth = width - 145;
+    } catch (e) { /* imagen ilegible: se imprime sin logo */ }
+  }
+
   doc.font('Helvetica-Bold').fontSize(12).fillColor(INK)
-    .text(data.centro.desc_centro || 'Asociación', left, y, { width, align: 'right' });
+    .text(data.centro.desc_centro || 'Asociación', textLeft, y, { width: textWidth, align: 'right' });
   y = doc.y + 2;
   doc.font('Helvetica').fontSize(8).fillColor(INK_SOFT);
-  if (data.centro.nit) { doc.text('NIT. ' + data.centro.nit, left, y, { width, align: 'right' }); y = doc.y; }
-  if (data.centro.direccion) { doc.text(data.centro.direccion, left, y, { width, align: 'right' }); y = doc.y; }
+  if (data.centro.nit) { doc.text('NIT. ' + data.centro.nit, textLeft, y, { width: textWidth, align: 'right' }); y = doc.y; }
+  if (data.centro.direccion) { doc.text(data.centro.direccion, textLeft, y, { width: textWidth, align: 'right' }); y = doc.y; }
   const contacto = [data.centro.telefono, data.centro.correo].filter(Boolean).join('  -  ');
-  if (contacto) { doc.text(contacto, left, y, { width, align: 'right' }); y = doc.y; }
+  if (contacto) { doc.text(contacto, textLeft, y, { width: textWidth, align: 'right' }); y = doc.y; }
 
-  y += 10;
+  y = Math.max(y, logoBottom) + 10;
   doc.moveTo(left, y).lineTo(right, y).strokeColor(LINE).lineWidth(1).stroke();
   y += 14;
 

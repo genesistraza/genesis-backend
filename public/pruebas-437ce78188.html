@@ -178,15 +178,14 @@
     <div class="bm-gridwrap">
       <table class="bm-grid">
         <thead>
-          <tr><th class="bm-c1" rowspan="1"></th><th colspan="7" id="bmFechaTitulo">—</th></tr>
-          <tr><th class="bm-c1"><select id="bmFamiliaFilter" class="no-print" onchange="renderBmGrid()"></select></th><th colspan="7" id="bmDiaSemana"></th></tr>
-          <tr><th class="bm-c1"></th><th>Cantidad (Kilogramos)</th><th>Valor</th><th>Total</th><th>Cantidad rechazo</th><th>Cantidad no SUI</th><th>Tipo destino</th><th>N° sitio destino</th></tr>
+          <tr><th class="bm-c1" rowspan="1"></th><th colspan="5" id="bmFechaTitulo">—</th></tr>
+          <tr><th class="bm-c1"><select id="bmFamiliaFilter" class="no-print" onchange="renderBmGrid()"></select></th><th colspan="5" id="bmDiaSemana"></th></tr>
+          <tr><th class="bm-c1"></th><th>Cantidad (Kilogramos)</th><th>Valor</th><th>Total</th><th>Cantidad rechazo</th><th>Cantidad no SUI</th></tr>
         </thead>
         <tbody id="bmGridBody"></tbody>
-        <tfoot><tr><th class="bm-c1" style="text-align:left;">Total</th><td id="bmTotCantidad">0,00</td><td></td><td id="bmTotValor">0,00</td><td id="bmTotRechazo">0,00</td><td id="bmTotNoSui">0,00</td><td></td><td></td></tr></tfoot>
+        <tfoot><tr><th class="bm-c1" style="text-align:left;">Total</th><td id="bmTotCantidad">0,00</td><td></td><td id="bmTotValor">0,00</td><td id="bmTotRechazo">0,00</td><td id="bmTotNoSui">0,00</td></tr></tfoot>
       </table>
     </div>
-    <p class="bm-note no-print">El tipo y el número del sitio de destino solo aplican si hay cantidad de rechazo.</p>
 
     <div class="modal-overlay" id="bmPickerOverlay">
       <div class="modal-box">
@@ -246,7 +245,10 @@
   // Agrupa los modulos en el desplegable para que sea facil de recorrer (mismo criterio que
   // el sistema de trazabilidad original: catalogos, recicladores, operacion, usuarios/cobro, PQR).
   var ENTITY_GROUPS = [
-    { label: 'Catálogos y estructura', keys: ['centros', 'areas_prestacion', 'bodegas', 'localidades', 'numacros', 'tipos_material'] },
+    // Tareas del administrador (Genesis Traza): valores fijos que el usuario/operador no toca —
+    // datos de la asociación (incluido el sitio de destino del rechazo) y los códigos regulatorios.
+    { label: 'Administración', adminOnly: true, keys: ['centros', 'tipos_material', 'catalogos'] },
+    { label: 'Catálogos y estructura', keys: ['areas_prestacion', 'bodegas', 'localidades', 'numacros'] },
     { label: 'Recicladores y formalización', keys: ['recicladores', 'formalizacion_fases', 'seguridad_social'] },
     { label: 'Operación diaria', keys: ['balance_masas', 'macrorrutas', 'microrrutas', 'microrrutas_detalle'] },
     { label: 'Usuarios y aprovechamiento', keys: ['usuarios', 'aprovechamiento', 'recursos'] },
@@ -255,7 +257,8 @@
   ];
 
   var ENTITY_HINTS = {
-    centros: 'Datos de la asociación/prestador: código, nombre y su registro RUP/ECA.',
+    centros: 'Datos de la asociación/prestador: código, nombre, registro RUP/ECA y el sitio de destino del rechazo (tipo y número), que es fijo y se aplica solo en Balance de Masas.',
+    catalogos: 'Listas y códigos fijos (tipos de identificación, destinos de rechazo, familias, etc.). Los códigos son los que exige el SUI: no los cambie sin necesidad.',
     areas_prestacion: 'Áreas de Prestación del Servicio (NUAP) que opera el prestador — departamento/municipio DANE. Cada ECA y macrorruta pertenece a una de estas.',
     bodegas: 'Estaciones de Clasificación y Aprovechamiento (ECA): predio, coordenadas, propietario, contrato y capacidades.',
     localidades: 'Localidades de Bogotá usadas para ubicar numacros y usuarios.',
@@ -303,8 +306,15 @@
       b.classList.toggle('active', b.dataset.vista === vista);
     });
     updateVistaHint();
-    if(pruebasCurrentEntity === 'balance_masas'){ initBmEnv(); }
-    else if(pruebasCurrentEntity){ fetchAndRenderPruebasTable(); }
+    if(pruebasEntities){
+      // Las tareas de administración no existen para la asociación: si estaba en una, pasa a la primera visible.
+      if(vista === 'asociacion' && isAdminOnlyEntity(pruebasCurrentEntity)) pruebasCurrentEntity = 'balance_masas';
+      renderPruebasEntitySelect();
+    }
+  }
+
+  function isAdminOnlyEntity(key){
+    return ENTITY_GROUPS.some(function(g){ return g.adminOnly && g.keys.indexOf(key) !== -1; });
   }
 
   function updateVistaHint(){
@@ -374,6 +384,7 @@
     bar.innerHTML = '';
     var firstKey = null;
     ENTITY_GROUPS.forEach(function(group){
+      if(group.adminOnly && pruebasVista === 'asociacion') return;
       var keys = group.keys.filter(function(k){ return pruebasEntities[k]; });
       if(keys.length === 0) return;
       if(!firstKey) firstKey = keys[0];
@@ -671,7 +682,6 @@
   var bmAllMateriales = null;
   var bmSelectedReciclador = null;
   var bmExistingByMaterial = {};
-  var bmDestinoOptions = null;
 
   var BM_MESES_LARGO = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
   var BM_DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
@@ -719,8 +729,7 @@
 
     var loadRecicladores = bmAllRecicladores ? Promise.resolve() : gtApiFetch('/trazabilidad/recicladores').then(function(res){ bmAllRecicladores = res.ok ? res.data : []; });
     var loadMateriales = bmAllMateriales ? Promise.resolve() : gtApiFetch('/trazabilidad/tipos_material').then(function(res){ bmAllMateriales = res.ok ? res.data : []; });
-    var loadDestinos = bmDestinoOptions ? Promise.resolve() : gtApiFetch('/trazabilidad/catalogo-options/destinos_rechazo').then(function(res){ bmDestinoOptions = res.ok ? res.data : []; });
-    Promise.all([loadRecicladores, loadMateriales, loadDestinos]).then(function(){
+    Promise.all([loadRecicladores, loadMateriales]).then(function(){
       var familias = ['--Todos los materiales'].concat(Array.from(new Set(bmAllMateriales.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       var sel = document.getElementById('bmFamiliaFilter');
       sel.innerHTML = familias.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('');
@@ -860,12 +869,8 @@
       var t = q * v;
       tr.querySelector('.bm-tot').textContent = t ? fmtNum(t) : '';
       sc += q; sv += t;
-      var rech = Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
-      sr += rech;
+      sr += Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
       sn += Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
-      var destinoOn = !!bmSelectedReciclador && rech > 0;
-      tr.querySelector('[data-field="id_tipo_destino"]').disabled = !destinoOn;
-      tr.querySelector('[data-field="numero_sitio_destino"]').disabled = !destinoOn;
     });
     document.getElementById('bmTotCantidad').textContent = fmtNum(sc);
     document.getElementById('bmTotValor').textContent = fmtNum(sv);
@@ -881,7 +886,6 @@
     var tbody = document.getElementById('bmGridBody');
     tbody.innerHTML = '';
     var dis = bmSelectedReciclador ? '' : ' disabled';
-    var destinoOpts = '<option value="">—</option>' + (bmDestinoOptions || []).map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
     list.forEach(function(m){
       var existing = bmExistingByMaterial[m.id] || {};
       var tr = document.createElement('tr');
@@ -891,11 +895,8 @@
         '<td><input type="number" step="0.01" data-mat="' + m.id + '" data-field="valor" value="' + (existing.valor || '') + '"' + dis + '></td>' +
         '<td class="bm-tot"></td>' +
         '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_rechazo" value="' + (existing.cantidad_rechazo || '') + '"' + dis + '></td>' +
-        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"' + dis + '></td>' +
-        '<td><select data-mat="' + m.id + '" data-field="id_tipo_destino"' + dis + '>' + destinoOpts + '</select></td>' +
-        '<td><input type="text" data-mat="' + m.id + '" data-field="numero_sitio_destino" value="' + (existing.numero_sitio_destino || '') + '"' + dis + '></td>';
+        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"' + dis + '></td>';
       tbody.appendChild(tr);
-      if(existing.id_tipo_destino) tr.querySelector('[data-field="id_tipo_destino"]').value = existing.id_tipo_destino;
     });
     updateBmTotals();
   }
@@ -918,20 +919,15 @@
     });
   }
 
-  var BM_TEXT_FIELDS = ['numero_sitio_destino'];
-  var BM_CATALOG_FIELDS = ['id_tipo_destino'];
-
   function saveBmDia(){
     if(!bmSelectedReciclador) return;
-    var inputs = document.querySelectorAll('#bmGridBody input, #bmGridBody select');
+    var inputs = document.querySelectorAll('#bmGridBody input');
     var byMaterial = {};
     inputs.forEach(function(inp){
       var matId = inp.getAttribute('data-mat');
       var field = inp.getAttribute('data-field');
       byMaterial[matId] = byMaterial[matId] || { id_tipo_material: Number(matId) };
-      if(BM_TEXT_FIELDS.indexOf(field) !== -1) byMaterial[matId][field] = inp.value || null;
-      else if(BM_CATALOG_FIELDS.indexOf(field) !== -1) byMaterial[matId][field] = inp.value ? Number(inp.value) : null;
-      else byMaterial[matId][field] = inp.value === '' ? 0 : Number(inp.value);
+      byMaterial[matId][field] = inp.value === '' ? 0 : Number(inp.value);
     });
     var materiales = Object.values(byMaterial);
     var msg = document.getElementById('bmSaveMsg');
@@ -1057,21 +1053,36 @@
     var subtitle = bmSelectedReciclador.nombre_completo + ' — Doc. ' + bmSelectedReciclador.nro_documento +
       ' — Fecha: ' + formatDateStrLocal(document.getElementById('bmFecha').value);
     var totalsRow = ['TOTAL', sumCantidad, '', sumValorTotal, sumRechazo, sumNosui];
-    openPrintWindowNow('Factura — Balance de Masas', subtitle, headers, rows, totalsRow);
+    openPrintWindowNow('Factura — Balance de Masas', subtitle, headers, rows, totalsRow, bmSelectedReciclador.id_centro);
   }
 
   // ---- Ventana de impresion con diseno propio (no solo el navegador imprimiendo la pantalla tal
   // cual): abre una ventana nueva con un documento HTML propio (encabezado, tabla, total, pie de
   // pagina) y dispara el dialogo de impresion, que ya trae "Guardar como PDF" como destino.
-  function openPrintWindowNow(title, subtitle, headers, rows, totalsRow){
+  // La ventana se abre en el mismo instante del clic (si no, el navegador la bloquea) y recien
+  // despues se pide el logo de la asociacion (idCentro) para armar el documento con el.
+  function openPrintWindowNow(title, subtitle, headers, rows, totalsRow, idCentro){
     var win = window.open('', '_blank', 'width=900,height=700');
     if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
+    win.document.open();
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando…</title></head><body style="font-family:Arial;color:#5B6B7C;padding:24px;">Preparando el documento…</body></html>');
+    win.document.close();
+    var logoReq = idCentro
+      ? gtApiFetch('/trazabilidad/centro-logo/' + idCentro).then(function(res){ return res.ok ? res.data.logo_url : null; }).catch(function(){ return null; })
+      : Promise.resolve(null);
+    logoReq.then(function(logoUrl){ writePrintDocument(win, title, subtitle, headers, rows, totalsRow, logoUrl); });
+  }
+
+  function writePrintDocument(win, title, subtitle, headers, rows, totalsRow, logoUrl){
+    if(win.closed) return;
     var generado = new Date().toLocaleString('es-CO');
     var esc = function(v){ return v === null || v === undefined ? '' : String(v); };
     var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>' +
       '@page{ margin:14mm; }' +
       'body{ font-family: Arial, Helvetica, sans-serif; color:#1B2733; margin:0; padding:22px; }' +
       '.pf-header{ display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #F2941F;padding-bottom:10px;margin-bottom:14px; }' +
+      '.pf-left{ display:flex;align-items:center;gap:14px; }' +
+      '.pf-logo{ max-height:56px;max-width:140px;object-fit:contain; }' +
       '.pf-brand{ font-size:11px;color:#5B6B7C;text-transform:uppercase;letter-spacing:.6px; }' +
       '.pf-header h1{ margin:4px 0 0;font-size:19px;color:#0A3369; }' +
       '.pf-meta{ font-size:11.5px;color:#5B6B7C;margin:0 0 14px; }' +
@@ -1082,7 +1093,9 @@
       '.pf-total td{ font-weight:700;border-top:2px solid #0A3369;background:#F3F5F8; }' +
       '.pf-footer{ margin-top:16px;font-size:9.5px;color:#9AA7B4;border-top:1px solid #DCE3EA;padding-top:6px; }' +
       '</style></head><body>' +
-      '<div class="pf-header"><div><div class="pf-brand">Genesis Traza — Trazabilidad</div><h1>' + esc(title) + '</h1></div>' +
+      '<div class="pf-header"><div class="pf-left">' +
+      (logoUrl ? '<img class="pf-logo" src="' + esc(logoUrl).replace(/"/g, '&quot;') + '" alt="">' : '') +
+      '<div><div class="pf-brand">Genesis Traza — Trazabilidad</div><h1>' + esc(title) + '</h1></div></div>' +
       '<div class="pf-brand">' + esc(generado) + '</div></div>' +
       (subtitle ? '<p class="pf-meta">' + esc(subtitle) + '</p>' : '') +
       '<table><thead><tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
@@ -1096,7 +1109,16 @@
     win.document.write(html);
     win.document.close();
     win.focus();
-    setTimeout(function(){ win.print(); }, 350);
+    // Imprime cuando el logo termino de cargar (o falla); tope de 4 s para no quedar colgado.
+    var printed = false;
+    var doPrint = function(){ if(printed || win.closed) return; printed = true; win.print(); };
+    var img = win.document.querySelector('.pf-logo');
+    if(img && !img.complete){
+      img.onload = img.onerror = function(){ setTimeout(doPrint, 100); };
+      setTimeout(doPrint, 4000);
+    } else {
+      setTimeout(doPrint, 350);
+    }
   }
 
   if(session) initPruebasPage();

@@ -71,8 +71,9 @@ async function main() {
 
     // 1) Centro demo
     const centro = await client.query(
-      `INSERT INTO tz_centros (cod_centro, desc_centro, rup_numero, rup_fecha_inscripcion, eca_numero)
-       VALUES ('DEMO-01', 'Asociacion Recicladores Unidos (DEMO)', 'RUP-DEMO-0001', '2023-03-15', 'ECA-DEMO-0001')
+      `INSERT INTO tz_centros (cod_centro, desc_centro, rup_numero, rup_fecha_inscripcion, eca_numero, id_tipo_destino, numero_sitio_destino)
+       VALUES ('DEMO-01', 'Asociacion Recicladores Unidos (DEMO)', 'RUP-DEMO-0001', '2023-03-15', 'ECA-DEMO-0001',
+         (SELECT id FROM tz_catalogos WHERE categoria = 'destinos_rechazo' AND codigo = '1'), '9999')
        RETURNING id`
     );
     const idCentro = centro.rows[0].id;

@@ -485,6 +485,16 @@ CREATE TABLE IF NOT EXISTS tz_seguridad_social (
   UNIQUE (id_reciclador)
 );
 
+-- Logo de cada asociacion: se sube una sola vez desde el panel de administrador y se usa en el
+-- dashboard del cliente, las facturas impresas, las planillas y el sandbox Pruebas.
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS logo_url TEXT;
+
+-- Datos FIJOS de la asociacion para el reporte al SUI (los configura el administrador una vez,
+-- no se digitan en la captura diaria): tipo y numero unico del sitio de destino del rechazo.
+-- El formulario original nunca los pedia por renglon, salian siempre iguales en el export.
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS id_tipo_destino INT REFERENCES tz_catalogos(id);
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS numero_sitio_destino VARCHAR(60);
+
 -- El formulario de Balance de Masas del sistema original tiene dos selectores "Microruta 1" y
 -- "Microruta 2" por reciclador/dia; se guardan aqui (apuntan al detalle de la microrruta).
 ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_microrruta_1 INT REFERENCES tz_formulario_microrrutas_detalle(id) ON DELETE SET NULL;

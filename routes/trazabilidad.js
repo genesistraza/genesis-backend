@@ -29,7 +29,19 @@ const ENTITIES = {
       { name: 'correo', label: 'Correo', type: 'text' },
       { name: 'rup_numero', label: 'Número RUP', type: 'text' },
       { name: 'rup_fecha_inscripcion', label: 'Fecha inscripción RUP', type: 'date' },
-      { name: 'eca_numero', label: 'Número ECA', type: 'text' }
+      { name: 'eca_numero', label: 'Número ECA', type: 'text' },
+      { name: 'id_tipo_destino', label: 'Destino del rechazo: tipo de sitio (fijo)', type: 'select-catalogo', categoria: 'destinos_rechazo' },
+      { name: 'numero_sitio_destino', label: 'Destino del rechazo: número único del sitio (fijo)', type: 'text' }
+    ]
+  },
+  catalogos: {
+    table: 'tz_catalogos', label: 'Códigos y términos fijos',
+    fields: [
+      { name: 'categoria', label: 'Lista (categoría)', type: 'text', required: true },
+      { name: 'codigo', label: 'Código', type: 'text', required: true },
+      { name: 'descripcion', label: 'Descripción', type: 'text', required: true },
+      { name: 'grupo', label: 'Grupo', type: 'text' },
+      { name: 'orden', label: 'Orden', type: 'number' }
     ]
   },
   areas_prestacion: {
@@ -124,9 +136,7 @@ const ENTITIES = {
       { name: 'cantidad', label: 'Cantidad (kg)', type: 'decimal' },
       { name: 'valor', label: 'Valor/kg', type: 'decimal' },
       { name: 'cantidad_rechazo', label: 'Cantidad rechazo', type: 'decimal' },
-      { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' },
-      { name: 'id_tipo_destino', label: 'Tipo de sitio de destino', type: 'select-catalogo', categoria: 'destinos_rechazo' },
-      { name: 'numero_sitio_destino', label: 'Número único del sitio de destino', type: 'text' }
+      { name: 'cantidad_nosui', label: 'Cantidad no SUI', type: 'decimal' }
     ]
   },
   macrorrutas: {
@@ -528,7 +538,7 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
   const { id_reciclador, fecha } = req.query;
   if (!id_reciclador || !fecha) return res.status(400).json({ error: 'Falta id_reciclador o fecha.' });
   const result = await pool.query(
-    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino,
+    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui,
             id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
     [id_reciclador, fecha]
@@ -539,8 +549,9 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
 // POST /trazabilidad/balance-masas-dia -> guarda de una vez todas las filas de material con
 // datos de un reciclador en un día (reemplaza lo que hubiera ese mismo reciclador+fecha),
 // igual a como se llena la grilla real: se escribe lo que aplica y se guarda una sola vez.
-// id_tipo_destino/numero_sitio_destino son por material (el rechazo de cada material puede ir
-// a un sitio de destino distinto), tal como lo exige el formato real de Balance de Masas.
+// El sitio de destino del rechazo NO se captura aquí: es un valor fijo de la asociación
+// (tz_centros.id_tipo_destino / numero_sitio_destino, lo configura el administrador) y el
+// export a la Super lo toma de ahí.
 router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
   const { id_centro, id_reciclador, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, materiales } = req.body;
   if (!id_centro || !id_reciclador || !fecha || !Array.isArray(materiales)) {
@@ -554,12 +565,11 @@ router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
     for (const m of filas) {
       await client.query(
         `INSERT INTO tz_formulario_balance_masas
-         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_tipo_destino, numero_sitio_destino)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, id_macrorruta || null,
           id_microrruta_1 || null, id_microrruta_2 || null, fecha,
-          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0,
-          m.id_tipo_destino || null, m.numero_sitio_destino || null]
+          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0]
       );
     }
     await client.query('COMMIT');
@@ -588,16 +598,17 @@ router.get('/balance-masas-export', asyncRoute(async (req, res) => {
   }
   const result = await pool.query(
     `SELECT bm.fecha, bm.cantidad, bm.valor, bm.cantidad_rechazo, bm.cantidad_nosui,
-            bm.numero_sitio_destino,
+            COALESCE(NULLIF(bm.numero_sitio_destino, ''), c.numero_sitio_destino) AS numero_sitio_destino,
             c.desc_centro AS centro,
             b.cod_bodega, b.desc_bodega,
             m.cod_macrorruta,
             r.nro_documento, r.nombre_completo, r.placa,
             tid.codigo AS codigo_tipo_identificacion,
             tm.cod_tipo_material, tm.desc_tipo_material,
-            tdes.codigo AS codigo_tipo_destino
+            COALESCE(tdes.codigo, cdes.codigo) AS codigo_tipo_destino
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_centros c ON c.id = bm.id_centro
+     LEFT JOIN tz_catalogos cdes ON cdes.id = c.id_tipo_destino
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
      LEFT JOIN tz_macrorrutas m ON m.id = bm.id_macrorruta
      LEFT JOIN tz_recicladores r ON r.id = bm.id_reciclador
@@ -609,6 +620,38 @@ router.get('/balance-masas-export', asyncRoute(async (req, res) => {
     params
   );
   res.json(result.rows);
+}));
+
+// El logo vive en la asociacion real (tabla associations, lo sube el administrador). Un centro de
+// este sandbox lo toma por el NIT: se comparan solo los digitos y se ignora el digito de
+// verificacion (los primeros 9), porque el mismo NIT se escribe como 901494752-8 o 901.494.752.
+function nitBase(nit) { return String(nit || '').replace(/\D/g, '').slice(0, 9); }
+
+async function findLogoUrlByNit(nit) {
+  const base = nitBase(nit);
+  if (base.length < 6) return null;
+  const r = await pool.query(
+    `SELECT logo_url FROM associations
+     WHERE logo_url IS NOT NULL AND left(regexp_replace(COALESCE(nit, ''), '\\D', '', 'g'), 9) = $1 LIMIT 1`,
+    [base]
+  );
+  return r.rows[0] ? r.rows[0].logo_url : null;
+}
+
+async function fetchImageBuffer(url) {
+  try {
+    const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!resp.ok) return null;
+    return Buffer.from(await resp.arrayBuffer());
+  } catch (e) {
+    return null;
+  }
+}
+
+// GET /trazabilidad/centro-logo/:id -> {logo_url} del centro (por NIT), para las impresiones.
+router.get('/centro-logo/:id', asyncRoute(async (req, res) => {
+  const c = await pool.query('SELECT nit FROM tz_centros WHERE id = $1', [req.params.id]);
+  res.json({ logo_url: c.rows[0] ? await findLogoUrlByNit(c.rows[0].nit) : null });
 }));
 
 // GET /trazabilidad/planillas-recepcion?anio=&mes=&id_centro=[&id_reciclador=] -> planilla(s)
@@ -626,6 +669,8 @@ router.get('/planillas-recepcion', asyncRoute(async (req, res) => {
   const centroRes = await pool.query('SELECT desc_centro, nit, direccion, telefono, correo FROM tz_centros WHERE id = $1', [id_centro]);
   if (centroRes.rows.length === 0) return res.status(404).json({ error: 'Centro no encontrado.' });
   const centro = centroRes.rows[0];
+  const logoUrl = await findLogoUrlByNit(centro.nit);
+  centro.logoBuffer = logoUrl ? await fetchImageBuffer(logoUrl) : null;
 
   const desde = `${anio}-${String(mesNum).padStart(2, '0')}-01`;
   const lastDay = new Date(anioNum, mesNum, 0).getDate();

@@ -264,6 +264,17 @@ details.card .more li{margin-bottom:6px;}
 .side-group-toggle .caret{transition:transform .15s ease;font-size:11px;}
 .side-group-toggle.open .caret{transform:rotate(180deg);}
 .side-spacer{flex:1;}
+/* Logo / avatar de la asociacion: tile blanco (los logos traen fondos distintos) o iniciales sobre degradado */
+.assoc-logo{width:52px;height:52px;flex-shrink:0;border-radius:13px;background:#fff;display:inline-flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+.assoc-logo img{max-width:100%;max-height:100%;object-fit:contain;padding:5px;box-sizing:border-box;}
+.assoc-logo.initials{background:var(--grad-accent);color:#fff;font-family:'Poppins',sans-serif;font-weight:700;font-size:18px;letter-spacing:.5px;}
+.assoc-logo.sm{width:32px;height:32px;border-radius:9px;font-size:12px;box-shadow:none;border:1px solid var(--line);}
+.assoc-logo.lg{width:96px;height:96px;border-radius:18px;font-size:30px;box-shadow:none;border:1px solid var(--line);}
+.assoc-logo.sm.initials, .assoc-logo.lg.initials{border-color:transparent;}
+.assoc-card{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:11px 12px;margin:0 2px 22px;}
+.assoc-card .assoc-name{color:#fff;font-weight:600;font-size:13.5px;line-height:1.25;word-break:break-word;}
+.assoc-card .assoc-sub{color:#9FC1E8;font-size:11.5px;margin-top:2px;}
+.topbar-with-logo{display:flex;align-items:center;gap:16px;}
 .side-user{padding:14px;border-top:1px solid rgba(255,255,255,.14);font-size:13px;}
 .side-user .name{color:#fff;font-weight:600;font-size:14px;}
 .side-user .role{color:#9FC1E8;text-transform:capitalize;}
