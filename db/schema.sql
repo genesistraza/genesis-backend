@@ -753,3 +753,34 @@ INSERT INTO tz_catalogos (categoria, codigo, descripcion, grupo, orden) VALUES
 ('origen_residuos_area','1','Rural',NULL,1),
 ('origen_residuos_area','2','Urbana',NULL,2)
 ON CONFLICT (categoria, codigo) DO NOTHING;
+
+-- Auditoria: integridad a nivel de base de datos.
+-- Referencia de Wompi de cada intento de pago (el webhook ubica el pago por ella, no por el monto).
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS reference VARCHAR(80);
+CREATE UNIQUE INDEX IF NOT EXISTS payments_reference_idx ON payments (reference) WHERE reference IS NOT NULL;
+
+-- Balance de masas: nada negativo, y el rechazo / no SUI nunca superan la cantidad del material.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tz_balance_masas_cantidades_chk') THEN
+    ALTER TABLE tz_formulario_balance_masas ADD CONSTRAINT tz_balance_masas_cantidades_chk CHECK (
+      cantidad >= 0 AND valor >= 0 AND cantidad_rechazo >= 0 AND cantidad_nosui >= 0
+      AND cantidad_rechazo <= cantidad AND cantidad_nosui <= cantidad
+    );
+  END IF;
+END $$;
+
+-- Ventas: el tipo de identificacion del comprador estaba como texto libre ('NIT') pero el motor lo
+-- trata como una opcion del catalogo (por id), y el listado fallaba con "integer = character
+-- varying". Ahora es una referencia real al catalogo; los valores viejos se convierten.
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_tipo_identificacion INT REFERENCES tz_catalogos(id);
+UPDATE tz_formulario_ventas v SET id_tipo_identificacion = c.id
+FROM tz_catalogos c
+WHERE v.id_tipo_identificacion IS NULL AND c.categoria = 'tipos_identificacion'
+  AND ((upper(trim(v.tipo_identificacion)) = 'NIT' AND c.codigo = '4')
+    OR (upper(trim(v.tipo_identificacion)) IN ('CC', 'CEDULA', 'CÉDULA') AND c.codigo = '1')
+    OR (upper(trim(v.tipo_identificacion)) IN ('CE') AND c.codigo = '2')
+    OR (upper(trim(v.tipo_identificacion)) IN ('PASAPORTE', 'PP') AND c.codigo = '3'));
+
+-- Un reciclador (documento) no puede repetirse dentro del mismo centro.
+CREATE UNIQUE INDEX IF NOT EXISTS tz_recicladores_documento_centro_idx ON tz_recicladores (id_centro, nro_documento);

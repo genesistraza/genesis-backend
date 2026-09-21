@@ -13,9 +13,25 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
 const { drawPlanilla, weekBucketRanges, bucketForDay, slugName } = require('../utils/planillaPdf');
 
+const { validateRecord, newContext, mapDbError, todayCO, isValidYmd, CROSS } = require('../utils/trazaValidate');
+
 const router = express.Router();
 router.use(requireAuth, requireRole('pro'));
 const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// Listas fijas (terminos que el usuario no debe escribir a mano). value se guarda tal cual.
+const opt = (...values) => values.map((v) => ({ value: v, label: v }));
+const OPCIONES = {
+  estadoActivo: opt('Activo', 'Inactivo'),
+  estadoRuta: opt('Activa', 'Suspendida', 'Inactiva'),
+  vehiculo: opt('Carreta', 'Triciclo', 'Bicicleta', 'Zorra de traccion humana', 'Vehiculo de traccion animal', 'Moto', 'Camioneta', 'Camion', 'Ninguno'),
+  fase: opt('Pendiente', 'En proceso', 'Completada'),
+  pqrTipo: opt('Peticion', 'Queja', 'Reclamo'),
+  pqrEstado: opt('Abierta', 'En proceso', 'Cerrada'),
+  afiliacion: opt('Afiliado', 'Sin afiliar', 'En tramite'),
+  siNo: [{ value: 'true', label: 'Sí' }, { value: 'false', label: 'No' }],
+  barrido: opt('Manual', 'Mecanico')
+};
 
 const ENTITIES = {
   centros: {
@@ -114,12 +130,12 @@ const ENTITIES = {
       { name: 'nro_documento', label: 'Documento', type: 'text', required: true },
       { name: 'cod_departamento_dane', label: 'Departamento donde opera (código DANE)', type: 'text' },
       { name: 'cod_municipio_dane', label: 'Municipio donde opera (código DANE)', type: 'text' },
-      { name: 'estado', label: 'Estado', type: 'text' },
+      { name: 'estado', label: 'Estado', type: 'select-fixed', options: OPCIONES.estadoActivo },
       { name: 'fecha_exp_documento', label: 'Fecha expedición doc.', type: 'date' },
       { name: 'fecha_nacimiento', label: 'Fecha nacimiento', type: 'date' },
       { name: 'direccion', label: 'Dirección', type: 'text' },
       { name: 'telefono', label: 'Teléfono', type: 'text' },
-      { name: 'tipo_de_vehiculo', label: 'Tipo vehículo', type: 'text' },
+      { name: 'tipo_de_vehiculo', label: 'Tipo vehículo', type: 'select-fixed', options: OPCIONES.vehiculo },
       { name: 'placa', label: 'Placa', type: 'text' }
     ]
   },
@@ -157,7 +173,7 @@ const ENTITIES = {
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
       { name: 'fase', label: 'Fase (1-8)', type: 'number', required: true },
       { name: 'descripcion_fase', label: 'Descripción de la fase', type: 'text' },
-      { name: 'estado', label: 'Estado (Pendiente/En proceso/Completada)', type: 'text' },
+      { name: 'estado', label: 'Estado', type: 'select-fixed', options: OPCIONES.fase },
       { name: 'fecha_completada', label: 'Fecha completada', type: 'date' },
       { name: 'observaciones', label: 'Observaciones', type: 'text' }
     ]
@@ -166,12 +182,12 @@ const ENTITIES = {
     table: 'tz_pqr', label: 'PQR',
     fields: [
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
-      { name: 'tipo', label: 'Tipo (Peticion/Queja/Reclamo)', type: 'text' },
+      { name: 'tipo', label: 'Tipo', type: 'select-fixed', options: OPCIONES.pqrTipo },
       { name: 'fecha', label: 'Fecha', type: 'date' },
       { name: 'nombre_solicitante', label: 'Nombre solicitante', type: 'text' },
       { name: 'documento_solicitante', label: 'Documento solicitante', type: 'text' },
       { name: 'descripcion', label: 'Descripción', type: 'text' },
-      { name: 'estado', label: 'Estado (Abierta/En proceso/Cerrada)', type: 'text' },
+      { name: 'estado', label: 'Estado', type: 'select-fixed', options: OPCIONES.pqrEstado },
       { name: 'fecha_respuesta', label: 'Fecha respuesta', type: 'date' },
       { name: 'respuesta', label: 'Respuesta', type: 'text' }
     ]
@@ -181,11 +197,11 @@ const ENTITIES = {
     fields: [
       { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo', required: true },
       { name: 'eps', label: 'EPS', type: 'text' },
-      { name: 'estado_afiliacion_eps', label: 'Estado afiliación EPS', type: 'text' },
+      { name: 'estado_afiliacion_eps', label: 'Estado afiliación EPS', type: 'select-fixed', options: OPCIONES.afiliacion },
       { name: 'arl', label: 'ARL', type: 'text' },
-      { name: 'estado_afiliacion_arl', label: 'Estado afiliación ARL', type: 'text' },
+      { name: 'estado_afiliacion_arl', label: 'Estado afiliación ARL', type: 'select-fixed', options: OPCIONES.afiliacion },
       { name: 'base_cotizacion_arl', label: 'Base cotización ARL', type: 'decimal' },
-      { name: 'beps_afiliado', label: 'Afiliado a BEPS (1 = sí, 0 = no)', type: 'text' },
+      { name: 'beps_afiliado', label: 'Afiliado a BEPS', type: 'select-fixed', options: OPCIONES.siNo },
       { name: 'aporte_beps_mensual', label: 'Aporte BEPS mensual', type: 'decimal' },
       { name: 'fecha_actualizacion', label: 'Fecha actualización', type: 'date' }
     ]
@@ -196,7 +212,7 @@ const ENTITIES = {
       { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
       { name: 'id_reciclador', label: 'Reciclador', type: 'select-entity', entity: 'recicladores', labelField: 'nombre_completo' },
       { name: 'fecha_entrada_operacion', label: 'Fecha entrada operación', type: 'date' },
-      { name: 'estado', label: 'Estado', type: 'text' }
+      { name: 'estado', label: 'Estado', type: 'select-fixed', options: OPCIONES.estadoRuta }
     ]
   },
   microrrutas_detalle: {
@@ -214,7 +230,7 @@ const ENTITIES = {
       { name: 'frecuencia_semanal', label: 'Frecuencia semanal', type: 'number' },
       { name: 'dias_frecuencia', label: 'Días', type: 'text' },
       { name: 'id_estacion_transferencia', label: 'Estación transferencia', type: 'select-catalogo', categoria: 'estaciones_transferencia' },
-      { name: 'tipo_barrido', label: 'Tipo barrido', type: 'text' }
+      { name: 'tipo_barrido', label: 'Tipo barrido', type: 'select-fixed', options: OPCIONES.barrido }
     ]
   },
   usuarios: {
@@ -264,7 +280,7 @@ const ENTITIES = {
       { name: 'periodo', label: 'Periodo', type: 'text' },
       { name: 'nro_factura', label: 'Número de factura', type: 'text' },
       { name: 'fecha_factura', label: 'Fecha de factura', type: 'date' },
-      { name: 'tipo_identificacion', label: 'Tipo identificación comprador', type: 'select-catalogo', categoria: 'tipos_identificacion' },
+      { name: 'id_tipo_identificacion', label: 'Tipo identificación comprador', type: 'select-catalogo', categoria: 'tipos_identificacion' },
       { name: 'nro_identificacion', label: 'Nro identificación comprador', type: 'text' },
       { name: 'digito_verificacion', label: 'Dígito de verificación (si NIT)', type: 'text' },
       { name: 'nombre_comprador', label: 'Nombre o razón social del comprador', type: 'text' },
@@ -313,9 +329,23 @@ const ENTITIES = {
 };
 
 function getEntity(key) {
-  const entity = ENTITIES[key];
-  if (!entity) return null;
-  return entity;
+  // hasOwnProperty: sin esto, "constructor" o "__proto__" en la URL devolvian un objeto de JS.
+  if (!Object.prototype.hasOwnProperty.call(ENTITIES, key)) return null;
+  return ENTITIES[key];
+}
+
+// Igual que asyncRoute, pero los errores de restriccion de PostgreSQL (duplicado, texto muy
+// largo, referencia rota...) se contestan como 4xx con un mensaje claro en vez de un 500.
+function guard(fn) {
+  return asyncRoute(async (req, res, next) => {
+    try {
+      await fn(req, res, next);
+    } catch (err) {
+      const mapped = mapDbError(err);
+      if (mapped && !res.headersSent) return res.status(mapped.status).json({ error: mapped.error });
+      throw err;
+    }
+  });
 }
 
 // GET /trazabilidad/entities -> el registro completo, para que el frontend arme menú,
@@ -329,7 +359,7 @@ router.get('/entities', (req, res) => {
 });
 
 // GET /trazabilidad/catalogo-options/:categoria -> opciones {value,label} para un select-catalogo
-router.get('/catalogo-options/:categoria', asyncRoute(async (req, res) => {
+router.get('/catalogo-options/:categoria', guard(async (req, res) => {
   const result = await pool.query(
     'SELECT id AS value, descripcion AS label FROM tz_catalogos WHERE categoria = $1 ORDER BY orden, descripcion',
     [req.params.categoria]
@@ -349,23 +379,33 @@ function normalizeRowKeys(row) {
   for (const key in row) out[normalizeHeader(key)] = row[key];
   return out;
 }
+// Devuelve 'YYYY-MM-DD' o null si no se pudo entender. Un texto con barras/puntos se lee en el
+// orden colombiano DIA/MES/AÑO (new Date('03/04/2026') lo leeria como 4 de marzo, en gringo).
 function toDateValue(v) {
-  let d = null;
-  if (v instanceof Date) d = v;
-  else if (typeof v === 'string' && v.trim()) {
-    const parsed = new Date(v);
-    if (!isNaN(parsed)) d = parsed;
+  if (v instanceof Date) {
+    if (isNaN(v)) return null;
+    return `${v.getUTCFullYear()}-${String(v.getUTCMonth() + 1).padStart(2, '0')}-${String(v.getUTCDate()).padStart(2, '0')}`;
   }
-  if (!d) return null;
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  if (typeof v !== 'string' || !v.trim()) return null;
+  const s = v.trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(s);
+  let y, mo, d;
+  if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})$/.exec(s))) { d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else return null;
+  const out = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  return isValidYmd(out) ? out : null;
 }
+// Numero desde Excel/CSV: acepta 12.5, 12,5 y 1.234,56. Devuelve null si no es un numero.
 function toNumberValue(v) {
   if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return isNaN(n) ? null : n;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  let s = String(v).trim().replace(/\s/g, '');
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.');
+  else if (/^-?\d+,\d+$/.test(s)) s = s.replace(',', '.');
+  if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 function toTextValue(v) {
   if (v === null || v === undefined) return null;
@@ -377,7 +417,7 @@ function toTextValue(v) {
 // Las columnas del archivo pueden llamarse como el nombre interno del campo o como su etiqueta
 // (p.ej. "id_centro" o "Centro" son equivalentes); para select-entity/select-catalogo tambien
 // acepta el texto de la etiqueta en vez del id (se resuelve contra la tabla/catalogo referenciado).
-router.post('/:entity/import', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
@@ -405,40 +445,56 @@ router.post('/:entity/import', uploadExcel.single('file'), asyncRoute(async (req
     }
   }
 
+  // Convierte la celda al tipo del campo. Si tiene contenido pero no se entiende, se devuelve
+  // {error} (antes se convertia en NULL en silencio y el dato se perdia sin avisar).
   function resolveFieldValue(f, rawValue) {
-    if (rawValue === null || rawValue === undefined || rawValue === '') return null;
+    if (rawValue === null || rawValue === undefined || rawValue === '') return { value: null };
     if (f.type === 'select-entity' || f.type === 'select-catalogo') {
-      if (typeof rawValue === 'number' || /^\d+$/.test(String(rawValue).trim())) return Number(rawValue);
-      const map = lookupMaps[f.name] || {};
-      return map[normalizeHeader(rawValue)] || null;
+      if (typeof rawValue === 'number' || /^\d+$/.test(String(rawValue).trim())) return { value: Number(rawValue) };
+      const id = (lookupMaps[f.name] || {})[normalizeHeader(rawValue)];
+      return id ? { value: id } : { error: `"${f.label}": "${rawValue}" no existe en ese módulo.` };
     }
-    if (f.type === 'date') return toDateValue(rawValue);
-    if (f.type === 'number' || f.type === 'decimal') return toNumberValue(rawValue);
-    return toTextValue(rawValue);
+    if (f.type === 'date') {
+      const d = toDateValue(rawValue);
+      return d ? { value: d } : { error: `"${f.label}": la fecha "${rawValue}" no se entiende (usa AAAA-MM-DD o DD/MM/AAAA).` };
+    }
+    if (f.type === 'number' || f.type === 'decimal') {
+      const n = toNumberValue(rawValue);
+      return n !== null ? { value: n } : { error: `"${f.label}": "${rawValue}" no es un número.` };
+    }
+    return { value: toTextValue(rawValue) };
   }
 
   const parsedRows = [];
   const errores = [];
-  rows.forEach((row, idx) => {
+  let omitidas = 0;
+  const ctx = newContext(true);
+  for (let idx = 0; idx < rows.length; idx++) {
+    const row = rows[idx];
     const parsed = {};
-    let missingRequired = null;
+    const rowErrors = [];
     entity.fields.forEach((f) => {
       const byLabel = normalizeHeader(f.label);
       const byName = normalizeHeader(f.name);
       const rawValue = (byLabel in row) ? row[byLabel] : row[byName];
-      const value = resolveFieldValue(f, rawValue);
-      if (f.required && (value === null || value === undefined)) missingRequired = f.label;
-      parsed[f.name] = value;
+      const r = resolveFieldValue(f, rawValue);
+      if (r.error) rowErrors.push(r.error); else parsed[f.name] = r.value;
     });
-    if (missingRequired) {
-      errores.push('Fila ' + (idx + 2) + ': falta o no se pudo resolver "' + missingRequired + '".');
-      return;
+    if (rowErrors.length === 0) {
+      const v = await validateRecord(ENTITIES, req.params.entity, parsed, { ctx });
+      if (v.errors.length) rowErrors.push(...v.errors);
+      else Object.assign(parsed, v.values);
+    }
+    if (rowErrors.length) {
+      omitidas++;
+      if (errores.length < 20) errores.push('Fila ' + (idx + 2) + ': ' + rowErrors.join(' '));
+      continue;
     }
     parsedRows.push(parsed);
-  });
+  }
 
   if (parsedRows.length === 0) {
-    return res.status(400).json({ error: 'Ninguna fila fue válida.', detalles: errores.slice(0, 20) });
+    return res.status(400).json({ error: 'Ninguna fila fue válida.' + (errores[0] ? ' ' + errores[0] : ''), detalles: errores });
   }
 
   const columns = entity.fields.map((f) => f.name);
@@ -465,14 +521,14 @@ router.post('/:entity/import', uploadExcel.single('file'), asyncRoute(async (req
   }
 
   await logActivity(req.user.id, 'pruebas_trazabilidad_importado',
-    { entity: req.params.entity, filas: parsedRows.length, omitidas: errores.length }, req.ip);
-  res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: errores.length, detalles: errores.slice(0, 20) });
+    { entity: req.params.entity, filas: parsedRows.length, omitidas }, req.ip);
+  res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: omitidas, detalles: errores });
 }));
 
 // GET /trazabilidad/:entity/template -> plantilla .xlsx con 2 hojas: "Plantilla" (encabezados +
 // una fila de ejemplo, lista para llenar y volver a importar) e "Instrucciones" (que va en cada
 // columna, en qué formato, y para los campos por código/catálogo, cuáles son los valores válidos).
-router.get('/:entity/template', asyncRoute(async (req, res) => {
+router.get('/:entity/template', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
 
@@ -495,6 +551,9 @@ router.get('/:entity/template', asyncRoute(async (req, res) => {
     } else if (f.type === 'date') {
       formato = 'Fecha en formato AAAA-MM-DD. Ejemplo: 2026-01-31';
       ejemplo = '2026-01-31';
+    } else if (f.type === 'select-fixed') {
+      formato = 'Debe ser uno de estos valores: ' + f.options.map((o) => o.label).join(' | ') + '.';
+      ejemplo = f.options[0].label;
     } else if (f.type === 'select-entity') {
       const refEntity = getEntity(f.entity);
       const labelCol = f.labelField === 'id' ? 'id::text' : f.labelField;
@@ -534,17 +593,101 @@ router.get('/:entity/template', asyncRoute(async (req, res) => {
 // GET /trazabilidad/balance-masas-dia?id_reciclador=X&fecha=YYYY-MM-DD -> lo que ya está
 // guardado ese día para ese reciclador (una fila por material), para precargar la grilla.
 // Registrada ANTES de /:entity para que Express no la confunda con esa ruta genérica.
-router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
-  const { id_reciclador, fecha } = req.query;
-  if (!id_reciclador || !fecha) return res.status(400).json({ error: 'Falta id_reciclador o fecha.' });
+router.get('/balance-masas-dia', guard(async (req, res) => {
+  const idReciclador = parseId(req.query.id_reciclador);
+  if (!idReciclador || !isValidYmd(req.query.fecha)) return res.status(400).json({ error: 'Falta id_reciclador o la fecha no es válida.' });
   const result = await pool.query(
     `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui,
             id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
-    [id_reciclador, fecha]
+    [idReciclador, req.query.fecha]
   );
   res.json(result.rows);
 }));
+
+const BM_MAX = 99999999;
+
+// Valida todo el dia antes de tocar la base: fecha, reciclador del centro, bodega/macrorruta/
+// microrrutas del mismo centro, materiales existentes y sin repetir, numeros >= 0, y que el
+// rechazo y la cantidad no SUI nunca superen la cantidad del material. Devuelve {errors} o {data}.
+async function validateBalanceDia(body) {
+  const errors = [];
+  const b = body || {};
+  const idCentro = parseId(b.id_centro);
+  const idReciclador = parseId(b.id_reciclador);
+  if (!idCentro || !idReciclador || !Array.isArray(b.materiales)) return { errors: ['Faltan datos obligatorios.'] };
+  if (!isValidYmd(b.fecha)) return { errors: ['La fecha no es válida.'] };
+  if (b.fecha > todayCO()) return { errors: ['No se puede registrar material con fecha futura.'] };
+  if (b.fecha < '2000-01-01') return { errors: ['La fecha es demasiado antigua.'] };
+
+  const rec = await pool.query('SELECT id_centro FROM tz_recicladores WHERE id = $1', [idReciclador]);
+  if (!rec.rows[0]) return { errors: ['El reciclador no existe.'] };
+  if (rec.rows[0].id_centro !== idCentro) return { errors: ['El reciclador no pertenece a ese centro.'] };
+
+  const opcionales = {};
+  for (const k of ['id_numacro', 'id_bodega', 'id_macrorruta', 'id_microrruta_1', 'id_microrruta_2']) {
+    if (b[k] === undefined || b[k] === null || b[k] === '') { opcionales[k] = null; continue; }
+    const n = parseId(b[k]);
+    if (!n) return { errors: ['Alguno de los selectores (ECA, macrorruta, microrruta) es inválido.'] };
+    opcionales[k] = n;
+  }
+  const mismoCentro = async (table, id, label) => {
+    if (!id) return;
+    const r = await pool.query(`SELECT id_centro FROM ${table} WHERE id = $1`, [id]);
+    if (!r.rows[0]) errors.push(`${label}: no existe.`);
+    else if (r.rows[0].id_centro !== idCentro) errors.push(`${label}: pertenece a otro centro.`);
+  };
+  await mismoCentro('tz_numacros', opcionales.id_numacro, 'Zona');
+  await mismoCentro('tz_bodegas', opcionales.id_bodega, 'ECA (NUECA)');
+  await mismoCentro('tz_macrorrutas', opcionales.id_macrorruta, 'Macrorruta (NUMACRO)');
+  for (const k of ['id_microrruta_1', 'id_microrruta_2']) {
+    if (!opcionales[k]) continue;
+    const r = await pool.query(
+      `SELECT f.id_centro, f.id_reciclador FROM tz_formulario_microrrutas_detalle d
+       JOIN tz_formulario_microrrutas f ON f.id = d.id_formulario_microrruta WHERE d.id = $1`, [opcionales[k]]);
+    const label = k === 'id_microrruta_1' ? 'Microrruta 1' : 'Microrruta 2';
+    if (!r.rows[0]) errors.push(`${label}: no existe.`);
+    else if (r.rows[0].id_centro !== idCentro || (r.rows[0].id_reciclador && r.rows[0].id_reciclador !== idReciclador)) {
+      errors.push(`${label}: no corresponde a este reciclador.`);
+    }
+  }
+  if (opcionales.id_microrruta_1 && opcionales.id_microrruta_1 === opcionales.id_microrruta_2) {
+    errors.push('Microrruta 1 y Microrruta 2 no pueden ser la misma.');
+  }
+
+  const ids = b.materiales.map((m) => parseId(m && m.id_tipo_material));
+  if (ids.some((x) => !x)) errors.push('Hay un material inválido en la lista.');
+  const validIds = ids.filter(Boolean);
+  if (new Set(validIds).size !== validIds.length) errors.push('Hay un material repetido en la lista.');
+  const names = new Map();
+  if (validIds.length) {
+    const r = await pool.query('SELECT id, desc_tipo_material FROM tz_tipos_material WHERE id = ANY($1::int[])', [validIds]);
+    r.rows.forEach((x) => names.set(x.id, x.desc_tipo_material));
+  }
+
+  const filas = [];
+  b.materiales.forEach((m) => {
+    const id = parseId(m && m.id_tipo_material);
+    if (!id) return;
+    const name = names.get(id) || ('#' + id);
+    if (!names.has(id)) { errors.push(`El material ${name} no existe.`); return; }
+    const num = (v, label) => {
+      if (v === undefined || v === null || v === '') return 0;
+      const n = typeof v === 'number' ? v : Number(String(v).replace(',', '.'));
+      if (!Number.isFinite(n) || n < 0 || n > BM_MAX) { errors.push(`${name}: "${label}" debe ser un número entre 0 y ${BM_MAX}.`); return 0; }
+      return n;
+    };
+    const row = { id_tipo_material: id, cantidad: num(m.cantidad, 'Cantidad'), valor: num(m.valor, 'Valor'),
+      cantidad_rechazo: num(m.cantidad_rechazo, 'Cantidad rechazo'), cantidad_nosui: num(m.cantidad_nosui, 'Cantidad no SUI') };
+    if (!(row.cantidad || row.valor || row.cantidad_rechazo || row.cantidad_nosui)) return; // fila vacia de la grilla
+    const rowErrors = [];
+    CROSS.balance_masas(row, rowErrors);
+    rowErrors.forEach((e) => errors.push(`${name}: ${e}`));
+    filas.push(row);
+  });
+
+  return { errors, data: { idCentro, idReciclador, fecha: b.fecha, opcionales, filas } };
+}
 
 // POST /trazabilidad/balance-masas-dia -> guarda de una vez todas las filas de material con
 // datos de un reciclador en un día (reemplaza lo que hubiera ese mismo reciclador+fecha),
@@ -552,28 +695,27 @@ router.get('/balance-masas-dia', asyncRoute(async (req, res) => {
 // El sitio de destino del rechazo NO se captura aquí: es un valor fijo de la asociación
 // (tz_centros.id_tipo_destino / numero_sitio_destino, lo configura el administrador) y el
 // export a la Super lo toma de ahí.
-router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
-  const { id_centro, id_reciclador, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, materiales } = req.body;
-  if (!id_centro || !id_reciclador || !fecha || !Array.isArray(materiales)) {
-    return res.status(400).json({ error: 'Faltan datos obligatorios.' });
-  }
+router.post('/balance-masas-dia', guard(async (req, res) => {
+  const v = await validateBalanceDia(req.body);
+  if (v.errors.length) return sendValidationErrors(res, v.errors);
+  const { idCentro, idReciclador, fecha, opcionales, filas } = v.data;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2', [id_reciclador, fecha]);
-    const filas = materiales.filter((m) => m.cantidad || m.valor || m.cantidad_rechazo || m.cantidad_nosui);
+    await client.query('DELETE FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2', [idReciclador, fecha]);
     for (const m of filas) {
       await client.query(
         `INSERT INTO tz_formulario_balance_masas
          (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [id_centro, id_reciclador, m.id_tipo_material, id_numacro || null, id_bodega || null, id_macrorruta || null,
-          id_microrruta_1 || null, id_microrruta_2 || null, fecha,
-          m.cantidad || 0, m.valor || 0, m.cantidad_rechazo || 0, m.cantidad_nosui || 0]
+        [idCentro, idReciclador, m.id_tipo_material, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta,
+          opcionales.id_microrruta_1, opcionales.id_microrruta_2, fecha,
+          m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui]
       );
     }
     await client.query('COMMIT');
-    await logActivity(req.user.id, 'pruebas_balance_masas_dia_guardado', { id_reciclador, fecha, filas: filas.length }, req.ip);
+    await logActivity(req.user.id, 'pruebas_balance_masas_dia_guardado', { id_reciclador: idReciclador, fecha, filas: filas.length }, req.ip);
     res.json({ message: 'Guardado.', filas: filas.length });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -587,13 +729,17 @@ router.post('/balance-masas-dia', asyncRoute(async (req, res) => {
 // de masas en ese rango de fechas (sin el limite de 500 del listado generico), con las columnas
 // ya resueltas (reciclador, material, bodega, numacro, centro) para armar el reporte periodico
 // en el mismo formato que recibe la Superintendencia. Registrada antes de /:entity.
-router.get('/balance-masas-export', asyncRoute(async (req, res) => {
+router.get('/balance-masas-export', guard(async (req, res) => {
   const { desde, hasta, id_centro } = req.query;
   if (!desde || !hasta) return res.status(400).json({ error: 'Falta el rango de fechas (desde y hasta).' });
+  if (!isValidYmd(desde) || !isValidYmd(hasta)) return res.status(400).json({ error: 'Las fechas no son válidas.' });
+  if (desde > hasta) return res.status(400).json({ error: 'La fecha "desde" no puede ser posterior a "hasta".' });
   const params = [desde, hasta];
   let where = 'bm.fecha BETWEEN $1 AND $2';
   if (id_centro) {
-    params.push(id_centro);
+    const idc = parseId(id_centro);
+    if (!idc) return res.status(400).json({ error: 'id_centro inválido.' });
+    params.push(idc);
     where += ' AND bm.id_centro = $' + params.length;
   }
   const result = await pool.query(
@@ -649,7 +795,7 @@ async function fetchImageBuffer(url) {
 }
 
 // GET /trazabilidad/centro-logo/:id -> {logo_url} del centro (por NIT), para las impresiones.
-router.get('/centro-logo/:id', asyncRoute(async (req, res) => {
+router.get('/centro-logo/:id', guard(async (req, res) => {
   const c = await pool.query('SELECT nit FROM tz_centros WHERE id = $1', [req.params.id]);
   res.json({ logo_url: c.rows[0] ? await findLogoUrlByNit(c.rows[0].nit) : null });
 }));
@@ -659,12 +805,15 @@ router.get('/centro-logo/:id', asyncRoute(async (req, res) => {
 // agrupado en 4 bloques dentro del mes), en el mismo formato que ya se usaba en la asociacion.
 // Sin id_reciclador devuelve un .zip con una planilla por cada reciclador que tuvo entregas ese
 // mes; con id_reciclador devuelve un solo PDF. Registrada antes de /:entity.
-router.get('/planillas-recepcion', asyncRoute(async (req, res) => {
+router.get('/planillas-recepcion', guard(async (req, res) => {
   const { anio, mes, id_centro, id_reciclador } = req.query;
   if (!anio || !mes || !id_centro) return res.status(400).json({ error: 'Falta anio, mes o id_centro.' });
   const anioNum = Number(anio);
   const mesNum = Number(mes);
-  if (!anioNum || !mesNum || mesNum < 1 || mesNum > 12) return res.status(400).json({ error: 'Mes o año inválido.' });
+  if (!Number.isInteger(anioNum) || !Number.isInteger(mesNum) || anioNum < 2000 || anioNum > 2100 || mesNum < 1 || mesNum > 12) {
+    return res.status(400).json({ error: 'Mes o año inválido.' });
+  }
+  if (!parseId(id_centro) || (id_reciclador && !parseId(id_reciclador))) return res.status(400).json({ error: 'Centro o reciclador inválido.' });
 
   const centroRes = await pool.query('SELECT desc_centro, nit, direccion, telefono, correo FROM tz_centros WHERE id = $1', [id_centro]);
   if (centroRes.rows.length === 0) return res.status(404).json({ error: 'Centro no encontrado.' });
@@ -754,7 +903,7 @@ router.get('/planillas-recepcion', asyncRoute(async (req, res) => {
 }));
 
 // GET /trazabilidad/:entity/options?labelField=xxx -> opciones {value,label} para un select-entity
-router.get('/:entity/options', asyncRoute(async (req, res) => {
+router.get('/:entity/options', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
   const labelField = req.query.labelField;
@@ -767,7 +916,7 @@ router.get('/:entity/options', asyncRoute(async (req, res) => {
 }));
 
 // GET /trazabilidad/:entity -> lista filas, con las etiquetas de sus select-entity resueltas
-router.get('/:entity', asyncRoute(async (req, res) => {
+router.get('/:entity', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
 
@@ -788,64 +937,106 @@ router.get('/:entity', asyncRoute(async (req, res) => {
     }
   });
 
-  const sql = `SELECT ${selectCols.join(', ')} FROM ${entity.table} t ${joins.join(' ')} ORDER BY t.id DESC LIMIT 500`;
-  const result = await pool.query(sql);
+  // ?id_centro=X limita a los datos de ese centro EN LA BASE (el filtro del navegador, despues del
+  // LIMIT, dejaba fuera los datos de una asociacion cuando otras tenian mas de 500 filas).
+  const params = [];
+  let where = '';
+  if (req.query.id_centro !== undefined && req.query.id_centro !== '') {
+    const idc = Number(req.query.id_centro);
+    if (!Number.isInteger(idc) || idc <= 0) return res.status(400).json({ error: 'id_centro inválido.' });
+    const cond = centroCondition(req.params.entity, entity);
+    if (cond) { params.push(idc); where = 'WHERE ' + cond; }
+  }
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 5000);
+  const sql = `SELECT ${selectCols.join(', ')} FROM ${entity.table} t ${joins.join(' ')} ${where} ORDER BY t.id DESC LIMIT ${limit}`;
+  const result = await pool.query(sql, params);
   res.json(result.rows);
 }));
 
-function buildInsertUpdate(entity, body) {
-  const cols = [];
-  const values = [];
-  entity.fields.forEach((f) => {
-    if (!(f.name in body)) return;
-    let v = body[f.name];
-    if (v === '' || v === undefined) v = null;
-    cols.push(f.name);
-    values.push(v);
-  });
-  return { cols, values };
+// Condicion SQL ($1 = id del centro) que acota una entidad a un centro, o null si no depende de uno.
+function centroCondition(key, entity) {
+  if (key === 'centros') return 't.id = $1';
+  if (entity.fields.some((f) => f.name === 'id_centro')) return 't.id_centro = $1';
+  if (key === 'seguridad_social') return 't.id_reciclador IN (SELECT id FROM tz_recicladores WHERE id_centro = $1)';
+  if (key === 'microrrutas_detalle') return 't.id_formulario_microrruta IN (SELECT id FROM tz_formulario_microrrutas WHERE id_centro = $1)';
+  return null;
+}
+
+function parseId(raw) {
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+function sendValidationErrors(res, errors) {
+  res.status(400).json({ error: errors.slice(0, 3).join(' '), detalles: errors });
 }
 
 // POST /trazabilidad/:entity -> crear
-router.post('/:entity', asyncRoute(async (req, res) => {
+router.post('/:entity', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
 
-  const missing = entity.fields.filter((f) => f.required && !req.body[f.name]);
-  if (missing.length) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios: ' + missing.map((f) => f.label).join(', ') });
-  }
+  const v = await validateRecord(ENTITIES, req.params.entity, req.body || {});
+  if (v.errors.length) return sendValidationErrors(res, v.errors);
 
-  const { cols, values } = buildInsertUpdate(entity, req.body);
-  const placeholders = cols.map((_, i) => `$${i + 1}`);
-  const sql = `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${placeholders.join(',')}) RETURNING id`;
+  const cols = Object.keys(v.values);
+  const values = cols.map((c) => v.values[c]);
+  const sql = `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')}) RETURNING id`;
   const result = await pool.query(sql, values);
   await logActivity(req.user.id, 'pruebas_trazabilidad_creado', { entity: req.params.entity, id: result.rows[0].id }, req.ip);
   res.json({ id: result.rows[0].id });
 }));
 
-// PUT /trazabilidad/:entity/:id -> editar
-router.put('/:entity/:id', asyncRoute(async (req, res) => {
+// PUT /trazabilidad/:entity/:id -> editar (los campos que no llegan se conservan; se valida la fila resultante)
+router.put('/:entity/:id', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Id inválido.' });
 
-  const { cols, values } = buildInsertUpdate(entity, req.body);
+  const current = await pool.query(`SELECT * FROM ${entity.table} WHERE id = $1`, [id]);
+  if (current.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado.' });
+
+  const v = await validateRecord(ENTITIES, req.params.entity, req.body || {}, { existing: current.rows[0], id });
+  if (v.errors.length) return sendValidationErrors(res, v.errors);
+
+  const cols = Object.keys(v.values);
   if (cols.length === 0) return res.status(400).json({ error: 'Nada para actualizar.' });
-  const setClause = cols.map((c, i) => `${c} = $${i + 1}`).join(', ');
-  values.push(req.params.id);
-  const sql = `UPDATE ${entity.table} SET ${setClause} WHERE id = $${values.length} RETURNING id`;
+  const values = cols.map((c) => v.values[c]);
+  values.push(id);
+  const sql = `UPDATE ${entity.table} SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${values.length} RETURNING id`;
   const result = await pool.query(sql, values);
-  if (result.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado.' });
-  await logActivity(req.user.id, 'pruebas_trazabilidad_editado', { entity: req.params.entity, id: req.params.id }, req.ip);
+  await logActivity(req.user.id, 'pruebas_trazabilidad_editado', { entity: req.params.entity, id }, req.ip);
   res.json({ id: result.rows[0].id });
 }));
 
 // DELETE /trazabilidad/:entity/:id
-router.delete('/:entity/:id', asyncRoute(async (req, res) => {
+router.delete('/:entity/:id', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  await pool.query(`DELETE FROM ${entity.table} WHERE id = $1`, [req.params.id]);
-  await logActivity(req.user.id, 'pruebas_trazabilidad_eliminado', { entity: req.params.entity, id: req.params.id }, req.ip);
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Id inválido.' });
+
+  // Borrar un centro arrastra en cascada TODOS sus datos (balance de masas, bodegas, rutas...): solo
+  // se permite cuando ya no tiene recicladores ni balance de masas.
+  if (req.params.entity === 'centros') {
+    const dep = await pool.query(
+      `SELECT (SELECT count(*) FROM tz_recicladores WHERE id_centro = $1)::int AS recicladores,
+              (SELECT count(*) FROM tz_formulario_balance_masas WHERE id_centro = $1)::int AS balance`, [id]);
+    const d = dep.rows[0];
+    if (d.recicladores || d.balance) {
+      return res.status(409).json({ error: `No se puede eliminar el centro: tiene ${d.recicladores} reciclador(es) y ${d.balance} registro(s) de balance de masas. Elimínalos primero.` });
+    }
+  }
+  let result;
+  try {
+    result = await pool.query(`DELETE FROM ${entity.table} WHERE id = $1 RETURNING id`, [id]);
+  } catch (err) {
+    if (err.code === '23503') return res.status(409).json({ error: 'No se puede eliminar: otros registros dependen de este (por ejemplo balance de masas o rutas). Elimina primero esos registros.' });
+    throw err;
+  }
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado.' });
+  await logActivity(req.user.id, 'pruebas_trazabilidad_eliminado', { entity: req.params.entity, id }, req.ip);
   res.json({ message: 'Eliminado.' });
 }));
 

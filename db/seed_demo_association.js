@@ -257,6 +257,7 @@ async function main() {
     // 14) Ventas
     const materialesVenta = ['Carton', 'Papel Archivo', 'Pet', 'Vidrio', 'Chatarra'];
     const ventaRows = [];
+    const idNit = (await catalogoMap(client, 'tipos_identificacion')).find((c) => c.descripcion === 'NIT').id;
     for (let i = 0; i < 20; i++) {
       const kg = randomInt(200, 4000);
       const valorKilo = randomInt(200, 2500);
@@ -265,7 +266,7 @@ async function main() {
       ventaRows.push({
         id_centro: idCentro, anio: 2026, periodo: pick(['2026-01', '2026-02']),
         fecha_habilitacion: randomDate(400, 200), fecha_certificacion: randomDate(200, 50),
-        tipo_identificacion: 'NIT', nro_identificacion: String(randomInt(800000000, 899999999)),
+        id_tipo_identificacion: idNit, nro_identificacion: String(randomInt(800000000, 899999999)),
         nro_factura: 'FAC-' + pad(i + 1, 4), nombre_comprador: pick(COMPRADORES),
         material: pick(materialesVenta), kg, toneladas: kg / 1000,
         valor_kilo: valorKilo, valor_sin_iva: valorSinIva, iva, valor_con_iva: valorSinIva + iva,
@@ -273,7 +274,7 @@ async function main() {
       });
     }
     await bulkInsert(client, 'tz_formulario_ventas',
-      ['id_centro', 'anio', 'periodo', 'fecha_habilitacion', 'fecha_certificacion', 'tipo_identificacion',
+      ['id_centro', 'anio', 'periodo', 'fecha_habilitacion', 'fecha_certificacion', 'id_tipo_identificacion',
         'nro_identificacion', 'nro_factura', 'nombre_comprador', 'material', 'kg', 'toneladas', 'valor_kilo',
         'valor_sin_iva', 'iva', 'valor_con_iva', 'depto_origen', 'municipio_origen', 'origen_residuos'], ventaRows);
 

@@ -15,21 +15,29 @@ async function sendReminderBatch(dateCondition, subject, extraNoteFor) {
     WHERE s.status = 'activa' AND ${dateCondition}
   `);
 
+  // Un correo que falla no puede cortar el envio de los demas ni impedir que mas abajo se marquen
+  // como vencidas las suscripciones.
+  let sent = 0;
   for (const row of rows.rows) {
-    await resend.emails.send({
-      from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
-      to: row.email,
-      subject,
-      html: buildPaymentReminderEmail({
-        fullName: row.full_name,
-        associationName: row.association_name,
-        planName: row.plan_name,
-        nextDueDate: row.next_due_date,
-        extraNote: extraNoteFor(row)
-      })
-    });
+    try {
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesistraza.com>',
+        to: row.email,
+        subject,
+        html: buildPaymentReminderEmail({
+          fullName: row.full_name,
+          associationName: row.association_name,
+          planName: row.plan_name,
+          nextDueDate: row.next_due_date,
+          extraNote: extraNoteFor(row)
+        })
+      });
+      sent++;
+    } catch (err) {
+      console.error('No se pudo enviar el recordatorio a ' + row.email + ':', err.message);
+    }
   }
-  return rows.rows.length;
+  return sent;
 }
 
 // Corre todos los días a las 8:00 AM (hora del servidor)

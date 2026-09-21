@@ -14,6 +14,9 @@ router.post('/', requireAuth, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'Tu usuario no tiene una asociación asignada.' });
   }
 
+  if (!Number.isInteger(Number(planId)) || Number(planId) <= 0) {
+    return res.status(400).json({ error: 'Plan inválido.' });
+  }
   const planResult = await pool.query('SELECT * FROM plans WHERE id = $1 AND active = true', [planId]);
   const plan = planResult.rows[0];
   if (!plan) {
@@ -33,6 +36,9 @@ router.post('/', requireAuth, asyncRoute(async (req, res) => {
   let subscriptionId;
   if (existing.rows.length > 0) {
     subscriptionId = existing.rows[0].id;
+    // Se reutiliza la suscripcion pendiente pero con el ciclo que se acaba de elegir: antes se
+    // quedaba con el anterior y se cobraba un monto distinto al que la pantalla mostraba.
+    await pool.query('UPDATE subscriptions SET billing_cycle = $1 WHERE id = $2', [cycle, subscriptionId]);
   } else {
     const inserted = await pool.query(
       `INSERT INTO subscriptions (association_id, plan_id, status, billing_cycle) VALUES ($1,$2,'pendiente',$3) RETURNING id`,

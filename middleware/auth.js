@@ -31,6 +31,11 @@ async function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Sesión inválida o expirada.' });
   }
+  // El token "pendiente de 2FA" solo sirve para /auth/login/2fa: sin este rechazo, quien tuviera solo
+  // la contraseña podia usarlo como sesion en cualquier ruta que solo pidiera requireAuth.
+  if (payload.pending2FA) {
+    return res.status(401).json({ error: 'Falta completar la verificación en dos pasos.' });
+  }
   try {
     const invalidatedAt = await getSessionsInvalidatedAt();
     if (invalidatedAt && payload.iat * 1000 < new Date(invalidatedAt).getTime()) {

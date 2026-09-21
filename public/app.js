@@ -121,8 +121,19 @@ function gtToggleSidebar(){
 
 function gtFormatDate(value){
   if(!value) return '—';
-  var d = new Date(value);
+  var s = String(value);
+  // Una fecha sin hora ('YYYY-MM-DD', o medianoche UTC) es un dia de calendario: se arma con sus
+  // componentes para que en Colombia (UTC-5) no se vea un dia antes. Con hora real, se convierte normal.
+  var m = /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.000)?Z)?$/.exec(s);
+  var d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value);
+  if(isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// Hoy en Colombia como 'YYYY-MM-DD' (toISOString da el dia de Londres: despues de las 7 p. m.
+// ya seria "manana").
+function gtTodayCO(){
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 }
 
 // Ordena una lista de recicladores (con toneladas_mes/pago_mes/nombre_completo) segun uno de

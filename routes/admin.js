@@ -19,6 +19,9 @@ const uploadLogo = multer({
   fileFilter: (req, file, cb) => cb(null, ['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype))
 });
 
+const MIN_PASSWORD = 8;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 function normalizeRowKeys(row) {
   const out = {};
   for (const key in row) out[key.trim()] = row[key];
@@ -92,27 +95,53 @@ router.post('/associations', asyncRoute(async (req, res) => {
   if (!name || !nit || !recyclerCount) {
     return res.status(400).json({ error: 'Nombre, NIT y número de recicladores son obligatorios.' });
   }
+  if (typeof name !== 'string' || typeof nit !== 'string') {
+    return res.status(400).json({ error: 'Nombre y NIT deben ser texto.' });
+  }
+  const recyclers = Number(recyclerCount);
+  if (!Number.isInteger(recyclers) || recyclers < 1 || recyclers > 100000) {
+    return res.status(400).json({ error: 'El número de recicladores debe ser un entero positivo.' });
+  }
 
-  const assocResult = await pool.query(
-    `INSERT INTO associations (name, nit, recycler_count, facturacion_url) VALUES ($1,$2,$3,$4) RETURNING *`,
-    [name, nit, recyclerCount, facturacionUrl || null]
-  );
-  const association = assocResult.rows[0];
-
-  let user = null;
-  if (contactFullName && contactEmail && contactPassword) {
-    const bcrypt = require('bcryptjs');
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [contactEmail.toLowerCase()]);
+  // Todo el contacto se valida ANTES de crear nada, y asociacion + usuario van en una transaccion:
+  // antes, un correo repetido devolvia error pero la asociacion ya habia quedado creada.
+  const wantsUser = !!(contactFullName && contactEmail && contactPassword);
+  if (wantsUser) {
+    if (!EMAIL_RE.test(String(contactEmail).trim())) return res.status(400).json({ error: 'El correo del contacto no es válido.' });
+    if (String(contactPassword).length < MIN_PASSWORD) return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.` });
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [String(contactEmail).trim().toLowerCase()]);
     if (existing.rows.length > 0) {
       return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
     }
-    const passwordHash = await bcrypt.hash(contactPassword, 10);
-    const userResult = await pool.query(
-      `INSERT INTO users (association_id, full_name, email, phone, password_hash, role, is_verified)
-       VALUES ($1,$2,$3,$4,$5,'operativo',true) RETURNING id, full_name, email, role`,
-      [association.id, contactFullName, contactEmail.toLowerCase(), contactPhone || null, passwordHash]
+  }
+
+  let association = null;
+  let user = null;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const assocResult = await client.query(
+      `INSERT INTO associations (name, nit, recycler_count, facturacion_url) VALUES ($1,$2,$3,$4) RETURNING *`,
+      [name.trim(), nit.trim(), recyclers, facturacionUrl || null]
     );
-    user = userResult.rows[0];
+    association = assocResult.rows[0];
+    if (wantsUser) {
+      const bcrypt = require('bcryptjs');
+      const passwordHash = await bcrypt.hash(String(contactPassword), 10);
+      const userResult = await client.query(
+        `INSERT INTO users (association_id, full_name, email, phone, password_hash, role, is_verified)
+         VALUES ($1,$2,$3,$4,$5,'operativo',true) RETURNING id, full_name, email, role`,
+        [association.id, String(contactFullName).trim(), String(contactEmail).trim().toLowerCase(), contactPhone || null, passwordHash]
+      );
+      user = userResult.rows[0];
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    throw e;
+  } finally {
+    client.release();
   }
 
   await logActivity(req.user.id, 'asociacion_creada', { associationId: association.id }, req.ip);
@@ -148,6 +177,9 @@ router.post('/associations/:id/logo', uploadLogo.single('logo'), asyncRoute(asyn
   if (!req.file) {
     return res.status(400).json({ error: 'Sube una imagen PNG, JPG o WEBP de hasta 3 MB.' });
   }
+  // Se comprueba que la asociacion exista ANTES de subir a Cloudinary (si no, queda una imagen huerfana).
+  const exists = Number.isInteger(Number(req.params.id)) && (await pool.query('SELECT 1 FROM associations WHERE id = $1', [req.params.id])).rows.length > 0;
+  if (!exists) return res.status(404).json({ error: 'Asociación no encontrada.' });
   const logoUrl = await new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
       {
@@ -261,9 +293,9 @@ router.put('/associations/:id', asyncRoute(async (req, res) => {
        name = COALESCE($1, name),
        nit = COALESCE($2, nit),
        recycler_count = COALESCE($3, recycler_count),
-       facturacion_url = $4
+       facturacion_url = CASE WHEN $6::boolean THEN $4 ELSE facturacion_url END
      WHERE id = $5 RETURNING *`,
-    [name, nit, recyclerCount, facturacionUrl || null, req.params.id]
+    [name, nit, recyclerCount, facturacionUrl || null, req.params.id, facturacionUrl !== undefined]
   );
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Asociación no encontrada.' });
@@ -423,8 +455,13 @@ router.post('/associations/:id/register-payment', asyncRoute(async (req, res) =>
 // DELETE /admin/payments/pending -> limpia solicitudes de pago y suscripciones que quedaron
 // pendientes y nunca se completaron (basura de intentos de compra abandonados). Solo 'pro'.
 router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, res) => {
-  const payments = await pool.query(`DELETE FROM payments WHERE status = 'pendiente' RETURNING id`);
-  const subs = await pool.query(`DELETE FROM subscriptions WHERE status = 'pendiente' RETURNING id`);
+  // Solo lo abandonado hace mas de 1 dia: un pago pendiente de hace minutos puede estar en pleno
+  // checkout de Wompi, y borrarlo dejaria un pago aprobado que el webhook ya no encuentra.
+  const payments = await pool.query(`DELETE FROM payments WHERE status = 'pendiente' AND created_at < NOW() - INTERVAL '1 day' RETURNING id`);
+  const subs = await pool.query(
+    `DELETE FROM subscriptions s WHERE s.status = 'pendiente' AND s.created_at < NOW() - INTERVAL '1 day'
+       AND NOT EXISTS (SELECT 1 FROM payments p WHERE p.subscription_id = s.id) RETURNING s.id`
+  );
   await logActivity(req.user.id, 'pagos_pendientes_limpiados', {
     paymentsEliminados: payments.rows.length,
     suscripcionesEliminadas: subs.rows.length
@@ -621,7 +658,7 @@ router.get('/pending-payments', asyncRoute(async (req, res) => {
     FROM subscriptions s
     JOIN associations a ON a.id = s.association_id
     JOIN users u ON u.association_id = a.id AND u.role = 'operativo'
-    WHERE s.status = 'vencida' OR s.next_due_date < NOW()
+    WHERE s.status = 'vencida' OR (s.status = 'activa' AND s.next_due_date < NOW())
   `);
   res.json(result.rows);
 }));
@@ -649,11 +686,24 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   if (!['admin', 'operativo'].includes(role)) {
     return res.status(400).json({ error: "El rol debe ser 'admin' (operativo) u 'operativo'." });
   }
+  if (typeof fullName !== 'string' || !fullName.trim()) return res.status(400).json({ error: 'El nombre es obligatorio.' });
+  if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) return res.status(400).json({ error: 'El correo no es válido.' });
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.` });
+  }
+  const emailLower = email.trim().toLowerCase();
+  if ((await pool.query('SELECT 1 FROM users WHERE email = $1', [emailLower])).rows.length > 0) {
+    return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+  }
+  if (associationId && (!Number.isInteger(Number(associationId)) ||
+      (await pool.query('SELECT 1 FROM associations WHERE id = $1', [associationId])).rows.length === 0)) {
+    return res.status(400).json({ error: 'La asociación indicada no existe.' });
+  }
   const passwordHash = await bcrypt.hash(password, 10);
   const result = await pool.query(
     `INSERT INTO users (full_name, email, password_hash, role, association_id, is_verified)
      VALUES ($1,$2,$3,$4,$5,true) RETURNING id, full_name, email, role`,
-    [fullName, email.toLowerCase(), passwordHash, role, associationId || null]
+    [fullName.trim(), emailLower, passwordHash, role, associationId || null]
   );
   await logActivity(req.user.id, 'usuario_admin_creado', { nuevo: result.rows[0] });
   res.json(result.rows[0]);

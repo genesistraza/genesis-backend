@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const qrcode = require('qrcode');
@@ -13,8 +14,15 @@ const router = express.Router();
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000)); // código de 6 dígitos
+  return String(crypto.randomInt(100000, 1000000)); // código de 6 dígitos (aleatorio criptográfico)
 }
+
+function escapeHtml(v) {
+  return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+const MIN_PASSWORD = 8;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 async function verifyRecaptcha(token) {
   if (!token) return false;
@@ -55,6 +63,19 @@ router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
   if (!fullName || !email || !password || !associationName || !nit || !phone || !recyclerCount) {
     return res.status(400).json({ error: 'Faltan campos obligatorios del formulario.' });
   }
+  if ([fullName, email, password, associationName, nit, phone].some((v) => typeof v !== 'string')) {
+    return res.status(400).json({ error: 'Alguno de los datos del formulario no es válido.' });
+  }
+  if (!EMAIL_RE.test(email.trim())) {
+    return res.status(400).json({ error: 'Escribe un correo válido.' });
+  }
+  if (password.length < MIN_PASSWORD) {
+    return res.status(400).json({ error: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres.` });
+  }
+  const recyclers = Number(recyclerCount);
+  if (!Number.isInteger(recyclers) || recyclers < 1 || recyclers > 100000) {
+    return res.status(400).json({ error: 'El número de recicladores debe ser un entero positivo.' });
+  }
 
   if (!acceptedTerms) {
     return res.status(400).json({ error: 'Debes aceptar los Términos y Condiciones y la Política de tratamiento de datos.' });
@@ -64,37 +85,45 @@ router.post('/register', registerLimiter, asyncRoute(async (req, res) => {
     return res.status(400).json({ error: 'Confirma que no eres un robot.' });
   }
 
-  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+  const emailLower = email.trim().toLowerCase();
+  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [emailLower]);
   if (existing.rows.length > 0) {
     return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
   }
 
-  const assocResult = await pool.query(
-    'INSERT INTO associations (name, nit, recycler_count) VALUES ($1,$2,$3) RETURNING id',
-    [associationName, nit || null, recyclerCount || 0]
-  );
-  const associationId = assocResult.rows[0].id;
-
+  // Asociacion, usuario y codigo en una sola transaccion: si algo falla no queda una asociacion huerfana.
   const passwordHash = await bcrypt.hash(password, 10);
-  const userResult = await pool.query(
-    `INSERT INTO users (association_id, full_name, email, phone, password_hash, role, is_verified, accepted_terms_at)
-     VALUES ($1,$2,$3,$4,$5,'operativo',false,NOW()) RETURNING id`,
-    [associationId, fullName, email.toLowerCase(), phone || null, passwordHash]
-  );
-  const userId = userResult.rows[0].id;
-
   const code = generateCode();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
-  await pool.query(
-    'INSERT INTO verification_codes (user_id, code, expires_at) VALUES ($1,$2,$3)',
-    [userId, code, expiresAt]
-  );
+  let userId;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const assocResult = await client.query(
+      'INSERT INTO associations (name, nit, recycler_count) VALUES ($1,$2,$3) RETURNING id',
+      [associationName.trim(), nit.trim(), recyclers]
+    );
+    const userResult = await client.query(
+      `INSERT INTO users (association_id, full_name, email, phone, password_hash, role, is_verified, accepted_terms_at)
+       VALUES ($1,$2,$3,$4,$5,'operativo',false,NOW()) RETURNING id`,
+      [assocResult.rows[0].id, fullName.trim(), emailLower, phone.trim(), passwordHash]
+    );
+    userId = userResult.rows[0].id;
+    await client.query('INSERT INTO verification_codes (user_id, code, expires_at) VALUES ($1,$2,$3)', [userId, code, expiresAt]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    if (e.code === '23505') return res.status(409).json({ error: 'Ya existe una cuenta con ese correo.' });
+    throw e;
+  } finally {
+    client.release();
+  }
 
   await resend.emails.send({
     from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesis-traza.com>',
-    to: email,
+    to: emailLower,
     subject: 'Tu código de verificación - Genesis Traza',
-    html: `<p>Hola ${fullName},</p><p>Tu código de verificación es:</p><h2 style="letter-spacing:4px;">${code}</h2><p>Vence en 15 minutos.</p>`
+    html: `<p>Hola ${escapeHtml(fullName)},</p><p>Tu código de verificación es:</p><h2 style="letter-spacing:4px;">${code}</h2><p>Vence en 15 minutos.</p>`
   });
 
   await logActivity(userId, 'registro_iniciado', { email });
@@ -124,15 +153,19 @@ router.post('/resend-code', registerLimiter, asyncRoute(async (req, res) => {
     from: process.env.EMAIL_FROM || 'Genesis Traza <no-reply@genesis-traza.com>',
     to: email,
     subject: 'Tu nuevo código de verificación - Genesis Traza',
-    html: `<p>Hola ${user.full_name},</p><p>Tu código de verificación es:</p><h2 style="letter-spacing:4px;">${code}</h2><p>Vence en 15 minutos.</p>`
+    html: `<p>Hola ${escapeHtml(user.full_name)},</p><p>Tu código de verificación es:</p><h2 style="letter-spacing:4px;">${code}</h2><p>Vence en 15 minutos.</p>`
   });
 
   res.json({ message: 'Código reenviado. Revisa tu correo.', userId: user.id });
 }));
 
 // POST /auth/verify  -> confirma el código de 6 dígitos
-router.post('/verify', asyncRoute(async (req, res) => {
+// Con limite de intentos: un codigo de 6 digitos sin limite se adivina por fuerza bruta y entrega un token.
+router.post('/verify', loginLimiter, asyncRoute(async (req, res) => {
   const { userId, code } = req.body;
+  if (!Number.isInteger(Number(userId)) || !/^\d{6}$/.test(String(code || ''))) {
+    return res.status(400).json({ error: 'Código incorrecto o vencido.' });
+  }
   const result = await pool.query(
     `SELECT * FROM verification_codes
      WHERE user_id = $1 AND code = $2 AND used = false AND expires_at > NOW()
@@ -158,11 +191,14 @@ router.post('/verify', asyncRoute(async (req, res) => {
 router.post('/login', loginLimiter, asyncRoute(async (req, res) => {
   const { email, password, recaptchaToken } = req.body;
 
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) {
+    return res.status(400).json({ error: 'Escribe tu correo y contraseña.' });
+  }
   if (!(await verifyRecaptcha(recaptchaToken))) {
     return res.status(400).json({ error: 'Confirma que no eres un robot.' });
   }
 
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
+  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.trim().toLowerCase()]);
   const user = result.rows[0];
   if (!user || !(await bcrypt.compare(password, user.password_hash))) {
     return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });

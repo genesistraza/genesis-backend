@@ -98,6 +98,7 @@
   .bm-grid tfoot{ position:sticky;bottom:0; }
   .bm-grid tfoot th, .bm-grid tfoot td{ background:#EEF2F8;font-weight:700;color:#23408E;text-align:right;border-top:2px solid #23408E; }
   .bm-note{ margin:6px 0 0;font-size:11px;color:var(--ink-soft); }
+  #bmGridBody input.bm-bad{ border-color:#C0392B !important;background:#FDECEA !important;color:#8E1B10; }
   .bm-pick-filters{ display:grid;grid-template-columns:1fr 1.6fr 1fr;gap:8px;margin:4px 0 8px; }
   .bm-pick-filters input{ height:30px;padding:2px 8px;font-size:12px;border:1px solid #C5CFDB;border-radius:4px; }
   .bm-pick-list{ max-height:52vh;overflow:auto;border-top:1px solid var(--line); }
@@ -137,7 +138,7 @@
     <div class="bm-bar no-print">
       <h2>Balance de Masas</h2>
       <button type="button" class="bm-ic" title="Buscar reciclador" onclick="openBmPicker()"><svg viewBox="0 0 24 24"><circle cx="12" cy="7.5" r="4.2"/><path d="M3.5 21c0-4.7 3.8-7.5 8.5-7.5s8.5 2.8 8.5 7.5z"/></svg></button>
-      <input type="date" id="bmFecha" title="Fecha" onchange="loadBmDia()">
+      <input type="date" id="bmFecha" title="Fecha" onchange="onBmFechaChange()">
       <button type="button" class="bm-ic" title="Guardar el día" onclick="saveBmDia()"><svg viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4z M7 3v5h9V3 M7 13h10v8H7z" fill-rule="evenodd"/></svg></button>
       <button type="button" class="bm-ic" title="Borrar el día de este reciclador" onclick="deleteBmDia()"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"/></svg></button>
       <span class="bm-sep"></span>
@@ -297,8 +298,6 @@
   // poder hacer las pruebas); sirve para ver como se veria cada modulo desde la otra perspectiva.
   var pruebasVista = 'administrador';
   var pruebasDemoCentro = null; // {id, label}, se resuelve una vez al cargar la pagina
-  var pruebasRecicladorCentroMap = null;
-  var pruebasMicrorrutaCentroMap = null;
 
   function onPruebasVistaChange(vista){
     pruebasVista = vista;
@@ -332,33 +331,6 @@
       hint.className = 'pruebas-hint administrador';
       hint.textContent = 'Viendo como Genesis Traza: todas las asociaciones, sin restricciones.';
     }
-  }
-
-  function rowMatchesVista(entityKey, row){
-    if(pruebasVista !== 'asociacion') return true;
-    if(!pruebasDemoCentro) return false;
-    if(entityKey === 'localidades' || entityKey === 'tipos_material') return true;
-    if(entityKey === 'centros') return row.id === pruebasDemoCentro.id;
-    if(entityKey === 'seguridad_social') return pruebasRecicladorCentroMap && pruebasRecicladorCentroMap[row.id_reciclador] === pruebasDemoCentro.id;
-    if(entityKey === 'microrrutas_detalle') return pruebasMicrorrutaCentroMap && pruebasMicrorrutaCentroMap[row.id_formulario_microrruta] === pruebasDemoCentro.id;
-    return row.id_centro === pruebasDemoCentro.id;
-  }
-
-  function ensureVistaLookups(entityKey){
-    if(pruebasVista !== 'asociacion') return Promise.resolve();
-    if(entityKey === 'seguridad_social' && !pruebasRecicladorCentroMap){
-      return gtApiFetch('/trazabilidad/recicladores').then(function(res){
-        pruebasRecicladorCentroMap = {};
-        (res.ok ? res.data : []).forEach(function(r){ pruebasRecicladorCentroMap[r.id] = r.id_centro; });
-      });
-    }
-    if(entityKey === 'microrrutas_detalle' && !pruebasMicrorrutaCentroMap){
-      return gtApiFetch('/trazabilidad/microrrutas').then(function(res){
-        pruebasMicrorrutaCentroMap = {};
-        (res.ok ? res.data : []).forEach(function(r){ pruebasMicrorrutaCentroMap[r.id] = r.id_centro; });
-      });
-    }
-    return Promise.resolve();
   }
 
   // ---- Pruebas: trazabilidad nativa (sandbox, tablas tz_*) ----
@@ -462,19 +434,28 @@
     document.getElementById('pruebasNewBtn').style.display = isCentrosAsCliente ? 'none' : '';
     document.getElementById('pruebasImportBtn').style.display = isCentrosAsCliente ? 'none' : '';
 
-    ensureVistaLookups(pruebasCurrentEntity).then(function(){
-    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity).then(function(res){
+    // En Vista Asociación el filtro por centro lo hace el servidor (el LIMIT de 500 se aplica después
+    // de filtrar, así los datos de la asociación nunca quedan tapados por los de otras).
+    var query = '';
+    if(pruebasVista === 'asociacion'){
+      if(!pruebasDemoCentro){
+        document.getElementById('pruebasTableBody').innerHTML = '<tr><td class="empty-row">No hay una asociación demo cargada.</td></tr>';
+        document.getElementById('pruebasRowCount').textContent = '0 registros';
+        return;
+      }
+      query = '?id_centro=' + pruebasDemoCentro.id;
+    }
+    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity + query).then(function(res){
       var thead = document.getElementById('pruebasTableHead');
       var tbody = document.getElementById('pruebasTableBody');
       if(!res.ok){ tbody.innerHTML = '<tr><td class="empty-row">No se pudo cargar.</td></tr>'; return; }
-      var rows = pruebasVista === 'asociacion'
-        ? res.data.filter(function(row){ return rowMatchesVista(pruebasCurrentEntity, row); })
-        : res.data;
+      var rows = res.data;
       pruebasCurrentRows = rows;
-      document.getElementById('pruebasRowCount').textContent = rows.length + (rows.length === 1 ? ' registro' : ' registros');
+      document.getElementById('pruebasRowCount').textContent = rows.length + (rows.length === 1 ? ' registro' : ' registros') +
+        (rows.length >= 500 ? ' (se muestran los 500 más recientes)' : '');
 
       var headHtml = '<tr>';
-      entity.fields.forEach(function(f){ headHtml += '<th>' + f.label + '</th>'; });
+      entity.fields.forEach(function(f){ headHtml += '<th>' + gtEscapeHtml(f.label) + '</th>'; });
       headHtml += '<th class="no-print"></th></tr>';
       thead.innerHTML = headHtml;
 
@@ -489,7 +470,12 @@
         entity.fields.forEach(function(f){
           var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
           if(f.type === 'date' && val) val = gtFormatDate(val);
-          html += '<td>' + (val === null || val === undefined || val === '' ? '—' : String(val)) + '</td>';
+          if(f.type === 'select-fixed' && val !== null && val !== undefined){
+            var fixedOpt = (f.options || []).find(function(o){ return String(o.value) === String(val); });
+            if(fixedOpt) val = fixedOpt.label;
+          }
+          // Todo lo que viene de la base se escapa: un nombre con "<" no debe ejecutarse como HTML.
+          html += '<td>' + (val === null || val === undefined || val === '' ? '—' : gtEscapeHtml(val)) + '</td>';
         });
         html += '<td class="no-print"><button type="button" class="cell-action" style="margin-right:10px;">Editar</button><button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button></td>';
         tr.innerHTML = html;
@@ -499,12 +485,15 @@
         tbody.appendChild(tr);
       });
     });
-    });
   }
 
   function deletePruebasRecord(id){
     if(!confirm('¿Eliminar este registro de prueba?')) return;
-    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity + '/' + id, { method: 'DELETE' }).then(function(){ fetchAndRenderPruebasTable(); });
+    gtApiFetch('/trazabilidad/' + pruebasCurrentEntity + '/' + id, { method: 'DELETE' }).then(function(res){
+      if(!res.ok) alert(res.data.error || 'No se pudo eliminar.');
+      pruebasOptionsCache = {};
+      fetchAndRenderPruebasTable();
+    });
   }
 
   function getPruebasFieldOptions(field, callback){
@@ -537,12 +526,24 @@
 
       var inputId = 'pruebasField_' + f.name;
       var input;
-      if(f.type === 'select-entity' || f.type === 'select-catalogo'){
+      if(f.type === 'select-fixed'){
+        // Lista fija definida por el sistema: no se escribe a mano.
+        input = document.createElement('select');
+        input.id = inputId;
+        var fixedOpts = f.options || [];
+        var current = existingRow && existingRow[f.name] !== null && existingRow[f.name] !== undefined ? String(existingRow[f.name]) : '';
+        var extra = current && !fixedOpts.some(function(o){ return String(o.value) === current; })
+          ? '<option value="' + gtEscapeHtml(current) + '">' + gtEscapeHtml(current) + ' (valor anterior)</option>' : '';
+        input.innerHTML = '<option value="">— Ninguno —</option>' + fixedOpts.map(function(o){
+          return '<option value="' + gtEscapeHtml(o.value) + '">' + gtEscapeHtml(o.label) + '</option>';
+        }).join('') + extra;
+        input.value = current;
+      } else if(f.type === 'select-entity' || f.type === 'select-catalogo'){
         input = document.createElement('select');
         input.id = inputId;
         input.innerHTML = '<option value="">Cargando…</option>';
         getPruebasFieldOptions(f, function(opts){
-          input.innerHTML = '<option value="">— Ninguno —</option>' + opts.map(function(o){ return '<option value="' + o.value + '">' + o.label + '</option>'; }).join('');
+          input.innerHTML = '<option value="">— Ninguno —</option>' + opts.map(function(o){ return '<option value="' + gtEscapeHtml(o.value) + '">' + gtEscapeHtml(o.label) + '</option>'; }).join('');
           if(existingRow && existingRow[f.name] !== null && existingRow[f.name] !== undefined){
             input.value = existingRow[f.name];
           }
@@ -552,6 +553,9 @@
         input.id = inputId;
         input.type = f.type === 'date' ? 'date' : (f.type === 'number' || f.type === 'decimal' ? 'number' : 'text');
         if(f.type === 'decimal') input.step = '0.0001';
+        // Sin negativos (salvo coordenadas) y sin fechas futuras en los campos que registran algo ya ocurrido.
+        if((f.type === 'number' || f.type === 'decimal') && f.name !== 'latitud' && f.name !== 'longitud') input.min = '0';
+        if(f.type === 'date' && /^fecha(_factura|_completada|_respuesta|_exp_documento|_nacimiento|_estado|_actualizacion)?$/.test(f.name)) input.max = gtTodayCO();
         if(existingRow && existingRow[f.name] !== null && existingRow[f.name] !== undefined){
           input.value = f.type === 'date' ? String(existingRow[f.name]).slice(0, 10) : existingRow[f.name];
         }
@@ -582,6 +586,7 @@
       body: JSON.stringify(body)
     }).then(function(res){
       if(!res.ok){ errorEl.textContent = res.data.error || 'No se pudo guardar.'; errorEl.style.display = 'block'; return; }
+      pruebasOptionsCache = {}; // los desplegables de otros módulos deben ver el registro nuevo/editado
       closePruebasFormModal();
       fetchAndRenderPruebasTable();
     });
@@ -603,9 +608,10 @@
     }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
       .then(function(res){
         input.value = '';
-        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo importar.'; return; }
-        msg.style.color = 'var(--green)';
-        msg.textContent = 'Importados ' + res.data.importados + (res.data.omitidos ? ', omitidos ' + res.data.omitidos + ' (revisa el formato de esas filas).' : '.');
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = (res.data.error || 'No se pudo importar.') + ' ' + (res.data.detalles && res.data.detalles.length > 1 ? '(' + res.data.detalles.length + ' filas con problemas; ver consola)' : ''); if(res.data.detalles) console.warn('Filas con problemas:', res.data.detalles); return; }
+        msg.style.color = res.data.omitidos ? '#B45F06' : 'var(--green)';
+        msg.textContent = 'Importados ' + res.data.importados + (res.data.omitidos ? ', omitidos ' + res.data.omitidos + '. ' + (res.data.detalles || []).slice(0, 3).join(' | ') : '.');
+        if(res.data.omitidos && res.data.detalles && res.data.detalles.length) console.warn('Filas omitidas:', res.data.detalles);
         fetchAndRenderPruebasTable();
       })
       .catch(function(){ msg.style.color = '#C0392B'; msg.textContent = 'No se pudo importar.'; });
@@ -639,27 +645,41 @@
   function exportPruebasCsv(){
     var entity = pruebasEntities[pruebasCurrentEntity];
     if(pruebasCurrentRows.length === 0){ alert('No hay registros para exportar.'); return; }
-    var headers = entity.fields.map(function(f){ return f.label; });
+    var headers = entity.fields.map(function(f){ return csvCell(f.label, ','); });
     var lines = [headers.join(',')];
     pruebasCurrentRows.forEach(function(row){
-      lines.push(entity.fields.map(function(f){
-        var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
-        var v = val === null || val === undefined ? '' : String(val);
-        return v.indexOf(',') !== -1 ? '"' + v.replace(/"/g, '""') + '"' : v;
-      }).join(','));
+      lines.push(entity.fields.map(function(f){ return csvCell(exportValue(f, row), ','); }).join(','));
     });
     downloadBlob(lines.join('\r\n'), pruebasCurrentEntity + '.csv', 'text/csv;charset=utf-8;');
+  }
+
+  // Valor de una celda tal como se ve en pantalla (etiqueta en vez de id, lista fija en vez de codigo).
+  function exportValue(f, row){
+    var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
+    if(f.type === 'select-fixed' && val !== null && val !== undefined){
+      var o = (f.options || []).find(function(x){ return String(x.value) === String(val); });
+      if(o) val = o.label;
+    }
+    return val;
+  }
+
+  // Celda CSV: se entrecomilla si lleva separador, comillas o saltos de linea, y un texto que empieza
+  // con = + - @ se neutraliza para que Excel no lo ejecute como formula.
+  function csvCell(val, sep){
+    var v = val === null || val === undefined ? '' : String(val);
+    if(/^[=+\-@\t\r]/.test(v) && isNaN(Number(v))) v = "'" + v;
+    return (v.indexOf(sep) !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1 || v.indexOf('\r') !== -1) ? '"' + v.replace(/"/g, '""') + '"' : v;
   }
 
   function exportPruebasExcel(){
     var entity = pruebasEntities[pruebasCurrentEntity];
     if(pruebasCurrentRows.length === 0){ alert('No hay registros para exportar.'); return; }
     var headers = entity.fields.map(function(f){ return f.label; });
-    var html = '<table><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>' +
+    var html = '<table><tr>' + headers.map(function(h){ return '<th>' + gtEscapeHtml(h) + '</th>'; }).join('') + '</tr>' +
       pruebasCurrentRows.map(function(row){
         return '<tr>' + entity.fields.map(function(f){
-          var val = (f.type === 'select-entity' || f.type === 'select-catalogo') ? row[f.name + '_label'] : row[f.name];
-          return '<td>' + (val === null || val === undefined ? '' : val) + '</td>';
+          var val = exportValue(f, row);
+          return '<td>' + (val === null || val === undefined ? '' : gtEscapeHtml(val)) + '</td>';
         }).join('') + '</tr>';
       }).join('') + '</table>';
     downloadBlob(html, pruebasCurrentEntity + '.xls', 'application/vnd.ms-excel');
@@ -710,29 +730,42 @@
     ['bmBodega', 'bmMacrorruta', 'bmMicrorruta1', 'bmMicrorruta2'].forEach(function(id){ document.getElementById(id).disabled = !on; });
   }
 
+  // Suma dias a una fecha 'YYYY-MM-DD' sin pasar por la zona horaria del navegador.
+  function addDaysYmd(ymd, n){
+    var p = ymd.split('-').map(Number);
+    var d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+    return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  }
+
+  var bmDirty = false;          // hay cantidades escritas que todavia no se guardan
+  var bmLoadSeq = 0;            // descarta respuestas viejas si el usuario cambia de dia/reciclador rapido
+
   function initBmEnv(){
     bmSelectedReciclador = null;
     bmExistingByMaterial = {};
+    bmValues = {};
+    bmDirty = false;
+    bmAllRecicladores = null; // se vuelve a pedir cada vez: si se creo un reciclador en otro modulo, debe aparecer
     ['bmNombre', 'bmCedula', 'bmTipoVehiculo', 'bmPlaca'].forEach(function(id){ document.getElementById(id).value = ''; });
     ['bmBodega', 'bmMacrorruta', 'bmMicrorruta1', 'bmMicrorruta2'].forEach(function(id){ document.getElementById(id).innerHTML = '<option value="">— Seleccionar —</option>'; });
     setBmFormEnabled(false);
+    var hoy = gtTodayCO();
     var fechaInput = document.getElementById('bmFecha');
-    if(!fechaInput.value) fechaInput.value = new Date().toISOString().slice(0, 10);
+    if(!fechaInput.value) fechaInput.value = hoy;
+    fechaInput.max = hoy;
+    bmLastFecha = fechaInput.value;
     var desdeInput = document.getElementById('bmExportDesde');
     var hastaInput = document.getElementById('bmExportHasta');
-    if(!hastaInput.value) hastaInput.value = new Date().toISOString().slice(0, 10);
-    if(!desdeInput.value){
-      var d = new Date();
-      d.setDate(d.getDate() - 30);
-      desdeInput.value = d.toISOString().slice(0, 10);
-    }
+    if(!hastaInput.value) hastaInput.value = hoy;
+    if(!desdeInput.value) desdeInput.value = addDaysYmd(hoy, -30);
 
-    var loadRecicladores = bmAllRecicladores ? Promise.resolve() : gtApiFetch('/trazabilidad/recicladores').then(function(res){ bmAllRecicladores = res.ok ? res.data : []; });
-    var loadMateriales = bmAllMateriales ? Promise.resolve() : gtApiFetch('/trazabilidad/tipos_material').then(function(res){ bmAllMateriales = res.ok ? res.data : []; });
+    var centroQuery = (pruebasVista === 'asociacion' && pruebasDemoCentro) ? '&id_centro=' + pruebasDemoCentro.id : '';
+    var loadRecicladores = gtApiFetch('/trazabilidad/recicladores?limit=5000' + centroQuery).then(function(res){ bmAllRecicladores = res.ok ? res.data : []; });
+    var loadMateriales = bmAllMateriales ? Promise.resolve() : gtApiFetch('/trazabilidad/tipos_material?limit=5000').then(function(res){ bmAllMateriales = res.ok ? res.data : []; });
     Promise.all([loadRecicladores, loadMateriales]).then(function(){
       var familias = ['--Todos los materiales'].concat(Array.from(new Set(bmAllMateriales.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       var sel = document.getElementById('bmFamiliaFilter');
-      sel.innerHTML = familias.map(function(f){ return '<option value="' + f + '">' + f + '</option>'; }).join('');
+      sel.innerHTML = familias.map(function(f){ return '<option value="' + gtEscapeHtml(f) + '">' + gtEscapeHtml(f) + '</option>'; }).join('');
       renderBmGrid();
     });
     updateBmFechaTitulo();
@@ -801,7 +834,7 @@
     var box = document.getElementById('bmPickList');
     if(list.length === 0){ box.innerHTML = '<p style="padding:12px;color:var(--ink-soft);font-size:12px;">Sin resultados.</p>'; return; }
     box.innerHTML = list.map(function(r){
-      return '<div class="bm-pick-row" data-id="' + r.id + '"><span>' + (r.nro_documento || '') + '</span><span>' + (r.nombre_completo || '') + '</span><span>' + (r.id_centro_label || '') + '</span></div>';
+      return '<div class="bm-pick-row" data-id="' + r.id + '"><span>' + gtEscapeHtml(r.nro_documento) + '</span><span>' + gtEscapeHtml(r.nombre_completo) + '</span><span>' + gtEscapeHtml(r.id_centro_label) + '</span></div>';
     }).join('');
     box.querySelectorAll('.bm-pick-row').forEach(function(row){
       row.addEventListener('click', function(){ selectBmReciclador(Number(row.getAttribute('data-id'))); });
@@ -810,12 +843,21 @@
 
   function fillBmSelect(id, rows, labelFn){
     var sel = document.getElementById(id);
-    sel.innerHTML = '<option value="">— Seleccionar —</option>' + rows.map(function(r){ return '<option value="' + r.id + '">' + labelFn(r) + '</option>'; }).join('');
+    sel.innerHTML = '<option value="">— Seleccionar —</option>' + rows.map(function(r){ return '<option value="' + r.id + '">' + gtEscapeHtml(labelFn(r)) + '</option>'; }).join('');
+  }
+
+  // Si hay cantidades escritas sin guardar, pregunta antes de cambiar de dia o de reciclador
+  // (antes se perdian en silencio al cambiar la fecha).
+  function bmConfirmDiscard(){
+    return !bmDirty || confirm('Tienes cantidades sin guardar. Si continúas se pierden. ¿Continuar?');
   }
 
   function selectBmReciclador(id){
-    bmSelectedReciclador = bmAllRecicladores.find(function(r){ return r.id === id; });
-    if(!bmSelectedReciclador) return;
+    var chosen = bmAllRecicladores.find(function(r){ return r.id === id; });
+    if(!chosen) return;
+    if(!bmConfirmDiscard()) return;
+    bmSelectedReciclador = chosen;
+    bmDirty = false;
     closeBmPicker();
     document.getElementById('bmNombre').value = bmSelectedReciclador.nombre_completo || '';
     document.getElementById('bmCedula').value = bmSelectedReciclador.nro_documento || '';
@@ -823,12 +865,15 @@
     document.getElementById('bmPlaca').value = bmSelectedReciclador.placa || '';
     setBmFormEnabled(true);
 
+    var qc = '?limit=5000&id_centro=' + bmSelectedReciclador.id_centro;
+    var seqReciclador = bmSelectedReciclador;
     Promise.all([
-      gtApiFetch('/trazabilidad/bodegas'),
-      gtApiFetch('/trazabilidad/macrorrutas'),
-      gtApiFetch('/trazabilidad/microrrutas'),
-      gtApiFetch('/trazabilidad/microrrutas_detalle')
+      gtApiFetch('/trazabilidad/bodegas' + qc),
+      gtApiFetch('/trazabilidad/macrorrutas' + qc),
+      gtApiFetch('/trazabilidad/microrrutas' + qc),
+      gtApiFetch('/trazabilidad/microrrutas_detalle' + qc)
     ]).then(function(results){
+      if(bmSelectedReciclador !== seqReciclador) return; // ya eligio a otro reciclador
       var idc = bmSelectedReciclador.id_centro;
       var bodegas = (results[0].ok ? results[0].data : []).filter(function(b){ return b.id_centro === idc; });
       var macrorrutas = (results[1].ok ? results[1].data : []).filter(function(m){ return m.id_centro === idc; });
@@ -843,14 +888,81 @@
     });
   }
 
+  // Lo escrito en la grilla vive en memoria para TODOS los materiales (no solo los que el filtro de
+  // familia deja visibles): asi cambiar el filtro no pierde lo digitado, y guardar no borra por
+  // error los materiales de otras familias que ya estaban registrados ese dia.
+  var bmValues = {};
+  var BM_FIELDS = ['cantidad', 'valor', 'cantidad_rechazo', 'cantidad_nosui'];
+  var BM_MAX = 99999999;
+  var bmLastFecha = null;
+
+  function bmValuesFromExisting(){
+    bmValues = {};
+    Object.keys(bmExistingByMaterial).forEach(function(id){
+      var e = bmExistingByMaterial[id];
+      bmValues[id] = {};
+      BM_FIELDS.forEach(function(f){ var n = Number(e[f]); bmValues[id][f] = n ? String(n) : ''; });
+    });
+  }
+
+  function bmNum(v){ return v === undefined || v === null || v === '' ? 0 : Number(v); }
+  function bmMaterialName(id){
+    var m = (bmAllMateriales || []).find(function(x){ return String(x.id) === String(id); });
+    return m ? m.desc_tipo_material : ('Material ' + id);
+  }
+
+  // Problema de UNA fila (texto) o '' si esta bien. Mismas reglas que valida el servidor.
+  function bmRowProblem(id){
+    var v = bmValues[id];
+    if(!v) return '';
+    var q = bmNum(v.cantidad), p = bmNum(v.valor), r = bmNum(v.cantidad_rechazo), n = bmNum(v.cantidad_nosui);
+    if(!(q || p || r || n)) return '';
+    if([q, p, r, n].some(function(x){ return isNaN(x) || x < 0; })) return 'no se permiten valores negativos ni texto.';
+    if([q, p, r, n].some(function(x){ return x > BM_MAX; })) return 'hay un número demasiado grande.';
+    if(!(q > 0)) return 'escribe la cantidad de material (kg).';
+    if(r > q) return 'el rechazo (' + fmtNum(r) + ' kg) no puede ser mayor que la cantidad de material (' + fmtNum(q) + ' kg).';
+    if(n > q) return 'la cantidad no SUI (' + fmtNum(n) + ' kg) no puede ser mayor que la cantidad de material (' + fmtNum(q) + ' kg).';
+    return '';
+  }
+
+  function bmProblems(){
+    var out = [];
+    Object.keys(bmValues).forEach(function(id){
+      var p = bmRowProblem(id);
+      if(p) out.push(bmMaterialName(id) + ': ' + p);
+    });
+    var fecha = document.getElementById('bmFecha').value;
+    if(!fecha) out.unshift('Elige la fecha.');
+    else if(fecha > gtTodayCO()) out.unshift('No se puede registrar material con fecha futura.');
+    var m1 = document.getElementById('bmMicrorruta1').value, m2 = document.getElementById('bmMicrorruta2').value;
+    if(m1 && m1 === m2) out.unshift('Microrruta 1 y Microrruta 2 no pueden ser la misma.');
+    return out;
+  }
+
+  function onBmFechaChange(){
+    var input = document.getElementById('bmFecha');
+    if(!bmConfirmDiscard()){ input.value = bmLastFecha || input.value; updateBmFechaTitulo(); return; }
+    bmLastFecha = input.value;
+    loadBmDia();
+  }
+
   function loadBmDia(){
     updateBmFechaTitulo();
     if(!bmSelectedReciclador){ renderBmGrid(); return; }
     var fecha = document.getElementById('bmFecha').value;
+    if(!fecha){ return; }
+    bmLastFecha = fecha;
+    var seq = ++bmLoadSeq;
+    var recAtRequest = bmSelectedReciclador;
     gtApiFetch('/trazabilidad/balance-masas-dia?id_reciclador=' + bmSelectedReciclador.id + '&fecha=' + fecha).then(function(res){
+      // Si mientras tanto cambio el dia o el reciclador, esta respuesta es de otro dia: se descarta
+      // (si no, se veian los datos de un dia bajo otra fecha y al guardar se pisaba el dia equivocado).
+      if(seq !== bmLoadSeq || recAtRequest !== bmSelectedReciclador) return;
+      bmDirty = false;
       bmExistingByMaterial = {};
       var rows = res.ok ? res.data : [];
       rows.forEach(function(row){ bmExistingByMaterial[row.id_tipo_material] = row; });
+      bmValuesFromExisting();
       // Los selectores del encabezado son del dia completo: se restauran desde la primera fila guardada.
       var first = rows[0] || {};
       document.getElementById('bmBodega').value = first.id_bodega || '';
@@ -863,15 +975,34 @@
 
   function updateBmTotals(){
     var sc = 0, sv = 0, sr = 0, sn = 0;
-    document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
-      var q = Number(tr.querySelector('[data-field="cantidad"]').value || 0);
-      var v = Number(tr.querySelector('[data-field="valor"]').value || 0);
-      var t = q * v;
-      tr.querySelector('.bm-tot').textContent = t ? fmtNum(t) : '';
-      sc += q; sv += t;
-      sr += Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
-      sn += Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
+    Object.keys(bmValues).forEach(function(id){
+      var v = bmValues[id];
+      var q = bmNum(v.cantidad), p = bmNum(v.valor);
+      if(!isNaN(q)) sc += q;
+      if(!isNaN(q) && !isNaN(p)) sv += q * p;
+      if(!isNaN(bmNum(v.cantidad_rechazo))) sr += bmNum(v.cantidad_rechazo);
+      if(!isNaN(bmNum(v.cantidad_nosui))) sn += bmNum(v.cantidad_nosui);
     });
+    document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
+      var id = tr.getAttribute('data-mat');
+      var v = bmValues[id] || {};
+      var t = bmNum(v.cantidad) * bmNum(v.valor);
+      tr.querySelector('.bm-tot').textContent = t ? fmtNum(t) : '';
+      var problem = bmRowProblem(id);
+      var q = bmNum(v.cantidad);
+      var badBy = {
+        cantidad: !!problem && !(q > 0),
+        valor: !!problem && bmNum(v.valor) < 0,
+        cantidad_rechazo: !!problem && (bmNum(v.cantidad_rechazo) > q || bmNum(v.cantidad_rechazo) < 0),
+        cantidad_nosui: !!problem && (bmNum(v.cantidad_nosui) > q || bmNum(v.cantidad_nosui) < 0)
+      };
+      tr.querySelectorAll('input').forEach(function(inp){
+        var bad = !!badBy[inp.getAttribute('data-field')];
+        inp.classList.toggle('bm-bad', bad);
+        inp.title = bad ? problem : '';
+      });
+    });
+    // Los totales son los del dia completo (todos los materiales), no solo los que muestra el filtro.
     document.getElementById('bmTotCantidad').textContent = fmtNum(sc);
     document.getElementById('bmTotValor').textContent = fmtNum(sv);
     document.getElementById('bmTotRechazo').textContent = fmtNum(sr);
@@ -887,22 +1018,27 @@
     tbody.innerHTML = '';
     var dis = bmSelectedReciclador ? '' : ' disabled';
     list.forEach(function(m){
-      var existing = bmExistingByMaterial[m.id] || {};
+      var v = bmValues[m.id] || {};
       var tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + m.desc_tipo_material + '</td>' +
-        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad" value="' + (existing.cantidad || '') + '"' + dis + '></td>' +
-        '<td><input type="number" step="0.01" data-mat="' + m.id + '" data-field="valor" value="' + (existing.valor || '') + '"' + dis + '></td>' +
-        '<td class="bm-tot"></td>' +
-        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_rechazo" value="' + (existing.cantidad_rechazo || '') + '"' + dis + '></td>' +
-        '<td><input type="number" step="0.0001" data-mat="' + m.id + '" data-field="cantidad_nosui" value="' + (existing.cantidad_nosui || '') + '"' + dis + '></td>';
+      tr.setAttribute('data-mat', m.id);
+      var cell = function(field, step){
+        return '<td><input type="number" min="0" max="' + BM_MAX + '" step="' + step + '" data-mat="' + m.id + '" data-field="' + field + '" value="' + gtEscapeHtml(v[field] || '') + '"' + dis + '></td>';
+      };
+      tr.innerHTML = '<td>' + gtEscapeHtml(m.desc_tipo_material) + '</td>' + cell('cantidad', '0.0001') + cell('valor', '0.01') +
+        '<td class="bm-tot"></td>' + cell('cantidad_rechazo', '0.0001') + cell('cantidad_nosui', '0.0001');
       tbody.appendChild(tr);
     });
     updateBmTotals();
   }
 
   document.addEventListener('input', function(e){
-    if(e.target.closest && e.target.closest('#bmGridBody')) updateBmTotals();
+    var inp = e.target;
+    if(!(inp.closest && inp.closest('#bmGridBody') && inp.getAttribute('data-mat'))) return;
+    var id = inp.getAttribute('data-mat');
+    bmValues[id] = bmValues[id] || {};
+    bmValues[id][inp.getAttribute('data-field')] = inp.value;
+    bmDirty = true;
+    updateBmTotals();
   });
 
   function deleteBmDia(){
@@ -915,22 +1051,23 @@
     }).then(function(res){
       msg.style.color = res.ok ? 'var(--green)' : '#C0392B';
       msg.textContent = res.ok ? 'Día borrado.' : (res.data.error || 'No se pudo borrar.');
-      if(res.ok) loadBmDia();
+      if(res.ok){ bmDirty = false; loadBmDia(); }
     });
   }
 
   function saveBmDia(){
     if(!bmSelectedReciclador) return;
-    var inputs = document.querySelectorAll('#bmGridBody input');
-    var byMaterial = {};
-    inputs.forEach(function(inp){
-      var matId = inp.getAttribute('data-mat');
-      var field = inp.getAttribute('data-field');
-      byMaterial[matId] = byMaterial[matId] || { id_tipo_material: Number(matId) };
-      byMaterial[matId][field] = inp.value === '' ? 0 : Number(inp.value);
-    });
-    var materiales = Object.values(byMaterial);
     var msg = document.getElementById('bmSaveMsg');
+    var problems = bmProblems();
+    if(problems.length){
+      msg.style.color = '#C0392B';
+      msg.textContent = problems[0] + (problems.length > 1 ? ' (y ' + (problems.length - 1) + ' problema(s) más)' : '');
+      return;
+    }
+    var materiales = Object.keys(bmValues).map(function(id){
+      var v = bmValues[id];
+      return { id_tipo_material: Number(id), cantidad: bmNum(v.cantidad), valor: bmNum(v.valor), cantidad_rechazo: bmNum(v.cantidad_rechazo), cantidad_nosui: bmNum(v.cantidad_nosui) };
+    });
     msg.style.color = 'var(--ink-soft)';
     msg.textContent = 'Guardando…';
     gtApiFetch('/trazabilidad/balance-masas-dia', {
@@ -949,6 +1086,7 @@
       if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo guardar.'; return; }
       msg.style.color = 'var(--green)';
       msg.textContent = 'Guardado (' + res.data.filas + ' materiales con datos).';
+      bmDirty = false;
       loadBmDia();
     });
   }
@@ -962,6 +1100,9 @@
   // tipo de sitio de destino 1=Relleno sanitario/2=Estacion de transferencia. La cantidad y el
   // rechazo se capturan en kg pero el formato pide toneladas, por eso se dividen entre 1000.
   // El "numero de semana" es la semana DENTRO DEL MES (1 a 5), no la semana del año.
+  // kg -> toneladas con 4 decimales (sin colas de coma flotante tipo 0.012300000000000002).
+  function bmToTon(kg){ return Math.round(Number(kg || 0) / 1000 * 10000) / 10000; }
+
   function bmReportRowToOldFormat(row){
     var fechaStr = String(row.fecha).slice(0, 10);
     var diaDelMes = Number(fechaStr.split('-')[2]);
@@ -973,9 +1114,9 @@
       'Tipo identificacion reciclador': row.codigo_tipo_identificacion || '',
       'Numero identificacion reciclador': row.nro_documento || '',
       Placa: row.placa || '',
-      'Cantidad material entrante (Ton)': (Number(row.cantidad) / 1000),
+      'Cantidad material entrante (Ton)': bmToTon(row.cantidad),
       'Tipo material entrante': row.cod_tipo_material || '',
-      'Rechazo material entrante (Ton)': (Number(row.cantidad_rechazo) / 1000),
+      'Rechazo material entrante (Ton)': bmToTon(row.cantidad_rechazo),
       'Tipo sitio destino': row.codigo_tipo_destino || '',
       'Numero sitio destino': row.numero_sitio_destino || ''
     };
@@ -990,7 +1131,17 @@
     gtApiFetch(url).then(function(res){
       if(!res.ok){ alert(res.data.error || 'No se pudo generar el reporte.'); if(onFail) onFail(); return; }
       if(res.data.length === 0){ alert('No hay datos de balance de masas en ese rango de fechas.'); if(onFail) onFail(); return; }
-      callback(res.data.map(bmReportRowToOldFormat), desde, hasta);
+      var rows = res.data.map(bmReportRowToOldFormat);
+      // El validador del SUI rechaza filas con campos obligatorios vacios: se avisa ANTES de descargar.
+      var required = ['NUECA', 'NUMACRO', 'Tipo identificacion reciclador', 'Numero identificacion reciclador', 'Tipo material entrante', 'Tipo sitio destino', 'Numero sitio destino'];
+      var faltantes = {};
+      rows.forEach(function(r){ required.forEach(function(k){ if(r[k] === '' || r[k] === null || r[k] === undefined) faltantes[k] = (faltantes[k] || 0) + 1; }); });
+      var keys = Object.keys(faltantes);
+      if(keys.length){
+        var detalle = keys.map(function(k){ return k + ': ' + faltantes[k] + ' fila(s)'; }).join('\n');
+        if(!confirm('Ojo: hay campos obligatorios vacíos que el SUI va a rechazar:\n\n' + detalle + '\n\n(Se completan en Recicladores, Bodegas/ECA, Macrorrutas, Tipos de material y en el destino del rechazo del Centro.)\n\n¿Descargar de todas formas?')){ if(onFail) onFail(); return; }
+      }
+      callback(rows, desde, hasta);
     });
   }
 
@@ -999,18 +1150,15 @@
       var headers = Object.keys(rows[0]);
       var filenameBase = 'balance_masas_' + desde + '_a_' + hasta;
       if(kind === 'xlsx'){
-        var html = '<table><tr>' + headers.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr>' +
-          rows.map(function(r){ return '<tr>' + headers.map(function(h){ return '<td>' + r[h] + '</td>'; }).join('') + '</tr>'; }).join('') +
+        var html = '<table><tr>' + headers.map(function(h){ return '<th>' + gtEscapeHtml(h) + '</th>'; }).join('') + '</tr>' +
+          rows.map(function(r){ return '<tr>' + headers.map(function(h){ return '<td>' + gtEscapeHtml(r[h]) + '</td>'; }).join('') + '</tr>'; }).join('') +
           '</table>';
         downloadBlob(html, filenameBase + '.xls', 'application/vnd.ms-excel');
       } else {
         var sep = kind === 'csv-semicolon' ? ';' : ',';
         var lines = [headers.join(sep)];
         rows.forEach(function(r){
-          lines.push(headers.map(function(h){
-            var v = r[h] === null || r[h] === undefined ? '' : String(r[h]);
-            return v.indexOf(sep) !== -1 ? '"' + v.replace(/"/g, '""') + '"' : v;
-          }).join(sep));
+          lines.push(headers.map(function(h){ return csvCell(r[h], sep); }).join(sep));
         });
         downloadBlob(lines.join('\r\n'), filenameBase + '.csv', 'text/csv;charset=utf-8;');
       }
@@ -1030,39 +1178,63 @@
     return Number(parts[2]) + ' de ' + (meses[mesIdx] || parts[1]) + ' de ' + parts[0];
   }
 
-  // ---- Factura del dia: el PDF es solo para esto — un comprobante imprimible de lo que un
-  // reciclador entrego ese dia especifico, con el valor de cada material y el total a pagar.
-  // No aplica al reporte de periodo (ese solo se exporta a Excel/CSV, en el formato de la Super).
-  function printBmGrid(){
-    if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
-    var headers = ['Material', 'Cantidad (kg)', 'Valor unitario', 'Valor total', 'Cant. rechazo', 'Cant. no SUI'];
-    var rows = [];
-    var sumCantidad = 0, sumValorTotal = 0, sumRechazo = 0, sumNosui = 0;
-    document.querySelectorAll('#bmGridBody tr').forEach(function(tr){
-      var material = tr.children[0].textContent;
-      var cantidad = Number(tr.querySelector('[data-field="cantidad"]').value || 0);
-      var valor = Number(tr.querySelector('[data-field="valor"]').value || 0);
-      var rechazo = Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
-      var nosui = Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
-      if(!cantidad && !valor && !rechazo && !nosui) return;
-      var valorTotal = cantidad * valor;
-      rows.push([material, cantidad, valor, valorTotal, rechazo, nosui]);
-      sumCantidad += cantidad; sumValorTotal += valorTotal; sumRechazo += rechazo; sumNosui += nosui;
-    });
-    if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
-    var subtitle = bmSelectedReciclador.nombre_completo + ' — Doc. ' + bmSelectedReciclador.nro_documento +
-      ' — Fecha: ' + formatDateStrLocal(document.getElementById('bmFecha').value);
-    var totalsRow = ['TOTAL', sumCantidad, '', sumValorTotal, sumRechazo, sumNosui];
-    openPrintWindowNow('Factura — Balance de Masas', subtitle, headers, rows, totalsRow, bmSelectedReciclador.id_centro);
+  // ---- Comprobante (factura) del dia: el PDF es solo para esto — lo que un reciclador entrego ese
+  // dia especifico, con el valor de cada material y el total a pagar, en un documento con
+  // encabezado de la asociacion (logo), datos del reciclador y de la operacion, referencias y
+  // firmas, como el "Balance de masas" del sistema original. No aplica al reporte de periodo
+  // (ese solo se exporta a Excel/CSV, en el formato de la Super).
+  function bmSelText(id){
+    var s = document.getElementById(id);
+    var o = s.options[s.selectedIndex];
+    return (o && s.value) ? o.textContent.trim() : '';
   }
 
-  // ---- Ventana de impresion con diseno propio (no solo el navegador imprimiendo la pantalla tal
-  // cual): abre una ventana nueva con un documento HTML propio (encabezado, tabla, total, pie de
-  // pagina) y dispara el dialogo de impresion, que ya trae "Guardar como PDF" como destino.
+  var bmCentrosCache = null;
+  function getBmCentro(idCentro){
+    var pick = function(list){ return (list || []).find(function(c){ return c.id === idCentro; }) || {}; };
+    if(bmCentrosCache) return Promise.resolve(pick(bmCentrosCache));
+    return gtApiFetch('/trazabilidad/centros').then(function(res){
+      bmCentrosCache = res.ok ? res.data : [];
+      return pick(bmCentrosCache);
+    }).catch(function(){ return {}; });
+  }
+
+  function printBmGrid(){
+    if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
+    var rows = [];
+    var tot = { cantidad: 0, valorTotal: 0, rechazo: 0, nosui: 0 };
+    var problemas = bmProblems();
+    if(problemas.length){ alert('Corrige esto antes de imprimir:\n' + problemas.slice(0, 5).join('\n')); return; }
+    // Se imprime el dia completo (todos los materiales con datos), aunque el filtro de familia muestre solo algunos.
+    (bmAllMateriales || []).slice().sort(function(a, b){ return (a.secuencia_orden || 0) - (b.secuencia_orden || 0); }).forEach(function(m){
+      var v = bmValues[m.id];
+      if(!v) return;
+      var cantidad = bmNum(v.cantidad), valor = bmNum(v.valor), rechazo = bmNum(v.cantidad_rechazo), nosui = bmNum(v.cantidad_nosui);
+      if(!cantidad && !valor && !rechazo && !nosui) return;
+      var valorTotal = cantidad * valor;
+      rows.push({ material: m.desc_tipo_material, cantidad: cantidad, valor: valor, valorTotal: valorTotal, rechazo: rechazo, nosui: nosui });
+      tot.cantidad += cantidad; tot.valorTotal += valorTotal; tot.rechazo += rechazo; tot.nosui += nosui;
+    });
+    if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
+    if(bmDirty && !confirm('Hay cantidades sin guardar. El comprobante las incluye, pero todavía no están en el sistema. ¿Imprimir de todos modos?')) return;
+    var fecha = document.getElementById('bmFecha').value;
+    var r = bmSelectedReciclador;
+    var doc = {
+      fecha: fecha,
+      diaSemana: document.getElementById('bmDiaSemana').textContent,
+      numero: 'BM-' + fecha.replace(/-/g, '') + '-' + String(r.id).padStart(4, '0'),
+      reciclador: { nombre: r.nombre_completo, documento: r.nro_documento, vehiculo: r.tipo_de_vehiculo, placa: r.placa },
+      eca: bmSelText('bmBodega'), macrorruta: bmSelText('bmMacrorruta'),
+      micro1: bmSelText('bmMicrorruta1'), micro2: bmSelText('bmMicrorruta2'),
+      rows: rows, tot: tot
+    };
+    openFacturaWindow(doc, r.id_centro);
+  }
+
   // La ventana se abre en el mismo instante del clic (si no, el navegador la bloquea) y recien
-  // despues se pide el logo de la asociacion (idCentro) para armar el documento con el.
-  function openPrintWindowNow(title, subtitle, headers, rows, totalsRow, idCentro){
-    var win = window.open('', '_blank', 'width=900,height=700');
+  // despues se piden los datos de la asociacion y su logo para armar el documento.
+  function openFacturaWindow(doc, idCentro){
+    var win = window.open('', '_blank', 'width=960,height=760');
     if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
     win.document.open();
     win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando…</title></head><body style="font-family:Arial;color:#5B6B7C;padding:24px;">Preparando el documento…</body></html>');
@@ -1070,41 +1242,112 @@
     var logoReq = idCentro
       ? gtApiFetch('/trazabilidad/centro-logo/' + idCentro).then(function(res){ return res.ok ? res.data.logo_url : null; }).catch(function(){ return null; })
       : Promise.resolve(null);
-    logoReq.then(function(logoUrl){ writePrintDocument(win, title, subtitle, headers, rows, totalsRow, logoUrl); });
+    Promise.all([getBmCentro(idCentro), logoReq]).then(function(out){
+      writeFacturaDocument(win, doc, out[0], out[1]);
+    });
   }
 
-  function writePrintDocument(win, title, subtitle, headers, rows, totalsRow, logoUrl){
+  function writeFacturaDocument(win, doc, centro, logoUrl){
     if(win.closed) return;
-    var generado = new Date().toLocaleString('es-CO');
-    var esc = function(v){ return v === null || v === undefined ? '' : String(v); };
-    var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>' +
-      '@page{ margin:14mm; }' +
-      'body{ font-family: Arial, Helvetica, sans-serif; color:#1B2733; margin:0; padding:22px; }' +
-      '.pf-header{ display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #F2941F;padding-bottom:10px;margin-bottom:14px; }' +
-      '.pf-left{ display:flex;align-items:center;gap:14px; }' +
-      '.pf-logo{ max-height:56px;max-width:140px;object-fit:contain; }' +
-      '.pf-brand{ font-size:11px;color:#5B6B7C;text-transform:uppercase;letter-spacing:.6px; }' +
-      '.pf-header h1{ margin:4px 0 0;font-size:19px;color:#0A3369; }' +
-      '.pf-meta{ font-size:11.5px;color:#5B6B7C;margin:0 0 14px; }' +
-      'table{ width:100%;border-collapse:collapse;font-size:11px; }' +
-      'th{ background:#0A3369;color:#fff;text-align:left;padding:6px 8px;white-space:nowrap; }' +
-      'td{ padding:5px 8px;border-bottom:1px solid #DCE3EA; }' +
-      'tr:nth-child(even) td{ background:#F7F9FB; }' +
-      '.pf-total td{ font-weight:700;border-top:2px solid #0A3369;background:#F3F5F8; }' +
-      '.pf-footer{ margin-top:16px;font-size:9.5px;color:#9AA7B4;border-top:1px solid #DCE3EA;padding-top:6px; }' +
-      '</style></head><body>' +
-      '<div class="pf-header"><div class="pf-left">' +
-      (logoUrl ? '<img class="pf-logo" src="' + esc(logoUrl).replace(/"/g, '&quot;') + '" alt="">' : '') +
-      '<div><div class="pf-brand">Genesis Traza — Trazabilidad</div><h1>' + esc(title) + '</h1></div></div>' +
-      '<div class="pf-brand">' + esc(generado) + '</div></div>' +
-      (subtitle ? '<p class="pf-meta">' + esc(subtitle) + '</p>' : '') +
-      '<table><thead><tr>' + headers.map(function(h){ return '<th>' + esc(h) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-      rows.map(function(r){ return '<tr>' + r.map(function(c){ return '<td>' + esc(c) + '</td>'; }).join('') + '</tr>'; }).join('') +
-      '</tbody>' +
-      (totalsRow ? '<tfoot><tr class="pf-total">' + totalsRow.map(function(c){ return '<td>' + esc(c) + '</td>'; }).join('') + '</tr></tfoot>' : '') +
-      '</table>' +
-      '<div class="pf-footer">Módulo Pruebas (sandbox de trazabilidad nativa) — comprobante de prueba, no válido como factura real.</div>' +
-      '</body></html>';
+    var esc = function(v){ return gtEscapeHtml(v === null || v === undefined ? '' : v); };
+    var dash = function(v){ return v ? esc(v) : '<span class="muted">—</span>'; };
+    var num = function(n, d){ return Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+    var money = function(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); };
+    var generado = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' });
+    var orgName = centro.desc_centro || 'Asociación';
+    var contacto = [centro.direccion, centro.telefono, centro.correo].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ');
+    var logoHtml = logoUrl
+      ? '<img class="logo" src="' + esc(logoUrl) + '" alt="Logo">'
+      : '<div class="logo mono">' + esc(gtAssocInitials(orgName)) + '</div>';
+
+    var body = doc.rows.map(function(x){
+      return '<tr><td class="l">' + esc(x.material) + '</td><td>' + num(x.cantidad, 2) + '</td><td>' + (x.valor ? money(x.valor) : '') + '</td>' +
+        '<td class="b">' + (x.valorTotal ? money(x.valorTotal) : '') + '</td><td>' + (x.rechazo ? num(x.rechazo, 2) : '') + '</td><td>' + (x.nosui ? num(x.nosui, 2) : '') + '</td></tr>';
+    }).join('');
+
+    var css =
+      '@page{ size:A4; margin:12mm; }' +
+      '*{ box-sizing:border-box; }' +
+      'html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      'body{ font-family:"Segoe UI",Arial,Helvetica,sans-serif; color:#1B2733; margin:0; padding:0; font-size:12px; }' +
+      '.page{ max-width:190mm; margin:0 auto; padding:6px 2px 0; }' +
+      '.top{ display:flex; justify-content:space-between; align-items:center; gap:18px; padding-bottom:14px; border-bottom:3px solid #F2941F; }' +
+      '.org{ display:flex; align-items:center; gap:14px; min-width:0; }' +
+      '.logo{ width:76px; height:76px; object-fit:contain; border-radius:10px; flex:none; }' +
+      '.logo.mono{ display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#0A3369,#1a57a8); color:#fff; font-weight:800; font-size:26px; letter-spacing:1px; }' +
+      '.org h2{ margin:0 0 3px; font-size:17px; color:#0A3369; line-height:1.2; }' +
+      '.org .nit{ font-size:12px; font-weight:600; color:#1B2733; }' +
+      '.org .contact{ font-size:10.5px; color:#5B6B7C; margin-top:3px; }' +
+      '.ref{ text-align:right; flex:none; }' +
+      '.ref .kind{ font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:#5B6B7C; }' +
+      '.ref .num{ font-size:19px; font-weight:800; color:#0A3369; margin:2px 0; font-variant-numeric:tabular-nums; }' +
+      '.ref .date{ font-size:11.5px; color:#1B2733; }' +
+      '.title{ display:flex; align-items:center; justify-content:space-between; margin:16px 0 12px; }' +
+      '.title h1{ margin:0; font-size:22px; color:#0A3369; font-family:Georgia,"Times New Roman",serif; font-weight:600; }' +
+      '.chip{ background:#FFF3E0; color:#B45F06; border:1px solid #F9D29B; border-radius:999px; padding:4px 12px; font-size:11px; font-weight:700; }' +
+      '.cards{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }' +
+      '.card{ border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; }' +
+      '.card h3{ margin:0; padding:7px 12px; background:#0A3369; color:#fff; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; }' +
+      '.kv{ display:grid; grid-template-columns:104px 1fr; }' +
+      '.kv div{ padding:6px 12px; border-bottom:1px solid #EEF2F6; font-size:11.5px; }' +
+      '.kv .k{ color:#5B6B7C; background:#F7F9FB; }' +
+      '.kv .v{ font-weight:600; }' +
+      '.kv div:nth-last-child(-n+2){ border-bottom:0; }' +
+      '.muted{ color:#9AA7B4; font-weight:400; }' +
+      'table.mat{ width:100%; border-collapse:collapse; font-size:11.5px; border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; }' +
+      'table.mat th{ background:#0A3369; color:#fff; padding:8px 10px; text-align:right; font-size:10.5px; letter-spacing:.4px; }' +
+      'table.mat th.l, table.mat td.l{ text-align:left; }' +
+      'table.mat td{ padding:7px 10px; text-align:right; border-bottom:1px solid #EEF2F6; font-variant-numeric:tabular-nums; }' +
+      'table.mat tbody tr:nth-child(even) td{ background:#F7F9FB; }' +
+      'table.mat td.b{ font-weight:700; color:#0A3369; }' +
+      'table.mat tfoot td{ background:#EAF0F8; border-top:2px solid #0A3369; border-bottom:0; font-weight:800; color:#0A3369; padding:9px 10px; }' +
+      '.kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0 4px; }' +
+      '.kpi{ border:1px solid #DCE3EA; border-radius:10px; padding:10px 12px; }' +
+      '.kpi .kl{ font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:#5B6B7C; }' +
+      '.kpi .kv2{ font-size:17px; font-weight:800; color:#0A3369; margin-top:3px; font-variant-numeric:tabular-nums; }' +
+      '.kpi.pay{ background:#0A3369; border-color:#0A3369; }' +
+      '.kpi.pay .kl{ color:#BBD0EE; } .kpi.pay .kv2{ color:#fff; }' +
+      '.sign{ display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:64px; }' +
+      '.sign div{ border-top:1.5px solid #1B2733; padding-top:6px; text-align:center; font-size:11px; color:#5B6B7C; }' +
+      '.sign b{ display:block; color:#1B2733; font-size:11.5px; }' +
+      '.foot{ margin-top:26px; padding-top:8px; border-top:1px solid #DCE3EA; display:flex; justify-content:space-between; gap:12px; font-size:9.5px; color:#9AA7B4; }' +
+      '.bar{ position:sticky; top:0; background:#0A3369; color:#fff; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; font-size:12px; }' +
+      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:8px; padding:7px 16px; font-weight:700; cursor:pointer; }' +
+      '@media print{ .bar{ display:none; } }';
+
+    var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Balance de masas ' + esc(doc.numero) + '</title><style>' + css + '</style></head><body>' +
+      '<div class="bar"><span>Vista previa del comprobante — en el diálogo de impresión elige "Guardar como PDF".</span><button onclick="window.print()">Imprimir / Guardar PDF</button></div>' +
+      '<div class="page">' +
+      '<div class="top"><div class="org">' + logoHtml +
+        '<div><h2>' + esc(orgName) + '</h2>' + (centro.nit ? '<div class="nit">NIT ' + esc(centro.nit) + '</div>' : '') +
+        (contacto ? '<div class="contact">' + contacto + '</div>' : '') + '</div></div>' +
+        '<div class="ref"><div class="kind">Comprobante N°</div><div class="num">' + esc(doc.numero) + '</div>' +
+        '<div class="date">' + esc(doc.diaSemana) + ', ' + esc(formatDateStrLocal(doc.fecha)) + '</div></div></div>' +
+      '<div class="title"><h1>Balance de masas</h1><span class="chip">Material recibido</span></div>' +
+      '<div class="cards">' +
+        '<div class="card"><h3>Reciclador de oficio</h3><div class="kv">' +
+          '<div class="k">Nombre</div><div class="v">' + dash(doc.reciclador.nombre) + '</div>' +
+          '<div class="k">Cédula</div><div class="v">' + dash(doc.reciclador.documento) + '</div>' +
+          '<div class="k">Tipo vehículo</div><div class="v">' + dash(doc.reciclador.vehiculo) + '</div>' +
+          '<div class="k">Placa</div><div class="v">' + dash(doc.reciclador.placa) + '</div></div></div>' +
+        '<div class="card"><h3>Operación</h3><div class="kv">' +
+          '<div class="k">NUECA (ECA)</div><div class="v">' + dash(doc.eca) + '</div>' +
+          '<div class="k">NUMACRO</div><div class="v">' + dash(doc.macrorruta) + '</div>' +
+          '<div class="k">Microrruta 1</div><div class="v">' + dash(doc.micro1) + '</div>' +
+          '<div class="k">Microrruta 2</div><div class="v">' + dash(doc.micro2) + '</div></div></div>' +
+      '</div>' +
+      '<table class="mat"><thead><tr><th class="l">Material</th><th>Cantidad (kg)</th><th>Valor / kg</th><th>Total</th><th>Rechazo (kg)</th><th>No SUI (kg)</th></tr></thead><tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td class="l">Total</td><td>' + num(doc.tot.cantidad, 2) + '</td><td></td><td>' + money(doc.tot.valorTotal) + '</td><td>' + num(doc.tot.rechazo, 2) + '</td><td>' + num(doc.tot.nosui, 2) + '</td></tr></tfoot></table>' +
+      '<div class="kpis">' +
+        '<div class="kpi"><div class="kl">Material recibido</div><div class="kv2">' + num(doc.tot.cantidad, 2) + ' kg</div></div>' +
+        '<div class="kpi"><div class="kl">Rechazo</div><div class="kv2">' + num(doc.tot.rechazo, 2) + ' kg</div></div>' +
+        '<div class="kpi"><div class="kl">No SUI</div><div class="kv2">' + num(doc.tot.nosui, 2) + ' kg</div></div>' +
+        '<div class="kpi pay"><div class="kl">Total a pagar</div><div class="kv2">' + money(doc.tot.valorTotal) + '</div></div>' +
+      '</div>' +
+      '<div class="sign"><div><b>' + esc(doc.reciclador.nombre) + '</b>C.C. ' + esc(doc.reciclador.documento) + ' — Reciclador</div><div><b>' + esc(orgName) + '</b>Responsable de la ECA</div></div>' +
+      '<div class="foot"><span>Generado el ' + esc(generado) + ' &nbsp;·&nbsp; Ref. ' + esc(doc.numero) + '</span><span>Genesis Traza — Módulo Pruebas: comprobante de prueba, sin validez como factura.</span></div>' +
+      '</div></body></html>';
+
     win.document.open();
     win.document.write(html);
     win.document.close();
@@ -1112,7 +1355,7 @@
     // Imprime cuando el logo termino de cargar (o falla); tope de 4 s para no quedar colgado.
     var printed = false;
     var doPrint = function(){ if(printed || win.closed) return; printed = true; win.print(); };
-    var img = win.document.querySelector('.pf-logo');
+    var img = win.document.querySelector('img.logo');
     if(img && !img.complete){
       img.onload = img.onerror = function(){ setTimeout(doPrint, 100); };
       setTimeout(doPrint, 4000);

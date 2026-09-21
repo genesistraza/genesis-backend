@@ -8,7 +8,10 @@ const LOGIN_URL = SITE_URL + '/?login=1';
 
 function formatDateEs(d) {
   if (!d) return null;
-  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Una fecha 'YYYY-MM-DD' (columna DATE) es un dia de calendario, no un instante: se formatea en UTC
+  // para que la zona horaria del servidor no la corra un dia.
+  const dateOnly = typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d);
+  return new Date(d).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric', ...(dateOnly ? { timeZone: 'UTC' } : {}) });
 }
 
 function buildEmailHtml({ heading, bodyHtml, ctaText, ctaUrl }) {

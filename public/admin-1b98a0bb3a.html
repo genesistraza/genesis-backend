@@ -712,7 +712,7 @@
       var body = document.getElementById('clientModalBody');
       if(!res.ok){ body.textContent = res.data.error || 'No se pudo cargar.'; return; }
       var d = res.data;
-      var esc = function(v){ return (v || '').toString().replace(/"/g, '&quot;'); };
+      var esc = function(v){ return gtEscapeHtml(v === null || v === undefined ? '' : v); };
       var html = '';
       html += '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:2px 0 4px;padding:14px;border:1px solid var(--line);border-radius:14px;background:#FAFCFF;">';
       html += gtAssocLogoHtml(d.association, 'lg');
@@ -734,9 +734,9 @@
 
       html += '<h4 style="margin-top:20px;font-size:14px;">Documentos legales</h4>';
       html += '<div class="form-grid" style="margin-top:10px;">';
-      html += '<div class="form-field"><label>RUT' + (d.association.rut_url ? ' — <a href="' + d.association.rut_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docRut" type="file" accept=".pdf,image/*"></div>';
-      html += '<div class="form-field"><label>Cámara de Comercio' + (d.association.camara_comercio_url ? ' — <a href="' + d.association.camara_comercio_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCamara" type="file" accept=".pdf,image/*"></div>';
-      html += '<div class="form-field"><label>Cédula representante legal' + (d.association.representante_cedula_url ? ' — <a href="' + d.association.representante_cedula_url + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCedula" type="file" accept=".pdf,image/*"></div>';
+      html += '<div class="form-field"><label>RUT' + (d.association.rut_url ? ' — <a href="' + esc(d.association.rut_url) + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docRut" type="file" accept=".pdf,image/*"></div>';
+      html += '<div class="form-field"><label>Cámara de Comercio' + (d.association.camara_comercio_url ? ' — <a href="' + esc(d.association.camara_comercio_url) + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCamara" type="file" accept=".pdf,image/*"></div>';
+      html += '<div class="form-field"><label>Cédula representante legal' + (d.association.representante_cedula_url ? ' — <a href="' + esc(d.association.representante_cedula_url) + '" target="_blank" style="color:var(--blue);">ver actual</a>' : '') + '</label><input id="docCedula" type="file" accept=".pdf,image/*"></div>';
       html += '</div>';
       html += '<button class="btn btn-outline" style="border-color:var(--blue-deep);color:var(--blue-deep);margin-top:12px;" onclick="uploadAssociationDocuments(' + d.association.id + ')">Subir documentos</button>';
       html += '<p id="docUploadMsg" style="margin-top:8px;font-size:13px;"></p>';
@@ -745,21 +745,21 @@
       html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Corrige aquí el dato de contacto si el cliente se equivocó al registrarse.</p>';
       d.users.forEach(function(u){
         html += '<div class="form-grid" style="margin-bottom:4px;">';
-        html += '<div class="form-field"><label>Correo — ' + esc(u.full_name) + ' (' + u.role + (u.is_verified ? '' : ', sin verificar') + ')</label><input id="userEmail_' + u.id + '" type="email" value="' + esc(u.email) + '"></div>';
+        html += '<div class="form-field"><label>Correo — ' + esc(u.full_name) + ' (' + esc(u.role) + (u.is_verified ? '' : ', sin verificar') + ')</label><input id="userEmail_' + u.id + '" type="email" value="' + esc(u.email) + '"></div>';
         html += '<div class="form-field"><label>Celular</label><input id="userPhone_' + u.id + '" type="tel" value="' + esc(u.phone) + '"></div>';
         html += '</div>';
         html += '<button class="btn btn-outline" style="margin-bottom:6px;" onclick="saveUserContact(' + u.id + ')">Guardar contacto</button>';
         html += '<p id="userContactMsg_' + u.id + '" style="margin:0 0 12px;font-size:13px;"></p>';
       });
       html += '<h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
-      d.subscriptions.forEach(function(s){ html += '<li>' + s.plan_name + ' — ' + s.status + ' (vence ' + gtFormatDate(s.next_due_date) + ')</li>'; });
+      d.subscriptions.forEach(function(s){ html += '<li>' + esc(s.plan_name) + ' — ' + esc(s.status) + ' (vence ' + gtFormatDate(s.next_due_date) + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Pagos recientes</h4><ul style="padding-left:18px;font-size:13.5px;">';
-      d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + p.status + '</li>'; });
+      d.payments.slice(0,10).forEach(function(p){ html += '<li>' + gtFormatDate(p.created_at) + ' — ' + gtFormatCOP(p.amount) + ' — ' + esc(p.status) + '</li>'; });
       html += '</ul>';
 
       var currentActive = d.subscriptions.find(function(s){ return s.status === 'activa'; });
       html += '<h4 style="margin-top:16px;font-size:14px;">Corregir plan</h4>';
-      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Usa esto solo si hubo un error (pago con el plan equivocado, ciclo equivocado, etc). Activa el plan de inmediato, sin pasar por una nueva compra. Plan actual: <strong>' + (currentActive ? currentActive.plan_name : 'ninguno') + '</strong>.</p>';
+      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Usa esto solo si hubo un error (pago con el plan equivocado, ciclo equivocado, etc). Activa el plan de inmediato, sin pasar por una nueva compra. Plan actual: <strong>' + (currentActive ? esc(currentActive.plan_name) : 'ninguno') + '</strong>.</p>';
       html += '<div class="form-grid">';
       html += '<div class="form-field"><label>Plan</label><select id="fixPlanSelect"><option value="">Cargando…</option></select></div>';
       html += '<div class="form-field"><label>Ciclo</label><select id="fixPlanCycle"><option value="mensual">Mensual</option><option value="anual">Anual</option></select></div>';

@@ -107,7 +107,11 @@ async function getMassBalancePeriods(associationId) {
 // aprovechadas (no cuenta el rechazo) y el pago correspondiente, sumando sus entradas de
 // balance de masas de ese mes. Si no se pasa "month" usa el mes calendario actual.
 async function getRecicladoresConPagoMes(associationId, month) {
-  const targetMonth = month || new Date().toISOString().slice(0, 7);
+  // Mes actual en Colombia (toISOString usa UTC: despues de las 7 p. m. del ultimo dia del mes ya
+  // "era" el mes siguiente y la lista salia en cero).
+  const targetMonth = /^\d{4}-(0[1-9]|1[0-2])$/.test(String(month || ''))
+    ? month
+    : new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7);
   const result = await pool.query(
     `SELECT r.id, r.documento_numero, r.nombre_completo,
             COALESCE(m.toneladas, 0) AS toneladas_mes,
