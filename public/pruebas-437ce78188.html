@@ -91,6 +91,7 @@
   .bm-grid tbody td:first-child{ color:var(--ink-soft);white-space:nowrap; }
   .bm-grid tbody input, .bm-grid tbody select{ width:100%;height:22px;border:none;background:transparent;font-size:11.5px;text-align:right;box-sizing:border-box;padding:0 2px; }
   .bm-grid tbody select{ text-align:left; }
+  .bm-grid tbody select:disabled{ appearance:none;-webkit-appearance:none;color:transparent; }
   .bm-grid tbody input:disabled, .bm-grid tbody select:disabled{ background:#F3F3F3;cursor:not-allowed; }
   .bm-grid tbody input:focus, .bm-grid tbody select:focus{ outline:2px solid #4A6FA5;background:#fff; }
   .bm-grid td.bm-tot{ text-align:right;background:#F7F8FA;color:#23408E; }
@@ -859,8 +860,12 @@
       var t = q * v;
       tr.querySelector('.bm-tot').textContent = t ? fmtNum(t) : '';
       sc += q; sv += t;
-      sr += Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
+      var rech = Number(tr.querySelector('[data-field="cantidad_rechazo"]').value || 0);
+      sr += rech;
       sn += Number(tr.querySelector('[data-field="cantidad_nosui"]').value || 0);
+      var destinoOn = !!bmSelectedReciclador && rech > 0;
+      tr.querySelector('[data-field="id_tipo_destino"]').disabled = !destinoOn;
+      tr.querySelector('[data-field="numero_sitio_destino"]').disabled = !destinoOn;
     });
     document.getElementById('bmTotCantidad').textContent = fmtNum(sc);
     document.getElementById('bmTotValor').textContent = fmtNum(sv);
