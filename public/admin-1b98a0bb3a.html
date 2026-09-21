@@ -751,6 +751,16 @@
         html += '<button class="btn btn-outline" style="margin-bottom:6px;" onclick="saveUserContact(' + u.id + ')">Guardar contacto</button>';
         html += '<p id="userContactMsg_' + u.id + '" style="margin:0 0 12px;font-size:13px;"></p>';
       });
+      if(d.users.length === 0) html += '<p style="font-size:13px;color:#B45F06;margin:0 0 10px;">Esta asociación todavía no tiene ningún usuario: nadie puede ingresar.</p>';
+      html += '<h4 style="margin-top:14px;font-size:14px;">Agregar usuario de ingreso</h4>';
+      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Con este correo y contraseña la persona entra a Mi cuenta y a la facturación electrónica. Contraseña de mínimo 8 caracteres. Solo el administrador principal puede crear usuarios.</p>';
+      html += '<div class="form-grid">';
+      html += '<div class="form-field"><label>Nombre completo</label><input id="newUserName"></div>';
+      html += '<div class="form-field"><label>Correo de ingreso</label><input id="newUserEmail" type="email" autocomplete="off"></div>';
+      html += '<div class="form-field"><label>Contraseña</label><div class="pwd-wrap"><input id="newUserPassword" type="password" autocomplete="new-password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>';
+      html += '</div>';
+      html += '<button class="btn btn-primary" style="margin-top:10px;" onclick="addAssociationUser(' + d.association.id + ')">Crear usuario</button>';
+      html += '<p id="newUserMsg" style="margin-top:8px;font-size:13px;"></p>';
       html += '<h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.subscriptions.forEach(function(s){ html += '<li>' + esc(s.plan_name) + ' — ' + esc(s.status) + ' (vence ' + gtFormatDate(s.next_due_date) + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Pagos recientes</h4><ul style="padding-left:18px;font-size:13.5px;">';
@@ -881,6 +891,24 @@
         msgEl.textContent = 'Guardado.';
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
+  }
+
+  // Crea un usuario (correo + contraseña) ligado a esta asociacion, sin tener que buscar su ID a mano.
+  function addAssociationUser(associationId){
+    var msg = document.getElementById('newUserMsg');
+    var fullName = document.getElementById('newUserName').value.trim();
+    var email = document.getElementById('newUserEmail').value.trim();
+    var password = document.getElementById('newUserPassword').value;
+    msg.style.color = '#C0392B';
+    if(!fullName || !email || !password){ msg.textContent = 'Escribe el nombre, el correo y la contraseña.'; return; }
+    if(password.length < 8){ msg.textContent = 'La contraseña debe tener al menos 8 caracteres.'; return; }
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Creando…';
+    gtApiFetch('/admin/users', { method: 'POST', body: JSON.stringify({ fullName: fullName, email: email, password: password, role: 'operativo', associationId: associationId }) })
+      .then(function(res){
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.status === 403 ? 'Solo el administrador principal puede crear usuarios.' : (res.data.error || 'No se pudo crear el usuario.'); return; }
+        openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
+      });
   }
 
   function fixAssociationPlan(associationId){
