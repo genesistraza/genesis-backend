@@ -202,7 +202,7 @@ tfoot td{ font-weight:700; border-top:2px solid var(--blue); background:#EEF3FA;
 <div class="card">
   <table><thead><tr><th class="l">Material</th><th>Cantidad (kg)</th><th>Valor/kg</th><th>Total</th><th>Rechazo (kg)</th><th>No SUI (kg)</th></tr></thead>
   <tbody>${rowsHtml}</tbody>
-  <tfoot><tr><td class="l" data-label="Total">Total</td><td data-label="Cantidad (kg)">${fmtNum(s.totales.cantidad)}</td><td></td><td data-label="Total">${fmtMoney(s.totales.valorTotal)}</td><td data-label="Rechazo (kg)">${fmtNum(s.totales.rechazo)}</td><td data-label="No SUI (kg)">${fmtNum(s.totales.nosui)}</td></tr></tfoot></table>
+  <tfoot><tr><td class="l" data-label="">Total</td><td data-label="Cantidad (kg)">${fmtNum(s.totales.cantidad)}</td><td data-label=""></td><td data-label="Total">${fmtMoney(s.totales.valorTotal)}</td><td data-label="Rechazo (kg)">${fmtNum(s.totales.rechazo)}</td><td data-label="No SUI (kg)">${fmtNum(s.totales.nosui)}</td></tr></tfoot></table>
   <div class="kpis">
     <div class="kpi"><span>Rechazo</span><b>${fmtNum(s.totales.rechazo)} kg</b></div>
     <div class="kpi pay"><span>Total a pagar</span><b>${fmtMoney(s.totales.valorTotal)}</b></div>
