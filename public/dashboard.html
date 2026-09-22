@@ -89,16 +89,15 @@
         </div>
       </div>
 
-      <div id="facturacionPanel" class="panel" style="display:none;text-align:center;">
-        <h2>Facturación electrónica</h2>
-        <p style="color:var(--ink-soft);margin:10px 0 18px;">Entra a tu sistema de facturación electrónica ante la DIAN.</p>
-        <a class="btn btn-primary" id="facturacionLink" href="#" target="_blank" rel="noopener">Entrar a facturación electrónica</a>
-      </div>
-
-      <div id="trazabilidadPanel" class="panel" style="display:none;text-align:center;">
-        <h2>Genesis Traza (Trazabilidad)</h2>
-        <p style="color:var(--ink-soft);margin:10px 0 18px;">Reporte SUI, Superservicios y Contraloría.</p>
-        <a class="btn btn-primary" href="https://genesis-traza.com" target="_blank" rel="noopener">Ir a Trazabilidad</a>
+      <!-- Provisional mientras terminamos las pruebas de trazabilidad en nuestro propio sistema: por ahora los
+           dos accesos llevan a los sistemas actuales (uno externo, uno propio con link por asociación). -->
+      <div id="sistemasPanel" class="panel" style="display:none;text-align:center;">
+        <h2>Nuestros sistemas</h2>
+        <p style="color:var(--ink-soft);margin:10px 0 18px;">Acceso provisional mientras terminamos las pruebas en nuestro sistema.</p>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <a class="btn btn-primary" href="https://genesis-traza.com" target="_blank" rel="noopener">Ir a Trazabilidad</a>
+          <a class="btn btn-primary" id="facturacionLink" href="#" target="_blank" rel="noopener" style="display:none;">Ir a Facturación</a>
+        </div>
       </div>
 
       <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
@@ -330,13 +329,15 @@
       assocCard.style.display = 'flex';
       document.getElementById('topAssocLogo').innerHTML = gtAssocLogoHtml(meData.association, 'lg');
 
+      // Trazabilidad es un enlace fijo (no depende de la asociacion): antes de iniciar sesion esta el
+      // mismo link en el desplegable de "Iniciar sesion" de index.html, pero desaparecia despues de
+      // entrar al dashboard. Facturacion solo se muestra si la asociacion ya tiene su link configurado.
+      document.getElementById('sistemasPanel').style.display = 'block';
       if(meData.association.facturacion_url){
-        document.getElementById('facturacionPanel').style.display = 'block';
-        document.getElementById('facturacionLink').href = meData.association.facturacion_url;
+        var facturacionLink = document.getElementById('facturacionLink');
+        facturacionLink.style.display = 'inline-block';
+        facturacionLink.href = meData.association.facturacion_url;
       }
-      // Enlace fijo (no depende de la asociacion): antes de iniciar sesion esta el mismo link en el
-      // desplegable de "Iniciar sesion" de index.html, pero desaparecia despues de entrar al dashboard.
-      document.getElementById('trazabilidadPanel').style.display = 'block';
 
       var sub = meData.subscriptions && meData.subscriptions[0];
       var totalPaid = (meData.payments || []).filter(function(p){ return p.status === 'aprobado'; })
