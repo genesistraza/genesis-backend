@@ -433,6 +433,24 @@
     role: localStorage.getItem('gt_role'),
     fullName: localStorage.getItem('gt_fullName')
   };
+
+  // Si ya pasaron 30 min desde la ultima actividad registrada (misma regla que gtRequireAuth en
+  // app.js), la sesion ya esta vencida aunque el token siga guardado en localStorage. Sin este
+  // chequeo, esta pagina (que no pasa por gtRequireAuth) seguia mostrando "sesion iniciada" hasta
+  // que el usuario entraba a una pantalla protegida y ahi si se detectaba el vencimiento.
+  var GT_INACTIVITY_LIMIT_MS = 30 * 60 * 1000;
+  if(authToken){
+    var gtLastActivity = Number(localStorage.getItem('gt_last_activity') || 0);
+    if(gtLastActivity && Date.now() - gtLastActivity > GT_INACTIVITY_LIMIT_MS){
+      localStorage.removeItem('gt_token');
+      localStorage.removeItem('gt_role');
+      localStorage.removeItem('gt_fullName');
+      localStorage.removeItem('gt_last_activity');
+      authToken = null;
+      authUser = { role: null, fullName: null };
+    }
+  }
+
   var pendingVerifyUserId = null;
   var pendingVerifyEmail = null;
   var pendingVerifyPassword = null;
@@ -593,6 +611,7 @@
     localStorage.removeItem('gt_token');
     localStorage.removeItem('gt_role');
     localStorage.removeItem('gt_fullName');
+    localStorage.removeItem('gt_last_activity');
     updateAuthUI();
   }
 
@@ -714,6 +733,21 @@
 
   updateAuthUI();
 
+  // Si el usuario deja esta pestaña abierta 30+ min (en vez de recargarla despues), la sesion
+  // tambien se cierra sola aqui, sin necesidad de que entre a una pantalla protegida primero.
+  if(authToken){
+    ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'].forEach(function(evt){
+      document.addEventListener(evt, function(){ localStorage.setItem('gt_last_activity', String(Date.now())); }, { passive: true });
+    });
+    setInterval(function(){
+      if(!authToken) return;
+      var last = Number(localStorage.getItem('gt_last_activity') || 0);
+      if(last && Date.now() - last > GT_INACTIVITY_LIMIT_MS){
+        logout();
+      }
+    }, 30000);
+  }
+
   // Los correos (recordatorios de pago, etc.) enlazan aqui con ?login=1 para abrir
   // el modal de inicio de sesion de una vez, en lugar de dejar al cliente buscarlo.
   var gtSessionParam = new URLSearchParams(window.location.search).get('session');
@@ -726,6 +760,15 @@
       ? 'Tu sesión se cerró por inactividad. Vuelve a iniciar sesión.'
       : 'Tu sesión expiró. Vuelve a iniciar sesión.';
     loginErrorEl.style.display = 'block';
+  }
+  // El aviso de arriba es de una sola vez: si se deja "?session=..." en la URL, recargar esta
+  // misma pagina (o volver a ella despues) seguia mostrando "tu sesion se cerro por inactividad"
+  // aunque ya se hubiera iniciado sesion de nuevo. Se limpia de la barra de direcciones apenas se lee.
+  if(gtSessionParam){
+    var gtCleanParams = new URLSearchParams(window.location.search);
+    gtCleanParams.delete('session');
+    var gtCleanQuery = gtCleanParams.toString();
+    window.history.replaceState(null, '', window.location.pathname + (gtCleanQuery ? '?' + gtCleanQuery : '') + window.location.hash);
   }
 </script>
 
