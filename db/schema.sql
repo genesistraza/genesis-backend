@@ -784,3 +784,23 @@ WHERE v.id_tipo_identificacion IS NULL AND c.categoria = 'tipos_identificacion'
 
 -- Un reciclador (documento) no puede repetirse dentro del mismo centro.
 CREATE UNIQUE INDEX IF NOT EXISTS tz_recicladores_documento_centro_idx ON tz_recicladores (id_centro, nro_documento);
+
+-- Comprobantes de Balance de Masas: cada vez que se imprime, se guarda una "foto" (snapshot)
+-- INMUTABLE de lo que había en ese momento -- nunca se edita ni se borra por la aplicación --
+-- con un token imposible de adivinar (32 bytes al azar) para el QR que lleva a la version
+-- publica y verificable de ese comprobante. Asi, si alguien altera a mano el papel impreso,
+-- cualquiera que escanee el QR ve los datos reales guardados en el servidor, no el papel alterado.
+CREATE TABLE IF NOT EXISTS tz_comprobantes (
+  id SERIAL PRIMARY KEY,
+  token VARCHAR(64) UNIQUE NOT NULL,
+  numero VARCHAR(60) NOT NULL,
+  id_centro INT REFERENCES tz_centros(id),
+  id_reciclador INT REFERENCES tz_recicladores(id),
+  fecha DATE NOT NULL,
+  formato VARCHAR(20) NOT NULL DEFAULT 'carta',
+  snapshot JSONB NOT NULL,
+  codigo_verificacion VARCHAR(20) NOT NULL,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS tz_comprobantes_reciclador_fecha_idx ON tz_comprobantes (id_reciclador, fecha);

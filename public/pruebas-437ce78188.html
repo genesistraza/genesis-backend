@@ -70,6 +70,19 @@
   .bm-ic:hover{ background:#EAF0F8; }
   .bm-ic svg{ width:22px;height:22px;fill:currentColor; }
   .bm-sep{ width:14px; }
+  .bm-print-item{ position:relative;display:inline-block; }
+  .bm-print-dropdown{
+    display:none;position:absolute;top:calc(100% + 3px);left:0;min-width:260px;z-index:60;
+    background:#fff;border:1px solid var(--line);border-radius:8px;
+    box-shadow:0 8px 22px rgba(10,51,105,.14);padding:5px;
+  }
+  .bm-print-item.open .bm-print-dropdown{ display:block; }
+  .bm-print-dropdown a{
+    display:block;padding:7px 10px;border-radius:5px;cursor:pointer;
+  }
+  .bm-print-dropdown a:hover{ background:#F3F5F8; }
+  .bm-print-dropdown a b{ display:block;font-size:12px;color:var(--ink); }
+  .bm-print-dropdown a span{ display:block;font-size:10.5px;color:var(--ink-soft);margin-top:1px; }
   .bm-reportes{ background:#F7F9FB;border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px; }
   .bm-rep-row{ display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12px;padding:3px 0; }
   .bm-rep-row strong{ min-width:150px;font-size:12px; }
@@ -142,7 +155,15 @@
       <button type="button" class="bm-ic" title="Guardar el día" onclick="saveBmDia()"><svg viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4z M7 3v5h9V3 M7 13h10v8H7z" fill-rule="evenodd"/></svg></button>
       <button type="button" class="bm-ic" title="Borrar el día de este reciclador" onclick="deleteBmDia()"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"/></svg></button>
       <span class="bm-sep"></span>
-      <button type="button" class="bm-ic" title="Imprimir factura del día (PDF)" onclick="printBmGrid()"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7z M4 8h16a1 1 0 0 1 1 1v8h-4v4H7v-4H3V9a1 1 0 0 1 1-1z M9 15h6v4H9z" fill-rule="evenodd"/></svg></button>
+      <div class="bm-print-item no-print" id="bmPrintItem">
+        <button type="button" class="bm-ic" title="Imprimir comprobante" onclick="toggleBmPrintMenu(event)"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7z M4 8h16a1 1 0 0 1 1 1v8h-4v4H7v-4H3V9a1 1 0 0 1 1-1z M9 15h6v4H9z" fill-rule="evenodd"/></svg></button>
+        <div class="bm-print-dropdown">
+          <a onclick="crearYImprimirComprobante('carta')"><b>Carta</b><span>Formato completo, tamaño oficio de escritorio.</span></a>
+          <a onclick="crearYImprimirComprobante('media_carta')"><b>Media carta</b><span>Compacto, para gastar menos papel.</span></a>
+          <a onclick="crearYImprimirComprobante('carta_horizontal')"><b>Carta horizontal</b><span>Ancho, con el QR bien visible al lado.</span></a>
+          <a onclick="crearYImprimirComprobante('tirilla')"><b>Tirilla (POS)</b><span>Para impresora térmica de rollo, 80&nbsp;mm.</span></a>
+        </div>
+      </div>
       <button type="button" class="bm-ic" id="bmReportesBtn" title="Reportes: exportar al formato de la Super y planillas" onclick="toggleBmReportes()"><svg viewBox="0 0 24 24"><path d="M5 3h9l5 5v13H5z M13 3v6h6 M11 12v5l-2-2-1.4 1.4L12 20.8l4.4-4.4L15 15l-2 2v-5z" fill-rule="evenodd"/></svg></button>
       <span class="pruebas-msg" id="bmSaveMsg"></span>
     </div>
@@ -1178,97 +1199,115 @@
     return Number(parts[2]) + ' de ' + (meses[mesIdx] || parts[1]) + ' de ' + parts[0];
   }
 
-  // ---- Comprobante (factura) del dia: el PDF es solo para esto — lo que un reciclador entrego ese
-  // dia especifico, con el valor de cada material y el total a pagar, en un documento con
-  // encabezado de la asociacion (logo), datos del reciclador y de la operacion, referencias y
-  // firmas, como el "Balance de masas" del sistema original. No aplica al reporte de periodo
-  // (ese solo se exporta a Excel/CSV, en el formato de la Super).
-  function bmSelText(id){
-    var s = document.getElementById(id);
-    var o = s.options[s.selectedIndex];
-    return (o && s.value) ? o.textContent.trim() : '';
+  // ---- Comprobante (factura) del dia, con QR de verificacion ----
+  // Cada vez que se elige un formato de impresion, el backend guarda una "foto" INMUTABLE de lo
+  // que ya esta grabado en la base de datos (no de lo que haya sin guardar en pantalla) y devuelve
+  // un enlace publico + un QR: cualquiera que lo escanee ve, desde cualquier celular o computador
+  // y sin iniciar sesion, exactamente esos mismos datos -- si alguien altera a mano el papel
+  // impreso, el QR sigue mostrando la version real guardada en el servidor. Ese comprobante nunca
+  // se puede editar ni borrar despues (no existe esa opcion en el backend).
+  function toggleBmPrintMenu(e){
+    e.stopPropagation();
+    var item = document.getElementById('bmPrintItem');
+    var wasOpen = item.classList.contains('open');
+    document.querySelectorAll('.bm-print-item.open, .pm-item.open').forEach(function(i){ i.classList.remove('open'); });
+    if(!wasOpen) item.classList.add('open');
   }
+  document.addEventListener('click', function(){ document.querySelectorAll('.bm-print-item.open').forEach(function(i){ i.classList.remove('open'); }); });
 
-  var bmCentrosCache = null;
-  function getBmCentro(idCentro){
-    var pick = function(list){ return (list || []).find(function(c){ return c.id === idCentro; }) || {}; };
-    if(bmCentrosCache) return Promise.resolve(pick(bmCentrosCache));
-    return gtApiFetch('/trazabilidad/centros').then(function(res){
-      bmCentrosCache = res.ok ? res.data : [];
-      return pick(bmCentrosCache);
-    }).catch(function(){ return {}; });
-  }
-
-  function printBmGrid(){
+  function crearYImprimirComprobante(formato){
+    document.getElementById('bmPrintItem').classList.remove('open');
     if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
-    var rows = [];
-    var tot = { cantidad: 0, valorTotal: 0, rechazo: 0, nosui: 0 };
     var problemas = bmProblems();
     if(problemas.length){ alert('Corrige esto antes de imprimir:\n' + problemas.slice(0, 5).join('\n')); return; }
-    // Se imprime el dia completo (todos los materiales con datos), aunque el filtro de familia muestre solo algunos.
-    (bmAllMateriales || []).slice().sort(function(a, b){ return (a.secuencia_orden || 0) - (b.secuencia_orden || 0); }).forEach(function(m){
-      var v = bmValues[m.id];
-      if(!v) return;
-      var cantidad = bmNum(v.cantidad), valor = bmNum(v.valor), rechazo = bmNum(v.cantidad_rechazo), nosui = bmNum(v.cantidad_nosui);
-      if(!cantidad && !valor && !rechazo && !nosui) return;
-      var valorTotal = cantidad * valor;
-      rows.push({ material: m.desc_tipo_material, cantidad: cantidad, valor: valor, valorTotal: valorTotal, rechazo: rechazo, nosui: nosui });
-      tot.cantidad += cantidad; tot.valorTotal += valorTotal; tot.rechazo += rechazo; tot.nosui += nosui;
-    });
-    if(rows.length === 0){ alert('No hay cantidades registradas ese día.'); return; }
-    if(bmDirty && !confirm('Hay cantidades sin guardar. El comprobante las incluye, pero todavía no están en el sistema. ¿Imprimir de todos modos?')) return;
-    var fecha = document.getElementById('bmFecha').value;
-    var r = bmSelectedReciclador;
-    var doc = {
-      fecha: fecha,
-      diaSemana: document.getElementById('bmDiaSemana').textContent,
-      numero: 'BM-' + fecha.replace(/-/g, '') + '-' + String(r.id).padStart(4, '0'),
-      reciclador: { nombre: r.nombre_completo, documento: r.nro_documento, vehiculo: r.tipo_de_vehiculo, placa: r.placa },
-      eca: bmSelText('bmBodega'), macrorruta: bmSelText('bmMacrorruta'),
-      micro1: bmSelText('bmMicrorruta1'), micro2: bmSelText('bmMicrorruta2'),
-      rows: rows, tot: tot
-    };
-    openFacturaWindow(doc, r.id_centro);
-  }
+    if(bmDirty && !confirm('Hay cantidades sin guardar. El comprobante y su QR solo pueden mostrar lo que YA está guardado. ¿Guardar ahora y continuar?')){ return; }
 
-  // La ventana se abre en el mismo instante del clic (si no, el navegador la bloquea) y recien
-  // despues se piden los datos de la asociacion y su logo para armar el documento.
-  function openFacturaWindow(doc, idCentro){
-    var win = window.open('', '_blank', 'width=960,height=760');
+    var fecha = document.getElementById('bmFecha').value;
+    var idReciclador = bmSelectedReciclador.id;
+    // La ventana se abre en el mismo instante del clic (si no, el navegador la bloquea); el
+    // contenido se llena despues de que el servidor arme y guarde el comprobante.
+    var win = window.open('', '_blank', 'width=980,height=760');
     if(!win){ alert('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes para este sitio.'); return; }
     win.document.open();
-    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando…</title></head><body style="font-family:Arial;color:#5B6B7C;padding:24px;">Preparando el documento…</body></html>');
+    win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generando…</title></head><body style="font-family:Arial;color:#5B6B7C;padding:24px;">Generando el comprobante y su código QR…</body></html>');
     win.document.close();
-    var logoReq = idCentro
-      ? gtApiFetch('/trazabilidad/centro-logo/' + idCentro).then(function(res){ return res.ok ? res.data.logo_url : null; }).catch(function(){ return null; })
-      : Promise.resolve(null);
-    Promise.all([getBmCentro(idCentro), logoReq]).then(function(out){
-      writeFacturaDocument(win, doc, out[0], out[1]);
-    });
+
+    var doFetch = function(){
+      return gtApiFetch('/trazabilidad/balance-masas-dia', {
+        method: 'POST',
+        body: JSON.stringify({
+          id_centro: bmSelectedReciclador.id_centro, id_reciclador: idReciclador,
+          id_bodega: document.getElementById('bmBodega').value || null,
+          id_macrorruta: document.getElementById('bmMacrorruta').value || null,
+          id_microrruta_1: document.getElementById('bmMicrorruta1').value || null,
+          id_microrruta_2: document.getElementById('bmMicrorruta2').value || null,
+          fecha: fecha,
+          materiales: Object.keys(bmValues).map(function(id){
+            var v = bmValues[id];
+            return { id_tipo_material: Number(id), cantidad: bmNum(v.cantidad), valor: bmNum(v.valor), cantidad_rechazo: bmNum(v.cantidad_rechazo), cantidad_nosui: bmNum(v.cantidad_nosui) };
+          })
+        })
+      }).then(function(){ bmDirty = false; });
+    };
+
+    (bmDirty ? doFetch() : Promise.resolve())
+      .then(function(){ return gtApiFetch('/comprobantes', { method: 'POST', body: JSON.stringify({ id_reciclador: idReciclador, fecha: fecha, formato: formato }) }); })
+      .then(function(res){
+        if(win.closed) return;
+        if(!res.ok){
+          win.document.open();
+          win.document.write('<!DOCTYPE html><html><body style="font-family:Arial;color:#C0392B;padding:24px;">' + gtEscapeHtml(res.data.error || 'No se pudo generar el comprobante.') + '</body></html>');
+          win.document.close();
+          return;
+        }
+        var builders = { carta: buildComprobanteCarta, media_carta: buildComprobanteMediaCarta, carta_horizontal: buildComprobanteCartaHorizontal, tirilla: buildComprobanteTirilla };
+        var html = (builders[formato] || buildComprobanteCarta)(res.data.snapshot, res.data.qrDataUrl, res.data.codigoVerificacion, res.data.url);
+        win.document.open();
+        win.document.write(html);
+        win.document.close();
+        win.focus();
+        var printed = false;
+        var doPrint = function(){ if(printed || win.closed) return; printed = true; win.print(); };
+        var imgs = win.document.querySelectorAll('img');
+        var pending = 0;
+        imgs.forEach(function(img){ if(!img.complete){ pending++; img.onload = img.onerror = function(){ if(--pending <= 0) setTimeout(doPrint, 100); }; } });
+        if(pending > 0) setTimeout(doPrint, 4000); else setTimeout(doPrint, 350);
+        loadBmDia(); // por si acaso, refleja en pantalla el guardado automatico
+      })
+      .catch(function(){
+        if(win.closed) return;
+        win.document.open();
+        win.document.write('<!DOCTYPE html><html><body style="font-family:Arial;color:#C0392B;padding:24px;">No se pudo generar el comprobante. Intenta de nuevo.</body></html>');
+        win.document.close();
+      });
   }
 
-  function writeFacturaDocument(win, doc, centro, logoUrl){
-    if(win.closed) return;
-    var esc = function(v){ return gtEscapeHtml(v === null || v === undefined ? '' : v); };
-    var dash = function(v){ return v ? esc(v) : '<span class="muted">—</span>'; };
-    var num = function(n, d){ return Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: d, maximumFractionDigits: d }); };
-    var money = function(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); };
-    var generado = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' });
-    var orgName = centro.desc_centro || 'Asociación';
-    var contacto = [centro.direccion, centro.telefono, centro.correo].filter(Boolean).map(esc).join(' &nbsp;·&nbsp; ');
-    var logoHtml = logoUrl
-      ? '<img class="logo" src="' + esc(logoUrl) + '" alt="Logo">'
-      : '<div class="logo mono">' + esc(gtAssocInitials(orgName)) + '</div>';
+  // ---- Helpers compartidos por los 4 formatos ----
+  function cbEsc(v){ return gtEscapeHtml(v === null || v === undefined ? '' : v); }
+  function cbDash(v){ return v ? cbEsc(v) : '<span class="muted">—</span>'; }
+  function cbNum(n, d){ return Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: d == null ? 2 : d, maximumFractionDigits: d == null ? 2 : d }); }
+  function cbMoney(n){ return '$ ' + Number(n || 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+  function cbGenerado(){ return new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' }); }
+  function cbBar(){ return '<div class="bar no-print-hide"><span>Vista previa — en el diálogo de impresión elige "Guardar como PDF".</span><button onclick="window.print()">Imprimir / Guardar PDF</button></div><style>@media print{.bar{display:none;}}</style>'; }
+  function cbLogo(centro, cls){
+    return centro.logoUrl
+      ? '<img class="' + cls + '" src="' + cbEsc(centro.logoUrl) + '" alt="">'
+      : '<div class="' + cls + ' mono">' + cbEsc(gtAssocInitials(centro.nombre)) + '</div>';
+  }
+  function cbQrBlock(qrDataUrl, codigo, extraClass){
+    return '<div class="qrbox ' + (extraClass || '') + '"><img class="qrimg" src="' + qrDataUrl + '" alt="Código QR de verificación"><div class="qrtext">Escanea para ver este<br>comprobante en tu celular<br><b>' + cbEsc(codigo) + '</b></div></div>';
+  }
 
-    var body = doc.rows.map(function(x){
-      return '<tr><td class="l">' + esc(x.material) + '</td><td>' + num(x.cantidad, 2) + '</td><td>' + (x.valor ? money(x.valor) : '') + '</td>' +
-        '<td class="b">' + (x.valorTotal ? money(x.valorTotal) : '') + '</td><td>' + (x.rechazo ? num(x.rechazo, 2) : '') + '</td><td>' + (x.nosui ? num(x.nosui, 2) : '') + '</td></tr>';
+  // ---- Formato Carta (el diseño completo, tamaño oficio de escritorio) ----
+  function buildComprobanteCarta(s, qrDataUrl, codigo, url){
+    var body = s.rows.map(function(x){
+      return '<tr><td class="l">' + cbEsc(x.material) + '</td><td>' + cbNum(x.cantidad) + '</td><td>' + (x.valor ? cbMoney(x.valor) : '') + '</td>' +
+        '<td class="b">' + (x.valorTotal ? cbMoney(x.valorTotal) : '') + '</td><td>' + (x.rechazo ? cbNum(x.rechazo) : '') + '</td><td>' + (x.nosui ? cbNum(x.nosui) : '') + '</td></tr>';
     }).join('');
-
+    var contacto = [s.centro.direccion, s.centro.telefono, s.centro.correo].filter(Boolean).map(cbEsc).join(' &nbsp;·&nbsp; ');
     var css =
-      '@page{ size:A4; margin:12mm; }' +
-      '*{ box-sizing:border-box; }' +
-      'html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      '@page{ size:letter portrait; margin:12mm; }' +
+      '*{ box-sizing:border-box; }' + 'html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
       'body{ font-family:"Segoe UI",Arial,Helvetica,sans-serif; color:#1B2733; margin:0; padding:0; font-size:12px; }' +
       '.page{ max-width:190mm; margin:0 auto; padding:6px 2px 0; }' +
       '.top{ display:flex; justify-content:space-between; align-items:center; gap:18px; padding-bottom:14px; border-bottom:3px solid #F2941F; }' +
@@ -1276,8 +1315,7 @@
       '.logo{ width:76px; height:76px; object-fit:contain; border-radius:10px; flex:none; }' +
       '.logo.mono{ display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#0A3369,#1a57a8); color:#fff; font-weight:800; font-size:26px; letter-spacing:1px; }' +
       '.org h2{ margin:0 0 3px; font-size:17px; color:#0A3369; line-height:1.2; }' +
-      '.org .nit{ font-size:12px; font-weight:600; color:#1B2733; }' +
-      '.org .contact{ font-size:10.5px; color:#5B6B7C; margin-top:3px; }' +
+      '.org .nit{ font-size:12px; font-weight:600; color:#1B2733; }' + '.org .contact{ font-size:10.5px; color:#5B6B7C; margin-top:3px; }' +
       '.ref{ text-align:right; flex:none; }' +
       '.ref .kind{ font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:#5B6B7C; }' +
       '.ref .num{ font-size:19px; font-weight:800; color:#0A3369; margin:2px 0; font-variant-numeric:tabular-nums; }' +
@@ -1288,80 +1326,197 @@
       '.cards{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }' +
       '.card{ border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; }' +
       '.card h3{ margin:0; padding:7px 12px; background:#0A3369; color:#fff; font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; }' +
-      '.kv{ display:grid; grid-template-columns:104px 1fr; }' +
-      '.kv div{ padding:6px 12px; border-bottom:1px solid #EEF2F6; font-size:11.5px; }' +
-      '.kv .k{ color:#5B6B7C; background:#F7F9FB; }' +
-      '.kv .v{ font-weight:600; }' +
-      '.kv div:nth-last-child(-n+2){ border-bottom:0; }' +
+      '.kv{ display:grid; grid-template-columns:104px 1fr; }' + '.kv div{ padding:6px 12px; border-bottom:1px solid #EEF2F6; font-size:11.5px; }' +
+      '.kv .k{ color:#5B6B7C; background:#F7F9FB; }' + '.kv .v{ font-weight:600; }' + '.kv div:nth-last-child(-n+2){ border-bottom:0; }' +
       '.muted{ color:#9AA7B4; font-weight:400; }' +
       'table.mat{ width:100%; border-collapse:collapse; font-size:11.5px; border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; }' +
       'table.mat th{ background:#0A3369; color:#fff; padding:8px 10px; text-align:right; font-size:10.5px; letter-spacing:.4px; }' +
       'table.mat th.l, table.mat td.l{ text-align:left; }' +
       'table.mat td{ padding:7px 10px; text-align:right; border-bottom:1px solid #EEF2F6; font-variant-numeric:tabular-nums; }' +
-      'table.mat tbody tr:nth-child(even) td{ background:#F7F9FB; }' +
-      'table.mat td.b{ font-weight:700; color:#0A3369; }' +
+      'table.mat tbody tr:nth-child(even) td{ background:#F7F9FB; }' + 'table.mat td.b{ font-weight:700; color:#0A3369; }' +
       'table.mat tfoot td{ background:#EAF0F8; border-top:2px solid #0A3369; border-bottom:0; font-weight:800; color:#0A3369; padding:9px 10px; }' +
       '.kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0 4px; }' +
       '.kpi{ border:1px solid #DCE3EA; border-radius:10px; padding:10px 12px; }' +
       '.kpi .kl{ font-size:9.5px; letter-spacing:1px; text-transform:uppercase; color:#5B6B7C; }' +
       '.kpi .kv2{ font-size:17px; font-weight:800; color:#0A3369; margin-top:3px; font-variant-numeric:tabular-nums; }' +
-      '.kpi.pay{ background:#0A3369; border-color:#0A3369; }' +
-      '.kpi.pay .kl{ color:#BBD0EE; } .kpi.pay .kv2{ color:#fff; }' +
-      '.sign{ display:grid; grid-template-columns:1fr 1fr; gap:48px; margin-top:64px; }' +
+      '.kpi.pay{ background:#0A3369; border-color:#0A3369; }' + '.kpi.pay .kl{ color:#BBD0EE; } .kpi.pay .kv2{ color:#fff; }' +
+      '.bottom{ display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-top:20px; }' +
+      '.sign{ display:grid; grid-template-columns:1fr 1fr; gap:40px; flex:1; }' +
       '.sign div{ border-top:1.5px solid #1B2733; padding-top:6px; text-align:center; font-size:11px; color:#5B6B7C; }' +
       '.sign b{ display:block; color:#1B2733; font-size:11.5px; }' +
-      '.foot{ margin-top:26px; padding-top:8px; border-top:1px solid #DCE3EA; display:flex; justify-content:space-between; gap:12px; font-size:9.5px; color:#9AA7B4; }' +
+      '.qrbox{ text-align:center; flex:none; }' + '.qrimg{ width:82px; height:82px; }' +
+      '.qrtext{ font-size:8.5px; color:#5B6B7C; margin-top:4px; line-height:1.35; }' + '.qrtext b{ color:#0A3369; letter-spacing:1px; }' +
+      '.foot{ margin-top:20px; padding-top:8px; border-top:1px solid #DCE3EA; display:flex; justify-content:space-between; gap:12px; font-size:9.5px; color:#9AA7B4; }' +
       '.bar{ position:sticky; top:0; background:#0A3369; color:#fff; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; font-size:12px; }' +
-      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:8px; padding:7px 16px; font-weight:700; cursor:pointer; }' +
-      '@media print{ .bar{ display:none; } }';
-
-    var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Balance de masas ' + esc(doc.numero) + '</title><style>' + css + '</style></head><body>' +
-      '<div class="bar"><span>Vista previa del comprobante — en el diálogo de impresión elige "Guardar como PDF".</span><button onclick="window.print()">Imprimir / Guardar PDF</button></div>' +
-      '<div class="page">' +
-      '<div class="top"><div class="org">' + logoHtml +
-        '<div><h2>' + esc(orgName) + '</h2>' + (centro.nit ? '<div class="nit">NIT ' + esc(centro.nit) + '</div>' : '') +
-        (contacto ? '<div class="contact">' + contacto + '</div>' : '') + '</div></div>' +
-        '<div class="ref"><div class="kind">Comprobante N°</div><div class="num">' + esc(doc.numero) + '</div>' +
-        '<div class="date">' + esc(doc.diaSemana) + ', ' + esc(formatDateStrLocal(doc.fecha)) + '</div></div></div>' +
+      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:8px; padding:7px 16px; font-weight:700; cursor:pointer; }';
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante ' + cbEsc(s.numero) + '</title><style>' + css + '</style></head><body>' +
+      cbBar() + '<div class="page">' +
+      '<div class="top"><div class="org">' + cbLogo(s.centro, 'logo') + '<div><h2>' + cbEsc(s.centro.nombre) + '</h2>' + (s.centro.nit ? '<div class="nit">NIT ' + cbEsc(s.centro.nit) + '</div>' : '') + (contacto ? '<div class="contact">' + contacto + '</div>' : '') + '</div></div>' +
+      '<div class="ref"><div class="kind">Comprobante N°</div><div class="num">' + cbEsc(s.numero) + '</div><div class="date">' + cbEsc(s.diaSemana) + ', ' + cbEsc(formatDateStrLocal(s.fecha)) + '</div></div></div>' +
       '<div class="title"><h1>Balance de masas</h1><span class="chip">Material recibido</span></div>' +
-      '<div class="cards">' +
-        '<div class="card"><h3>Reciclador de oficio</h3><div class="kv">' +
-          '<div class="k">Nombre</div><div class="v">' + dash(doc.reciclador.nombre) + '</div>' +
-          '<div class="k">Cédula</div><div class="v">' + dash(doc.reciclador.documento) + '</div>' +
-          '<div class="k">Tipo vehículo</div><div class="v">' + dash(doc.reciclador.vehiculo) + '</div>' +
-          '<div class="k">Placa</div><div class="v">' + dash(doc.reciclador.placa) + '</div></div></div>' +
-        '<div class="card"><h3>Operación</h3><div class="kv">' +
-          '<div class="k">NUECA (ECA)</div><div class="v">' + dash(doc.eca) + '</div>' +
-          '<div class="k">NUMACRO</div><div class="v">' + dash(doc.macrorruta) + '</div>' +
-          '<div class="k">Microrruta 1</div><div class="v">' + dash(doc.micro1) + '</div>' +
-          '<div class="k">Microrruta 2</div><div class="v">' + dash(doc.micro2) + '</div></div></div>' +
-      '</div>' +
+      '<div class="cards"><div class="card"><h3>Reciclador de oficio</h3><div class="kv">' +
+      '<div class="k">Nombre</div><div class="v">' + cbDash(s.reciclador.nombre) + '</div><div class="k">Cédula</div><div class="v">' + cbDash(s.reciclador.documento) + '</div>' +
+      '<div class="k">Tipo vehículo</div><div class="v">' + cbDash(s.reciclador.vehiculo) + '</div><div class="k">Placa</div><div class="v">' + cbDash(s.reciclador.placa) + '</div></div></div>' +
+      '<div class="card"><h3>Operación</h3><div class="kv"><div class="k">NUECA (ECA)</div><div class="v">' + cbDash(s.operacion.eca) + '</div>' +
+      '<div class="k">NUMACRO</div><div class="v">' + cbDash(s.operacion.macrorruta) + '</div><div class="k">Microrruta 1</div><div class="v">' + cbDash(s.operacion.micro1) + '</div>' +
+      '<div class="k">Microrruta 2</div><div class="v">' + cbDash(s.operacion.micro2) + '</div></div></div></div>' +
       '<table class="mat"><thead><tr><th class="l">Material</th><th>Cantidad (kg)</th><th>Valor / kg</th><th>Total</th><th>Rechazo (kg)</th><th>No SUI (kg)</th></tr></thead><tbody>' + body + '</tbody>' +
-      '<tfoot><tr><td class="l">Total</td><td>' + num(doc.tot.cantidad, 2) + '</td><td></td><td>' + money(doc.tot.valorTotal) + '</td><td>' + num(doc.tot.rechazo, 2) + '</td><td>' + num(doc.tot.nosui, 2) + '</td></tr></tfoot></table>' +
-      '<div class="kpis">' +
-        '<div class="kpi"><div class="kl">Material recibido</div><div class="kv2">' + num(doc.tot.cantidad, 2) + ' kg</div></div>' +
-        '<div class="kpi"><div class="kl">Rechazo</div><div class="kv2">' + num(doc.tot.rechazo, 2) + ' kg</div></div>' +
-        '<div class="kpi"><div class="kl">No SUI</div><div class="kv2">' + num(doc.tot.nosui, 2) + ' kg</div></div>' +
-        '<div class="kpi pay"><div class="kl">Total a pagar</div><div class="kv2">' + money(doc.tot.valorTotal) + '</div></div>' +
-      '</div>' +
-      '<div class="sign"><div><b>' + esc(doc.reciclador.nombre) + '</b>C.C. ' + esc(doc.reciclador.documento) + ' — Reciclador</div><div><b>' + esc(orgName) + '</b>Responsable de la ECA</div></div>' +
-      '<div class="foot"><span>Generado el ' + esc(generado) + ' &nbsp;·&nbsp; Ref. ' + esc(doc.numero) + '</span><span>Genesis Traza — Módulo Pruebas: comprobante de prueba, sin validez como factura.</span></div>' +
+      '<tfoot><tr><td class="l">Total</td><td>' + cbNum(s.totales.cantidad) + '</td><td></td><td>' + cbMoney(s.totales.valorTotal) + '</td><td>' + cbNum(s.totales.rechazo) + '</td><td>' + cbNum(s.totales.nosui) + '</td></tr></tfoot></table>' +
+      '<div class="kpis"><div class="kpi"><div class="kl">Material recibido</div><div class="kv2">' + cbNum(s.totales.cantidad) + ' kg</div></div>' +
+      '<div class="kpi"><div class="kl">Rechazo</div><div class="kv2">' + cbNum(s.totales.rechazo) + ' kg</div></div>' +
+      '<div class="kpi"><div class="kl">No SUI</div><div class="kv2">' + cbNum(s.totales.nosui) + ' kg</div></div>' +
+      '<div class="kpi pay"><div class="kl">Total a pagar</div><div class="kv2">' + cbMoney(s.totales.valorTotal) + '</div></div></div>' +
+      '<div class="bottom"><div class="sign"><div><b>' + cbEsc(s.reciclador.nombre) + '</b>C.C. ' + cbEsc(s.reciclador.documento) + ' — Reciclador</div><div><b>' + cbEsc(s.centro.nombre) + '</b>Responsable de la ECA</div></div>' + cbQrBlock(qrDataUrl, codigo) + '</div>' +
+      '<div class="foot"><span>Generado el ' + cbEsc(cbGenerado()) + ' &nbsp;·&nbsp; Ref. ' + cbEsc(s.numero) + '</span><span>Genesis Traza — Módulo Pruebas: comprobante de prueba, sin validez como factura.</span></div>' +
       '</div></body></html>';
+  }
 
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    // Imprime cuando el logo termino de cargar (o falla); tope de 4 s para no quedar colgado.
-    var printed = false;
-    var doPrint = function(){ if(printed || win.closed) return; printed = true; win.print(); };
-    var img = win.document.querySelector('img.logo');
-    if(img && !img.complete){
-      img.onload = img.onerror = function(){ setTimeout(doPrint, 100); };
-      setTimeout(doPrint, 4000);
-    } else {
-      setTimeout(doPrint, 350);
-    }
+  // ---- Formato Media carta (compacto, la mitad del papel) ----
+  function buildComprobanteMediaCarta(s, qrDataUrl, codigo, url){
+    var body = s.rows.map(function(x){
+      return '<tr><td class="l">' + cbEsc(x.material) + '</td><td>' + cbNum(x.cantidad) + '</td><td>' + (x.valorTotal ? cbMoney(x.valorTotal) : '—') + '</td><td>' + (x.rechazo ? cbNum(x.rechazo) : '—') + '</td></tr>';
+    }).join('');
+    var contacto = [s.centro.direccion, s.centro.telefono].filter(Boolean).map(cbEsc).join(' · ');
+    var css =
+      '@page{ size:216mm 140mm; margin:7mm 9mm; }' + '*{ box-sizing:border-box; }' +
+      'html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      'body{ font-family:"Segoe UI",Arial,Helvetica,sans-serif; color:#1B2733; margin:0; font-size:10.5px; }' +
+      '.top{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding-bottom:7px; border-bottom:2px solid #F2941F; }' +
+      '.org{ display:flex; align-items:center; gap:9px; min-width:0; }' +
+      '.logo{ width:38px; height:38px; object-fit:contain; border-radius:7px; flex:none; }' +
+      '.logo.mono{ display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#0A3369,#1a57a8); color:#fff; font-weight:800; font-size:13px; }' +
+      '.org h2{ margin:0; font-size:12.5px; color:#0A3369; }' + '.org .sub{ font-size:9px; color:#5B6B7C; }' +
+      '.ref{ text-align:right; font-size:9.5px; color:#5B6B7C; }' + '.ref b{ display:block; font-size:13px; color:#0A3369; }' +
+      'h1{ font-size:14px; color:#0A3369; margin:8px 0 6px; font-family:Georgia,serif; font-weight:600; }' +
+      '.row{ display:flex; gap:14px; margin-bottom:6px; flex-wrap:wrap; }' +
+      '.row span{ font-size:10px; } .row b{ color:#0A3369; }' +
+      'table{ width:100%; border-collapse:collapse; font-size:10px; margin-top:4px; }' +
+      'th{ background:#0A3369; color:#fff; padding:3px 6px; text-align:right; font-size:9px; } th.l,td.l{ text-align:left; }' +
+      'td{ padding:2.5px 6px; border-bottom:1px solid #EEF2F6; text-align:right; }' +
+      'tfoot td{ font-weight:700; border-top:2px solid #0A3369; background:#EAF0F8; }' +
+      '.bottom{ display:flex; justify-content:space-between; align-items:center; margin-top:8px; gap:12px; }' +
+      '.pay{ background:#0A3369; color:#fff; border-radius:8px; padding:6px 12px; font-size:10px; }' + '.pay b{ display:block; font-size:14px; }' +
+      '.qrbox{ text-align:center; } .qrimg{ width:54px; height:54px; } .qrtext{ font-size:7px; color:#5B6B7C; line-height:1.3; } .qrtext b{ color:#0A3369; }' +
+      '.foot{ margin-top:8px; font-size:7.5px; color:#9AA7B4; text-align:center; }' +
+      '.bar{ position:sticky; top:0; background:#0A3369; color:#fff; padding:8px 14px; display:flex; justify-content:space-between; align-items:center; font-size:11px; }' +
+      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:7px; padding:6px 14px; font-weight:700; cursor:pointer; }';
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante ' + cbEsc(s.numero) + '</title><style>' + css + '</style></head><body>' +
+      cbBar() +
+      '<div class="top"><div class="org">' + cbLogo(s.centro, 'logo') + '<div><h2>' + cbEsc(s.centro.nombre) + '</h2><div class="sub">' + (s.centro.nit ? 'NIT ' + cbEsc(s.centro.nit) + (contacto ? ' · ' + contacto : '') : contacto) + '</div></div></div>' +
+      '<div class="ref">Comprobante<b>' + cbEsc(s.numero) + '</b>' + cbEsc(s.diaSemana) + ', ' + cbEsc(formatDateStrLocal(s.fecha)) + '</div></div>' +
+      '<h1>Balance de masas</h1>' +
+      '<div class="row"><span><b>' + cbEsc(s.reciclador.nombre) + '</b> — C.C. ' + cbEsc(s.reciclador.documento) + (s.reciclador.placa ? ' — Placa ' + cbEsc(s.reciclador.placa) : '') + '</span></div>' +
+      '<div class="row"><span>NUECA: <b>' + (s.operacion.eca ? cbEsc(s.operacion.eca) : '—') + '</b></span><span>NUMACRO: <b>' + (s.operacion.macrorruta ? cbEsc(s.operacion.macrorruta) : '—') + '</b></span></div>' +
+      '<table><thead><tr><th class="l">Material</th><th>Kg</th><th>Total</th><th>Rechazo</th></tr></thead><tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td class="l">Total</td><td>' + cbNum(s.totales.cantidad) + '</td><td>' + cbMoney(s.totales.valorTotal) + '</td><td>' + cbNum(s.totales.rechazo) + '</td></tr></tfoot></table>' +
+      '<div class="bottom"><div class="pay">Total a pagar<b>' + cbMoney(s.totales.valorTotal) + '</b></div>' + cbQrBlock(qrDataUrl, codigo) + '</div>' +
+      '<div class="foot">Genesis Traza — Módulo Pruebas: comprobante de prueba, sin validez como factura.</div>' +
+      '</body></html>';
+  }
+
+  // ---- Formato Carta horizontal (ancho, el QR queda a la vista de una vez) ----
+  function buildComprobanteCartaHorizontal(s, qrDataUrl, codigo, url){
+    var body = s.rows.map(function(x){
+      return '<tr><td class="l">' + cbEsc(x.material) + '</td><td>' + cbNum(x.cantidad) + '</td><td>' + (x.valor ? cbMoney(x.valor) : '') + '</td>' +
+        '<td class="b">' + (x.valorTotal ? cbMoney(x.valorTotal) : '') + '</td><td>' + (x.rechazo ? cbNum(x.rechazo) : '') + '</td><td>' + (x.nosui ? cbNum(x.nosui) : '') + '</td></tr>';
+    }).join('');
+    var contacto = [s.centro.direccion, s.centro.telefono, s.centro.correo].filter(Boolean).map(cbEsc).join(' &nbsp;·&nbsp; ');
+    var css =
+      '@page{ size:letter landscape; margin:11mm 14mm; }' + '*{ box-sizing:border-box; }' +
+      'html,body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }' +
+      'body{ font-family:"Segoe UI",Arial,Helvetica,sans-serif; color:#1B2733; margin:0; font-size:12px; }' +
+      '.top{ display:flex; justify-content:space-between; align-items:center; gap:20px; padding-bottom:12px; border-bottom:3px solid #F2941F; }' +
+      '.org{ display:flex; align-items:center; gap:14px; } .logo{ width:64px; height:64px; object-fit:contain; border-radius:10px; }' +
+      '.logo.mono{ display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg,#0A3369,#1a57a8); color:#fff; font-weight:800; font-size:22px; }' +
+      '.org h2{ margin:0 0 2px; font-size:16px; color:#0A3369; } .org .contact{ font-size:10.5px; color:#5B6B7C; }' +
+      '.mid{ text-align:center; } .mid h1{ margin:0; font-size:20px; color:#0A3369; font-family:Georgia,serif; font-weight:600; } .mid .ref{ font-size:11.5px; color:#5B6B7C; }' +
+      '.qrbox{ text-align:center; } .qrimg{ width:74px; height:74px; } .qrtext{ font-size:8px; color:#5B6B7C; line-height:1.3; } .qrtext b{ color:#0A3369; letter-spacing:1px; }' +
+      '.body{ display:flex; gap:20px; margin-top:16px; }' +
+      '.left{ width:230px; flex:none; } .right{ flex:1; min-width:0; }' +
+      '.card{ border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; margin-bottom:12px; }' +
+      '.card h3{ margin:0; padding:6px 10px; background:#0A3369; color:#fff; font-size:10px; letter-spacing:1px; text-transform:uppercase; }' +
+      '.kv div{ padding:5px 10px; border-bottom:1px solid #EEF2F6; font-size:11px; display:flex; justify-content:space-between; gap:8px; }' +
+      '.kv div:last-child{ border-bottom:0; } .kv .k{ color:#5B6B7C; } .kv .v{ font-weight:600; text-align:right; }' +
+      'table.mat{ width:100%; border-collapse:collapse; font-size:11.5px; border:1px solid #DCE3EA; border-radius:10px; overflow:hidden; }' +
+      'table.mat th{ background:#0A3369; color:#fff; padding:8px 10px; text-align:right; font-size:10.5px; } table.mat th.l, table.mat td.l{ text-align:left; }' +
+      'table.mat td{ padding:6px 10px; text-align:right; border-bottom:1px solid #EEF2F6; }' +
+      'table.mat tbody tr:nth-child(even) td{ background:#F7F9FB; } table.mat td.b{ font-weight:700; color:#0A3369; }' +
+      'table.mat tfoot td{ background:#EAF0F8; border-top:2px solid #0A3369; font-weight:800; color:#0A3369; }' +
+      '.kpis{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:12px; }' +
+      '.kpi{ border:1px solid #DCE3EA; border-radius:10px; padding:8px 10px; }' +
+      '.kpi .kl{ font-size:9px; letter-spacing:.6px; text-transform:uppercase; color:#5B6B7C; } .kpi .kv2{ font-size:15px; font-weight:800; color:#0A3369; }' +
+      '.kpi.pay{ background:#0A3369; } .kpi.pay .kl{ color:#BBD0EE; } .kpi.pay .kv2{ color:#fff; }' +
+      '.sign{ display:flex; gap:40px; margin-top:16px; }' + '.sign div{ flex:1; border-top:1.5px solid #1B2733; padding-top:5px; text-align:center; font-size:10.5px; color:#5B6B7C; }' +
+      '.sign b{ display:block; color:#1B2733; font-size:11px; }' +
+      '.foot{ margin-top:12px; font-size:9px; color:#9AA7B4; text-align:center; }' +
+      '.bar{ position:sticky; top:0; background:#0A3369; color:#fff; padding:9px 16px; display:flex; justify-content:space-between; align-items:center; font-size:12px; }' +
+      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:8px; padding:7px 16px; font-weight:700; cursor:pointer; }';
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante ' + cbEsc(s.numero) + '</title><style>' + css + '</style></head><body>' +
+      cbBar() +
+      '<div class="top"><div class="org">' + cbLogo(s.centro, 'logo') + '<div><h2>' + cbEsc(s.centro.nombre) + '</h2>' + (s.centro.nit ? '<div class="contact">NIT ' + cbEsc(s.centro.nit) + (contacto ? ' &nbsp;·&nbsp; ' + contacto : '') + '</div>' : '') + '</div></div>' +
+      '<div class="mid"><h1>Balance de masas</h1><div class="ref">Comprobante N° ' + cbEsc(s.numero) + ' — ' + cbEsc(s.diaSemana) + ', ' + cbEsc(formatDateStrLocal(s.fecha)) + '</div></div>' +
+      cbQrBlock(qrDataUrl, codigo) + '</div>' +
+      '<div class="body"><div class="left">' +
+      '<div class="card"><h3>Reciclador de oficio</h3><div class="kv"><div><span class="k">Nombre</span><span class="v">' + cbDash(s.reciclador.nombre) + '</span></div><div><span class="k">Cédula</span><span class="v">' + cbDash(s.reciclador.documento) + '</span></div><div><span class="k">Vehículo</span><span class="v">' + cbDash(s.reciclador.vehiculo) + '</span></div><div><span class="k">Placa</span><span class="v">' + cbDash(s.reciclador.placa) + '</span></div></div></div>' +
+      '<div class="card"><h3>Operación</h3><div class="kv"><div><span class="k">NUECA</span><span class="v">' + cbDash(s.operacion.eca) + '</span></div><div><span class="k">NUMACRO</span><span class="v">' + cbDash(s.operacion.macrorruta) + '</span></div><div><span class="k">Micro 1</span><span class="v">' + cbDash(s.operacion.micro1) + '</span></div><div><span class="k">Micro 2</span><span class="v">' + cbDash(s.operacion.micro2) + '</span></div></div></div>' +
+      '</div><div class="right">' +
+      '<table class="mat"><thead><tr><th class="l">Material</th><th>Cantidad (kg)</th><th>Valor / kg</th><th>Total</th><th>Rechazo (kg)</th><th>No SUI (kg)</th></tr></thead><tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td class="l">Total</td><td>' + cbNum(s.totales.cantidad) + '</td><td></td><td>' + cbMoney(s.totales.valorTotal) + '</td><td>' + cbNum(s.totales.rechazo) + '</td><td>' + cbNum(s.totales.nosui) + '</td></tr></tfoot></table>' +
+      '<div class="kpis"><div class="kpi"><div class="kl">Recibido</div><div class="kv2">' + cbNum(s.totales.cantidad) + ' kg</div></div>' +
+      '<div class="kpi"><div class="kl">Rechazo</div><div class="kv2">' + cbNum(s.totales.rechazo) + ' kg</div></div>' +
+      '<div class="kpi"><div class="kl">No SUI</div><div class="kv2">' + cbNum(s.totales.nosui) + ' kg</div></div>' +
+      '<div class="kpi pay"><div class="kl">Total a pagar</div><div class="kv2">' + cbMoney(s.totales.valorTotal) + '</div></div></div>' +
+      '<div class="sign"><div><b>' + cbEsc(s.reciclador.nombre) + '</b>Reciclador</div><div><b>' + cbEsc(s.centro.nombre) + '</b>Responsable de la ECA</div></div>' +
+      '</div></div>' +
+      '<div class="foot">Generado el ' + cbEsc(cbGenerado()) + ' — Genesis Traza — Módulo Pruebas: comprobante de prueba, sin validez como factura.</div>' +
+      '</body></html>';
+  }
+
+  // ---- Formato Tirilla (POS termica, rollo de 80 mm) ----
+  function buildComprobanteTirilla(s, qrDataUrl, codigo, url){
+    var lineas = s.rows.map(function(x){
+      var l1 = '<div class="mat">' + cbEsc(x.material) + '</div>';
+      var l2 = '<div class="row"><span>' + cbNum(x.cantidad) + ' kg x ' + cbMoney(x.valor) + '</span><span>' + cbMoney(x.valorTotal) + '</span></div>';
+      return l1 + l2;
+    }).join('');
+    var css =
+      '@page{ size:80mm auto; margin:3mm 4mm; }' + '*{ box-sizing:border-box; }' +
+      'body{ font-family:"Courier New",Consolas,monospace; color:#111; margin:0; font-size:11px; width:100%; }' +
+      '.center{ text-align:center; } .b{ font-weight:700; }' +
+      '.org{ font-size:13px; font-weight:700; text-transform:uppercase; margin-bottom:2px; }' +
+      '.small{ font-size:9.5px; color:#333; }' +
+      'hr{ border:none; border-top:1px dashed #444; margin:6px 0; }' +
+      '.row{ display:flex; justify-content:space-between; gap:6px; font-size:10.5px; margin:1px 0; }' +
+      '.mat{ font-size:10.5px; margin-top:4px; }' +
+      '.totals .row{ font-size:12px; } .totals .row.grand{ font-size:14px; font-weight:800; border-top:1px dashed #444; padding-top:4px; margin-top:4px; }' +
+      '.qrbox{ text-align:center; margin-top:10px; } .qrimg{ width:120px; height:120px; }' +
+      '.qrtext{ font-size:9px; color:#333; margin-top:3px; line-height:1.35; } .qrtext b{ letter-spacing:1px; }' +
+      '.foot{ text-align:center; font-size:8.5px; color:#555; margin-top:10px; line-height:1.4; }' +
+      '.bar{ position:sticky; top:0; background:#0A3369; color:#fff; padding:8px 10px; display:flex; justify-content:space-between; align-items:center; font-size:11px; font-family:Arial,sans-serif; }' +
+      '.bar button{ background:#F2941F; color:#fff; border:0; border-radius:6px; padding:5px 10px; font-weight:700; cursor:pointer; font-family:Arial,sans-serif; }';
+    return '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Comprobante ' + cbEsc(s.numero) + '</title><style>' + css + '</style></head><body>' +
+      cbBar() +
+      '<div class="center org">' + cbEsc(s.centro.nombre) + '</div>' +
+      (s.centro.nit ? '<div class="center small">NIT ' + cbEsc(s.centro.nit) + '</div>' : '') +
+      ([s.centro.direccion, s.centro.telefono].filter(Boolean).length ? '<div class="center small">' + [s.centro.direccion, s.centro.telefono].filter(Boolean).map(cbEsc).join(' - ') + '</div>' : '') +
+      '<hr>' +
+      '<div class="row"><span>Comprobante</span><span class="b">' + cbEsc(s.numero) + '</span></div>' +
+      '<div class="row"><span>Fecha</span><span>' + cbEsc(s.diaSemana) + ' ' + cbEsc(s.fecha) + '</span></div>' +
+      '<hr>' +
+      '<div class="row"><span>Reciclador</span><span class="b">' + cbEsc(s.reciclador.nombre) + '</span></div>' +
+      '<div class="row"><span>Documento</span><span>' + cbEsc(s.reciclador.documento) + '</span></div>' +
+      (s.operacion.eca ? '<div class="row"><span>NUECA</span><span>' + cbEsc(s.operacion.eca) + '</span></div>' : '') +
+      (s.operacion.macrorruta ? '<div class="row"><span>NUMACRO</span><span>' + cbEsc(s.operacion.macrorruta) + '</span></div>' : '') +
+      '<hr>' + lineas + '<hr>' +
+      '<div class="totals">' +
+      '<div class="row"><span>Cantidad</span><span>' + cbNum(s.totales.cantidad) + ' kg</span></div>' +
+      (s.totales.rechazo ? '<div class="row"><span>Rechazo</span><span>' + cbNum(s.totales.rechazo) + ' kg</span></div>' : '') +
+      (s.totales.nosui ? '<div class="row"><span>No SUI</span><span>' + cbNum(s.totales.nosui) + ' kg</span></div>' : '') +
+      '<div class="row grand"><span>TOTAL</span><span>' + cbMoney(s.totales.valorTotal) + '</span></div>' +
+      '</div>' +
+      '<div class="qrbox"><img class="qrimg" src="' + qrDataUrl + '" alt="QR"><div class="qrtext">Escanea para verificar<br><b>' + cbEsc(codigo) + '</b></div></div>' +
+      '<div class="foot">Genesis Traza - Modulo Pruebas<br>Comprobante de prueba, sin validez como factura.<br>Generado ' + cbEsc(cbGenerado()) + '</div>' +
+      '</body></html>';
   }
 
   if(session) initPruebasPage();

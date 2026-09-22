@@ -10,6 +10,7 @@ const subscriptionsRoutes = require('./routes/subscriptions');
 const newsRoutes = require('./routes/news');
 const massBalanceRoutes = require('./routes/massBalance');
 const trazabilidadRoutes = require('./routes/trazabilidad');
+const comprobantesRoutes = require('./routes/comprobantes');
 const startPaymentReminders = require('./jobs/paymentReminders');
 const startNewsFetcher = require('./jobs/newsFetcher');
 
@@ -27,6 +28,9 @@ app.use('/subscriptions', subscriptionsRoutes);
 app.use('/news', newsRoutes);
 app.use('/', massBalanceRoutes);
 app.use('/trazabilidad', trazabilidadRoutes);
+// Fuera de /trazabilidad a propósito: la página de verificación de un comprobante es pública
+// (sin iniciar sesión), mientras que todo lo de /trazabilidad exige rol 'pro'.
+app.use('/comprobantes', comprobantesRoutes);
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
