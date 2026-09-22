@@ -1,3 +1,8 @@
+# Comprobantes con QR: la pagina publica de verificacion vive en el backend (Railway), no en
+# este sitio estatico. Este proxy (200, no redireccion) hace que el link se vea con el dominio
+# de la marca (genesistraza.com/comprobantes/...) aunque el que responde sea el backend.
+/comprobantes/*  https://genesis-backend-production-edc7.up.railway.app/comprobantes/:splat  200
+
 # Redirige URLs viejas del sitio anterior (Wix) que Google ya indexó,
 # para que no den 404.
 /nosotros        /#nosotros     301
