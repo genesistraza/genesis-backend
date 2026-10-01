@@ -12,6 +12,7 @@ const QRCode = require('qrcode');
 const pool = require('../db/pool');
 const { requireAuth, requireRole } = require('../middleware/auth');
 const { asyncRoute, logActivity } = require('../middleware/logger');
+const huella = require('../utils/huella');
 
 const router = express.Router();
 
@@ -115,11 +116,24 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
   };
   const codigo = codigoVerificacion(token, snapshot);
 
-  await pool.query(
-    `INSERT INTO tz_comprobantes (token, numero, id_centro, id_reciclador, fecha, formato, snapshot, codigo_verificacion, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [token, numero, rec.id_centro, idReciclador, fecha, formato, snapshot, codigo, req.user.id]
-  );
+  // El comprobante y su huella se guardan juntos: si el sellado falla, no queda comprobante sin sellar.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ins = await client.query(
+      `INSERT INTO tz_comprobantes (token, numero, id_centro, id_reciclador, fecha, formato, snapshot, codigo_verificacion, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, numero, fecha, id_centro, id_reciclador, snapshot`,
+      [token, numero, rec.id_centro, idReciclador, fecha, formato, snapshot, codigo, req.user.id]
+    );
+    const c = ins.rows[0];
+    await huella.sellar(client, { tipo: 'comprobante', version: 'comprobante-v1', refId: c.id, idCentro: c.id_centro, registro: c });
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
   await logActivity(req.user.id, 'pruebas_comprobante_generado', { id_reciclador: idReciclador, fecha, formato, numero }, req.ip);
 
   const url = `${PUBLIC_BASE}/comprobantes/${token}`;
@@ -128,7 +142,25 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
   res.json({ token, numero, codigoVerificacion: codigo, url, qrDataUrl, snapshot });
 }));
 
-function renderPublicPage(s, codigo, createdAt) {
+// Bloque de integridad de la pagina publica: resultado de cada comprobacion de la cadena.
+function renderIntegridad(v, token) {
+  if (!v || !v.sellado) return '<div class="card integ"><h3>Integridad</h3><p class="muted">Este comprobante es anterior a la cadena de integridad y aún no tiene huella.</p></div>';
+  const fila = (ok, titulo, detalle) => `<div class="chk ${ok === true ? 'ok' : ok === false ? 'bad' : 'wait'}"><span class="dot">${ok === true ? '✓' : ok === false ? '✕' : '…'}</span><div><b>${titulo}</b><small>${detalle}</small></div></div>`;
+  const s = v.selloDia;
+  const anclaje = !s ? fila(null, 'Anclaje en Bitcoin', `Se ancla en la madrugada siguiente al ${esc(v.fechaSello)}.`)
+    : s.estado === 'confirmado' ? fila(true, 'Anclado en Bitcoin', `Bloque ${esc(s.bloque)} · sello del ${esc(s.fecha)}.`)
+    : fila(null, 'Anclaje en Bitcoin', s.estado === 'error' ? 'Reintentando el envío a OpenTimestamps.' : 'Enviado a OpenTimestamps; Bitcoin lo confirma en unas horas.');
+  return `<div class="card integ"><h3>Integridad del documento</h3>
+  ${fila(v.integro, v.integro ? 'Contenido íntegro' : 'Contenido alterado', v.integro ? 'Coincide exactamente con la huella registrada al emitirlo.' : 'Los datos no coinciden con la huella registrada.')}
+  ${fila(v.cadena, v.cadena ? 'Cadena válida' : 'Cadena rota', v.cadena ? 'Encadenado sin cortes con los registros de su asociación.' : 'La cadena de huellas de la asociación no cuadra.')}
+  ${s ? fila(v.enRaiz, v.enRaiz ? 'Incluido en el sello del día' : 'No coincide con el sello del día', `Sello del ${esc(s.fecha)}.`) : ''}
+  ${anclaje}
+  <div class="hash">Huella: <code>${esc(v.huella)}</code></div>
+  <div class="links"><a href="/comprobantes/${esc(token)}/prueba.json">Descargar prueba</a>${s && s.tieneOts ? ` · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.txt">Sello del día (.txt)</a> · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.ots">Prueba OpenTimestamps (.ots)</a>` : ''}</div>
+  </div>`;
+}
+
+function renderPublicPage(s, codigo, createdAt, v, token) {
   const org = s.centro.nombre || 'Asociación';
   const logo = s.centro.logoUrl
     ? `<img class="logo" src="${esc(s.centro.logoUrl)}" alt="">`
@@ -178,6 +210,17 @@ tfoot td{ font-weight:700; border-top:2px solid var(--blue); background:#EEF3FA;
 .codebox{ text-align:center; font-size:12px; color:var(--soft); margin-top:6px; }
 .codebox b{ color:var(--blue); letter-spacing:2px; font-size:15px; }
 .foot{ text-align:center; font-size:10.5px; color:#9AA7B4; margin-top:18px; line-height:1.5; }
+.integ h3{ margin:0 0 10px; font-size:14px; color:var(--blue); }
+.integ .muted{ margin:0; font-size:12.5px; color:var(--soft); }
+.chk{ display:flex; gap:10px; align-items:flex-start; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.chk:last-of-type{ border-bottom:0; }
+.chk .dot{ flex:none; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:12px; color:#fff; }
+.chk.ok .dot{ background:#1E7E42; } .chk.bad .dot{ background:#C0392B; } .chk.wait .dot{ background:#C98A12; }
+.chk small{ display:block; color:var(--soft); font-size:11.5px; }
+.integ .hash{ margin-top:10px; font-size:10.5px; color:var(--soft); word-break:break-all; }
+.integ .hash code{ font-size:10.5px; word-break:break-all; overflow-wrap:anywhere; }
+.integ .links{ margin-top:8px; font-size:12px; }
+.integ .links a{ color:#1E6FD6; }
 @media (max-width:480px){
   table, thead, tbody, th, td, tr{ display:block; }
   thead{ display:none; }
@@ -208,6 +251,7 @@ tfoot td{ font-weight:700; border-top:2px solid var(--blue); background:#EEF3FA;
     <div class="kpi pay"><span>Total a pagar</span><b>${fmtMoney(s.totales.valorTotal)}</b></div>
   </div>
 </div>
+${renderIntegridad(v, token)}
 <div class="codebox">Código de verificación (compáralo con el del papel impreso)<br><b>${esc(codigo)}</b></div>
 <div class="foot">Generado el ${esc(generado)} · Genesis Traza — Módulo Pruebas (sandbox de trazabilidad nativa).<br>Comprobante de prueba, sin validez como factura real.</div>
 </div></body></html>`;
@@ -225,9 +269,53 @@ function renderNotFoundPage() {
 router.get('/:token', asyncRoute(async (req, res) => {
   res.set('Content-Type', 'text/html; charset=utf-8');
   if (!/^[0-9a-f]{64}$/.test(req.params.token)) return res.status(404).send(renderNotFoundPage());
-  const r = await pool.query('SELECT snapshot, codigo_verificacion, created_at FROM tz_comprobantes WHERE token = $1', [req.params.token]);
-  if (r.rows.length === 0) return res.status(404).send(renderNotFoundPage());
-  res.send(renderPublicPage(r.rows[0].snapshot, r.rows[0].codigo_verificacion, r.rows[0].created_at));
+  const c = await buscarPorToken(req.params.token);
+  if (!c) return res.status(404).send(renderNotFoundPage());
+  const v = await huella.verificar('comprobante', c.id, c);
+  res.send(renderPublicPage(c.snapshot, c.codigo_verificacion, c.created_at, v, req.params.token));
+}));
+
+async function buscarPorToken(token) {
+  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  const r = await pool.query('SELECT id, numero, fecha, id_centro, id_reciclador, snapshot, codigo_verificacion, created_at FROM tz_comprobantes WHERE token = $1', [token]);
+  return r.rows[0] || null;
+}
+
+// GET /comprobantes/:token/prueba.json -> todo lo necesario para verificar este comprobante sin
+// depender de Genesis Traza: el contenido canonico, su huella, la cadena y la prueba Merkle.
+router.get('/:token/prueba.json', asyncRoute(async (req, res) => {
+  const c = await buscarPorToken(req.params.token);
+  if (!c) return res.status(404).json({ error: 'Comprobante no encontrado.' });
+  const h = (await pool.query("SELECT * FROM tz_huellas WHERE tipo = 'comprobante' AND ref_id = $1", [c.id])).rows[0];
+  if (!h) return res.status(404).json({ error: 'Este comprobante aún no tiene huella.' });
+  const s = (await pool.query('SELECT fecha, raiz, total, archivo, estado, bloque FROM tz_sellos_diarios WHERE fecha = $1', [h.fecha_sello])).rows[0];
+  res.set('Content-Disposition', `attachment; filename="prueba_${c.numero}.json"`);
+  res.json({
+    como_verificar: [
+      '1. sha256(contenido_canonico) debe ser igual a huella_dato.',
+      '2. sha256(bytes(huella_prev) + bytes(huella_dato)) debe ser igual a huella.',
+      '3. Aplicando prueba_merkle a huella (der: sha256(actual+h), izq: sha256(h+actual)) se obtiene sello_diario.raiz.',
+      '4. sha256(sello_diario.archivo) es lo que se ancló en Bitcoin: verifique el archivo .ots en https://opentimestamps.org',
+    ],
+    contenido_canonico: huella.canonico(huella.FORMATOS[h.version](c)),
+    version: h.version, huella_dato: h.huella_dato, huella_prev: h.huella_prev, huella: h.huella, fecha_sello: h.fecha_sello,
+    prueba_merkle: h.prueba,
+    sello_diario: s ? { ...s, archivo_ots: `/comprobantes/sellos/${s.fecha}/sello.ots`, archivo_texto: `/comprobantes/sellos/${s.fecha}/sello.txt` } : null,
+  });
+}));
+
+// Archivos publicos del sello diario: el texto anclado y su prueba OpenTimestamps (.ots).
+router.get('/sellos/:fecha/sello.txt', asyncRoute(async (req, res) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.fecha)) return res.status(404).send('No encontrado');
+  const s = (await pool.query('SELECT archivo FROM tz_sellos_diarios WHERE fecha = $1', [req.params.fecha])).rows[0];
+  if (!s) return res.status(404).send('No encontrado');
+  res.set('Content-Type', 'text/plain; charset=utf-8').set('Content-Disposition', `attachment; filename="sello_${req.params.fecha}.txt"`).send(s.archivo);
+}));
+router.get('/sellos/:fecha/sello.ots', asyncRoute(async (req, res) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.fecha)) return res.status(404).send('No encontrado');
+  const s = (await pool.query('SELECT ots FROM tz_sellos_diarios WHERE fecha = $1', [req.params.fecha])).rows[0];
+  if (!s || !s.ots) return res.status(404).send('El sello de ese día aún no se ha anclado.');
+  res.set('Content-Type', 'application/octet-stream').set('Content-Disposition', `attachment; filename="sello_${req.params.fecha}.txt.ots"`).send(s.ots);
 }));
 
 module.exports = router;

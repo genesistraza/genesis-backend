@@ -13,6 +13,7 @@ const trazabilidadRoutes = require('./routes/trazabilidad');
 const comprobantesRoutes = require('./routes/comprobantes');
 const startPaymentReminders = require('./jobs/paymentReminders');
 const startNewsFetcher = require('./jobs/newsFetcher');
+const startSellosDiarios = require('./jobs/sellosDiarios');
 
 const app = express();
 app.set('trust proxy', 1); // Railway corre detras de un proxy; necesario para que el rate limiting vea la IP real
@@ -36,6 +37,7 @@ app.get('/health', (req, res) => res.json({ ok: true }));
 
 startPaymentReminders();
 startNewsFetcher();
+startSellosDiarios();
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Genesis Traza backend corriendo en puerto ${PORT}`));

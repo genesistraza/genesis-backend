@@ -804,3 +804,81 @@ CREATE TABLE IF NOT EXISTS tz_comprobantes (
   created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS tz_comprobantes_reciclador_fecha_idx ON tz_comprobantes (id_reciclador, fecha);
+
+-- ============================================================================================
+-- Cadena de integridad (huellas + sello diario con OpenTimestamps)
+-- Cada registro sellado guarda la huella (sha256) de su contenido canonico, encadenada a la del
+-- registro anterior de su mismo centro. Cada noche las huellas del dia se combinan en un arbol
+-- Merkle y la raiz se ancla en Bitcoin con OpenTimestamps (jobs/sellosDiarios.js, utils/huella.js).
+-- ============================================================================================
+CREATE TABLE IF NOT EXISTS tz_huellas (
+  id BIGSERIAL PRIMARY KEY,
+  id_centro INT,
+  tipo VARCHAR(30) NOT NULL,
+  ref_id BIGINT NOT NULL,
+  version VARCHAR(30) NOT NULL,
+  huella_dato CHAR(64) NOT NULL,
+  huella_prev CHAR(64) NOT NULL,
+  huella CHAR(64) NOT NULL UNIQUE,
+  fecha_sello DATE NOT NULL,
+  prueba JSONB,
+  creado TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (tipo, ref_id)
+);
+CREATE INDEX IF NOT EXISTS tz_huellas_centro_idx ON tz_huellas (id_centro, id);
+CREATE INDEX IF NOT EXISTS tz_huellas_fecha_idx ON tz_huellas (fecha_sello);
+
+CREATE TABLE IF NOT EXISTS tz_sellos_diarios (
+  fecha DATE PRIMARY KEY,
+  raiz CHAR(64) NOT NULL,
+  total INT NOT NULL,
+  archivo TEXT NOT NULL,
+  ots BYTEA,
+  estado VARCHAR(20) NOT NULL DEFAULT 'calculado',
+  bloque INT,
+  error TEXT,
+  creado TIMESTAMPTZ DEFAULT NOW(),
+  actualizado TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Candados en la base de datos (no solo en la aplicacion): un comprobante nunca se modifica ni se
+-- borra, y una huella solo admite que se le agregue su prueba Merkle una vez.
+CREATE OR REPLACE FUNCTION tz_bloquear_comprobantes() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'Los comprobantes son inmutables: no se pueden modificar ni borrar.';
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tz_comprobantes_inmutables ON tz_comprobantes;
+CREATE TRIGGER tz_comprobantes_inmutables BEFORE UPDATE OR DELETE ON tz_comprobantes
+  FOR EACH ROW EXECUTE FUNCTION tz_bloquear_comprobantes();
+
+CREATE OR REPLACE FUNCTION tz_bloquear_huellas() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Las huellas no se pueden borrar.';
+  END IF;
+  IF NEW.id_centro IS DISTINCT FROM OLD.id_centro OR NEW.tipo <> OLD.tipo OR NEW.ref_id <> OLD.ref_id
+     OR NEW.version <> OLD.version OR NEW.huella_dato <> OLD.huella_dato OR NEW.huella_prev <> OLD.huella_prev
+     OR NEW.huella <> OLD.huella OR NEW.fecha_sello <> OLD.fecha_sello OR NEW.creado <> OLD.creado
+     OR (OLD.prueba IS NOT NULL AND NEW.prueba IS DISTINCT FROM OLD.prueba) THEN
+    RAISE EXCEPTION 'Las huellas son inmutables (solo se puede agregar su prueba Merkle una vez).';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tz_huellas_inmutables ON tz_huellas;
+CREATE TRIGGER tz_huellas_inmutables BEFORE UPDATE OR DELETE ON tz_huellas
+  FOR EACH ROW EXECUTE FUNCTION tz_bloquear_huellas();
+
+-- La raiz y el archivo de un sello diario no cambian; solo avanzan el .ots y su estado.
+CREATE OR REPLACE FUNCTION tz_bloquear_sellos() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Los sellos diarios no se pueden borrar.';
+  END IF;
+  IF NEW.fecha <> OLD.fecha OR NEW.raiz <> OLD.raiz OR NEW.total <> OLD.total OR NEW.archivo <> OLD.archivo THEN
+    RAISE EXCEPTION 'La raiz de un sello diario es inmutable.';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tz_sellos_inmutables ON tz_sellos_diarios;
+CREATE TRIGGER tz_sellos_inmutables BEFORE UPDATE OR DELETE ON tz_sellos_diarios
+  FOR EACH ROW EXECUTE FUNCTION tz_bloquear_sellos();
