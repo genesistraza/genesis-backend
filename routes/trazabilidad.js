@@ -14,6 +14,7 @@ const { asyncRoute, logActivity } = require('../middleware/logger');
 const { drawPlanilla, weekBucketRanges, bucketForDay, slugName } = require('../utils/planillaPdf');
 
 const { validateRecord, newContext, mapDbError, todayCO, isValidYmd, CROSS } = require('../utils/trazaValidate');
+const { fechasSelladas, registrarMotivo, leerMotivo } = require('../utils/selloDia');
 
 const router = express.Router();
 router.use(requireAuth, requireRole('pro'));
@@ -497,6 +498,11 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
     return res.status(400).json({ error: 'Ninguna fila fue válida.' + (errores[0] ? ' ' + errores[0] : ''), detalles: errores });
   }
 
+  let anotar = async () => {};
+  if (req.params.entity === 'balance_masas') {
+    anotar = await exigirMotivoSellado(req, res, parsedRows.map((r) => ({ idCentro: r.id_centro, fecha: r.fecha })));
+    if (!anotar) return;
+  }
   const columns = entity.fields.map((f) => f.name);
   const client = await pool.connect();
   try {
@@ -520,6 +526,7 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
     client.release();
   }
 
+  await anotar('balance_importado');
   await logActivity(req.user.id, 'pruebas_trazabilidad_importado',
     { entity: req.params.entity, filas: parsedRows.length, omitidas }, req.ip);
   res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: omitidas, detalles: errores });
@@ -700,6 +707,21 @@ router.post('/balance-masas-dia', guard(async (req, res) => {
   if (v.errors.length) return sendValidationErrors(res, v.errors);
   const { idCentro, idReciclador, fecha, opcionales, filas } = v.data;
 
+  // Si lo que llega es igual a lo guardado (p. ej. al reimprimir), no se toca nada: ni se reescribe
+  // el dia ni se pide motivo, porque no hay ningun cambio.
+  const actuales = (await pool.query(
+    `SELECT id_centro, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui,
+            id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
+     FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`, [idReciclador, fecha])).rows;
+  const firma = (list) => list.map((r) => [r.id_tipo_material, Number(r.cantidad), Number(r.valor), Number(r.cantidad_rechazo), Number(r.cantidad_nosui)].join('|')).sort().join(';');
+  const mismosOpcionales = actuales.every((r) => r.id_centro === idCentro && ['id_numacro', 'id_bodega', 'id_macrorruta', 'id_microrruta_1', 'id_microrruta_2'].every((k) => (r[k] || null) === (opcionales[k] || null)));
+  if (actuales.length && filas.length && mismosOpcionales && firma(actuales) === firma(filas)) {
+    return res.json({ message: 'Sin cambios.', filas: filas.length, sinCambios: true });
+  }
+
+  const anotar = await exigirMotivoSellado(req, res, [{ idCentro, fecha }]);
+  if (!anotar) return;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -715,6 +737,7 @@ router.post('/balance-masas-dia', guard(async (req, res) => {
       );
     }
     await client.query('COMMIT');
+    await anotar('balance_dia_guardado');
     await logActivity(req.user.id, 'pruebas_balance_masas_dia_guardado', { id_reciclador: idReciclador, fecha, filas: filas.length }, req.ip);
     res.json({ message: 'Guardado.', filas: filas.length });
   } catch (err) {
@@ -971,6 +994,27 @@ function sendValidationErrors(res, errors) {
   res.status(400).json({ error: errors.slice(0, 3).join(' '), detalles: errors });
 }
 
+// Cambiar un dia de balance de masas que ya fue sellado exige un motivo (cabecera X-Motivo-Cambio).
+// pares: [{ idCentro, fecha }]. Si falta el motivo responde 409 { requiereMotivo } y devuelve null;
+// si no, devuelve una funcion que registra el motivo una vez hecho el cambio.
+async function exigirMotivoSellado(req, res, pares) {
+  const porCentro = new Map();
+  for (const p of pares) if (p.idCentro && p.fecha) porCentro.set(p.idCentro, (porCentro.get(p.idCentro) || []).concat(p.fecha));
+  const afectados = [];
+  for (const [idCentro, fechas] of porCentro) {
+    const sel = await fechasSelladas(idCentro, fechas);
+    if (sel.length) afectados.push({ idCentro, fechas: sel });
+  }
+  if (!afectados.length) return async () => {};
+  const motivo = leerMotivo(req);
+  if (!motivo) {
+    const dias = afectados.flatMap((a) => a.fechas).sort();
+    res.status(409).json({ requiereMotivo: true, error: `${dias.length === 1 ? 'El día ' + dias[0] + ' ya está sellado' : 'Los días ' + dias.join(', ') + ' ya están sellados'}. Para cambiarlo escribe el motivo: quedará registrado y esta noche se sellará una nueva versión del día.` });
+    return null;
+  }
+  return async (accion) => { for (const a of afectados) await registrarMotivo(a.idCentro, a.fechas, motivo, req.user.id, accion); };
+}
+
 // POST /trazabilidad/:entity -> crear
 router.post('/:entity', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
@@ -978,11 +1022,17 @@ router.post('/:entity', guard(async (req, res) => {
 
   const v = await validateRecord(ENTITIES, req.params.entity, req.body || {});
   if (v.errors.length) return sendValidationErrors(res, v.errors);
+  let anotar = async () => {};
+  if (req.params.entity === 'balance_masas') {
+    anotar = await exigirMotivoSellado(req, res, [{ idCentro: v.values.id_centro, fecha: v.values.fecha }]);
+    if (!anotar) return;
+  }
 
   const cols = Object.keys(v.values);
   const values = cols.map((c) => v.values[c]);
   const sql = `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')}) RETURNING id`;
   const result = await pool.query(sql, values);
+  await anotar('balance_registro_creado');
   await logActivity(req.user.id, 'pruebas_trazabilidad_creado', { entity: req.params.entity, id: result.rows[0].id }, req.ip);
   res.json({ id: result.rows[0].id });
 }));
@@ -1000,12 +1050,19 @@ router.put('/:entity/:id', guard(async (req, res) => {
   const v = await validateRecord(ENTITIES, req.params.entity, req.body || {}, { existing: current.rows[0], id });
   if (v.errors.length) return sendValidationErrors(res, v.errors);
 
+  let anotar = async () => {};
+  if (req.params.entity === 'balance_masas') {
+    const old = current.rows[0], nuevo = { ...old, ...v.values };
+    anotar = await exigirMotivoSellado(req, res, [{ idCentro: old.id_centro, fecha: old.fecha }, { idCentro: nuevo.id_centro, fecha: nuevo.fecha }]);
+    if (!anotar) return;
+  }
   const cols = Object.keys(v.values);
   if (cols.length === 0) return res.status(400).json({ error: 'Nada para actualizar.' });
   const values = cols.map((c) => v.values[c]);
   values.push(id);
   const sql = `UPDATE ${entity.table} SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${values.length} RETURNING id`;
   const result = await pool.query(sql, values);
+  await anotar('balance_registro_editado');
   await logActivity(req.user.id, 'pruebas_trazabilidad_editado', { entity: req.params.entity, id }, req.ip);
   res.json({ id: result.rows[0].id });
 }));
@@ -1028,6 +1085,14 @@ router.delete('/:entity/:id', guard(async (req, res) => {
       return res.status(409).json({ error: `No se puede eliminar el centro: tiene ${d.recicladores} reciclador(es) y ${d.balance} registro(s) de balance de masas. Elimínalos primero.` });
     }
   }
+  let anotar = async () => {};
+  if (req.params.entity === 'balance_masas') {
+    const old = (await pool.query('SELECT id_centro, fecha FROM tz_formulario_balance_masas WHERE id = $1', [id])).rows[0];
+    if (old) {
+      anotar = await exigirMotivoSellado(req, res, [{ idCentro: old.id_centro, fecha: old.fecha }]);
+      if (!anotar) return;
+    }
+  }
   let result;
   try {
     result = await pool.query(`DELETE FROM ${entity.table} WHERE id = $1 RETURNING id`, [id]);
@@ -1036,6 +1101,7 @@ router.delete('/:entity/:id', guard(async (req, res) => {
     throw err;
   }
   if (result.rows.length === 0) return res.status(404).json({ error: 'Registro no encontrado.' });
+  await anotar('balance_registro_eliminado');
   await logActivity(req.user.id, 'pruebas_trazabilidad_eliminado', { entity: req.params.entity, id }, req.ip);
   res.json({ message: 'Eliminado.' });
 }));

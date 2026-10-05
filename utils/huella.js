@@ -21,6 +21,7 @@ const hashPar = (a, b) => sha256(Buffer.concat([Buffer.from(a, 'hex'), Buffer.fr
 // un formato, se crea una version nueva y las huellas viejas se siguen verificando con la suya.
 const FORMATOS = {
   'comprobante-v1': (c) => ({ tipo: 'comprobante', v: 1, numero: c.numero, fecha: c.fecha, id_centro: c.id_centro, id_reciclador: c.id_reciclador, snapshot: c.snapshot }),
+  'dia-v1': (d) => ({ tipo: 'dia', v: 1, id_centro: d.id_centro, fecha: d.fecha, version: d.version, datos: d.datos }),
 };
 const huellaDato = (version, registro) => sha256(canonico(FORMATOS[version](registro)));
 

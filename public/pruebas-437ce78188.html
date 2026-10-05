@@ -620,13 +620,24 @@
     var msg = document.getElementById('pruebasImportMsg');
     msg.style.color = 'var(--ink-soft)';
     msg.textContent = 'Importando…';
-    var formData = new FormData();
-    formData.append('file', file);
-    fetch(API_BASE + '/trazabilidad/' + pruebasCurrentEntity + '/import', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + gtGetToken() },
-      body: formData
-    }).then(function(r){ return r.json().then(function(data){ return { ok: r.ok, data: data }; }); })
+    var enviar = function(motivo){
+      var formData = new FormData();
+      formData.append('file', file);
+      var headers = { 'Authorization': 'Bearer ' + gtGetToken() };
+      if(motivo) headers['X-Motivo-Cambio'] = encodeURIComponent(motivo);
+      return fetch(API_BASE + '/trazabilidad/' + pruebasCurrentEntity + '/import', { method: 'POST', headers: headers, body: formData })
+        .then(function(r){ return r.json().then(function(data){ return { ok: r.ok, status: r.status, data: data }; }); })
+        .then(function(res){
+          // Si el archivo trae dias ya sellados, se pide el motivo y se reintenta una vez.
+          if(!motivo && res.status === 409 && res.data.requiereMotivo){
+            var m = gtPedirMotivo(res.data.error);
+            if(m) return enviar(m);
+            return { ok: false, data: { error: 'Importación cancelada: hay días sellados y no se escribió el motivo.' } };
+          }
+          return res;
+        });
+    };
+    enviar('')
       .then(function(res){
         input.value = '';
         if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = (res.data.error || 'No se pudo importar.') + ' ' + (res.data.detalles && res.data.detalles.length > 1 ? '(' + res.data.detalles.length + ' filas con problemas; ver consola)' : ''); if(res.data.detalles) console.warn('Filas con problemas:', res.data.detalles); return; }

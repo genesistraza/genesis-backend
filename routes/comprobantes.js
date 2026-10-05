@@ -114,6 +114,20 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
     },
     rows, totales
   };
+  // Reimprimir el mismo dia sin que haya cambiado nada devuelve EL MISMO comprobante (mismo numero,
+  // QR y huella): solo se crea uno nuevo si los datos son distintos. El formato de papel (carta,
+  // tirilla...) y el logo no cuentan como cambio de datos.
+  const datosDe = (s) => huella.canonico({ centro: { ...s.centro, logoUrl: null }, reciclador: s.reciclador, operacion: s.operacion, rows: s.rows, totales: s.totales });
+  const previo = (await pool.query(
+    'SELECT token, numero, snapshot, codigo_verificacion FROM tz_comprobantes WHERE id_reciclador = $1 AND fecha = $2 ORDER BY id DESC LIMIT 1',
+    [idReciclador, fecha])).rows[0];
+  if (previo && datosDe(previo.snapshot) === datosDe(JSON.parse(JSON.stringify(snapshot)))) {
+    const url = `${PUBLIC_BASE}/comprobantes/${previo.token}`;
+    const qrDataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'H', margin: 1, width: 320 });
+    return res.json({ token: previo.token, numero: previo.numero, codigoVerificacion: previo.codigo_verificacion, url, qrDataUrl,
+      snapshot: { ...previo.snapshot, formato }, reutilizado: true });
+  }
+
   const codigo = codigoVerificacion(token, snapshot);
 
   // El comprobante y su huella se guardan juntos: si el sellado falla, no queda comprobante sin sellar.
@@ -156,7 +170,7 @@ function renderIntegridad(v, token) {
   ${s ? fila(v.enRaiz, v.enRaiz ? 'Incluido en el sello del día' : 'No coincide con el sello del día', `Sello del ${esc(s.fecha)}.`) : ''}
   ${anclaje}
   <div class="hash">Huella: <code>${esc(v.huella)}</code></div>
-  <div class="links"><a href="/comprobantes/${esc(token)}/prueba.json">Descargar prueba</a>${s && s.tieneOts ? ` · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.txt">Sello del día (.txt)</a> · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.ots">Prueba OpenTimestamps (.ots)</a>` : ''}</div>
+  <div class="links"><a href="/verificar.html?q=${esc(v.rec)}">Ver la trazabilidad de ${esc(v.rec)}</a> · <a href="/comprobantes/${esc(token)}/prueba.json">Descargar prueba</a>${s && s.tieneOts ? ` · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.txt">Sello del día (.txt)</a> · <a href="/comprobantes/sellos/${esc(s.fecha)}/sello.ots">Prueba OpenTimestamps (.ots)</a>` : ''}</div>
   </div>`;
 }
 
@@ -266,12 +280,14 @@ function renderNotFoundPage() {
 
 // GET /comprobantes/:token -> pagina publica (SIN iniciar sesion) con el comprobante congelado.
 // El token debe verse exactamente como se genera (64 hex): cualquier otra cosa es, de una vez, "no encontrado".
-router.get('/:token', asyncRoute(async (req, res) => {
+router.get('/:token', asyncRoute(async (req, res, next) => {
+  if (req.params.token === 'consulta') return next(); // la consulta publica se define mas abajo
   res.set('Content-Type', 'text/html; charset=utf-8');
   if (!/^[0-9a-f]{64}$/.test(req.params.token)) return res.status(404).send(renderNotFoundPage());
   const c = await buscarPorToken(req.params.token);
   if (!c) return res.status(404).send(renderNotFoundPage());
   const v = await huella.verificar('comprobante', c.id, c);
+  v.rec = codReciclador(c.id_reciclador);
   res.send(renderPublicPage(c.snapshot, c.codigo_verificacion, c.created_at, v, req.params.token));
 }));
 
@@ -316,6 +332,116 @@ router.get('/sellos/:fecha/sello.ots', asyncRoute(async (req, res) => {
   const s = (await pool.query('SELECT ots FROM tz_sellos_diarios WHERE fecha = $1', [req.params.fecha])).rows[0];
   if (!s || !s.ots) return res.status(404).send('El sello de ese día aún no se ha anclado.');
   res.set('Content-Type', 'application/octet-stream').set('Content-Disposition', `attachment; filename="sello_${req.params.fecha}.txt.ots"`).send(s.ots);
+}));
+
+// ============================================================================================
+// Consulta publica de trazabilidad (genesistraza.com/verificar.html): se busca por codigo del sello
+// diario, por huella, por ID de reciclador (REC-0042) o por numero de comprobante. Solo muestra el
+// ID codificado del reciclador, nunca su nombre ni su cedula.
+// ============================================================================================
+const { codReciclador } = require('../utils/selloDia');
+
+async function estadoSello(tipo, row) {
+  const v = await huella.verificar(tipo, row.id, row);
+  const s = v.selloDia;
+  return {
+    integro: v.integro === true, cadena: v.cadena === true, enRaiz: v.enRaiz === true, huella: v.huella, fechaSello: v.fechaSello,
+    bitcoin: s ? { estado: s.estado, bloque: s.bloque, fecha: s.fecha, ots: s.tieneOts ? `/comprobantes/sellos/${s.fecha}/sello.ots` : null, txt: `/comprobantes/sellos/${s.fecha}/sello.txt` } : null,
+  };
+}
+const totalesDe = (filas) => filas.reduce((t, f) => ({ cantidad: t.cantidad + Number(f.cantidad || 0), rechazo: t.rechazo + Number(f.rechazo || 0), recicladores: t.recicladores.add(f.reciclador) }), { cantidad: 0, rechazo: 0, recicladores: new Set() });
+
+async function vistaDia(idCentro, fecha) {
+  const rows = (await pool.query('SELECT * FROM tz_sellos_asociacion WHERE id_centro = $1 AND fecha = $2 AND huella IS NOT NULL ORDER BY version', [idCentro, fecha])).rows;
+  if (!rows.length) return null;
+  const versiones = [];
+  for (const r of rows) {
+    const t = totalesDe(r.datos.filas);
+    versiones.push({ version: r.version, codigo: r.codigo, creado: r.creado, motivo: r.motivo, cambios: r.cambios, filas: r.datos.filas,
+      totales: { cantidad: t.cantidad, rechazo: t.rechazo, recicladores: t.recicladores.size }, verificacion: await estadoSello('dia', r) });
+  }
+  return { tipo: 'dia', centro: rows[rows.length - 1].datos.centro, idCentro, fecha, versiones };
+}
+
+async function vistaReciclador(id) {
+  const cod = codReciclador(id);
+  const rows = (await pool.query(
+    `SELECT * FROM tz_sellos_asociacion WHERE huella IS NOT NULL AND datos->'filas' @> $1::jsonb ORDER BY fecha DESC, id_centro, version`,
+    [JSON.stringify([{ reciclador: cod }])])).rows;
+  // Tambien versiones posteriores donde ya no aparece (p. ej. le borraron el registro de ese dia).
+  const grupos = new Map();
+  for (const r of rows) grupos.set(r.id_centro + '|' + r.fecha, { idCentro: r.id_centro, fecha: r.fecha, todas: [] });
+  if (!grupos.size) return null;
+  // Todas las versiones de esos dias en una sola consulta.
+  const centros = [...grupos.values()].map((g) => g.idCentro), fechas = [...grupos.values()].map((g) => g.fecha);
+  const versiones = (await pool.query(
+    `SELECT s.* FROM tz_sellos_asociacion s JOIN unnest($1::int[], $2::date[]) AS k(c, f) ON s.id_centro = k.c AND s.fecha = k.f
+     WHERE s.huella IS NOT NULL ORDER BY s.version`, [centros, fechas])).rows;
+  for (const v of versiones) grupos.get(v.id_centro + '|' + v.fecha).todas.push(v);
+  const dias = [];
+  for (const g of grupos.values()) {
+    const todas = g.todas;
+    const actual = todas[todas.length - 1];
+    const mias = (v) => v.datos.filas.filter((f) => f.reciclador === cod);
+    const firma = (v) => huella.canonico(mias(v));
+    const cambiado = todas.some((v) => firma(v) !== firma(actual));
+    const filas = mias(actual);
+    dias.push({ fecha: g.fecha, centro: actual.datos.centro, codigo: actual.codigo, versiones: todas.length, cambiado, filas,
+      cantidad: filas.reduce((s, f) => s + Number(f.cantidad || 0), 0), rechazo: filas.reduce((s, f) => s + Number(f.rechazo || 0), 0),
+      verificacion: await estadoSello('dia', actual) });
+  }
+  if (!dias.length) return null;
+  return { tipo: 'reciclador', reciclador: cod, dias };
+}
+
+// GET /comprobantes/consulta?q=...
+router.get('/consulta', asyncRoute(async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'Escribe un código para consultar.' });
+  const Q = q.toUpperCase();
+  let m;
+  if ((m = Q.match(/^GT(\d+)-(\d{4})(\d{2})(\d{2})-V\d+-[0-9A-F]{6}$/))) {
+    const s = (await pool.query('SELECT id_centro, fecha, version FROM tz_sellos_asociacion WHERE codigo = $1', [Q])).rows[0];
+    if (s) { const v = await vistaDia(s.id_centro, s.fecha); return res.json({ ...v, buscada: s.version }); }
+  } else if (/^[0-9A-F]{64}$/.test(Q)) {
+    const h = (await pool.query('SELECT tipo, ref_id FROM tz_huellas WHERE huella = $1 OR huella_dato = $1 LIMIT 1', [q.toLowerCase()])).rows[0];
+    if (h && h.tipo === 'dia') {
+      const s = (await pool.query('SELECT id_centro, fecha, version FROM tz_sellos_asociacion WHERE id = $1', [h.ref_id])).rows[0];
+      if (s) { const v = await vistaDia(s.id_centro, s.fecha); return res.json({ ...v, buscada: s.version }); }
+    }
+    if (h && h.tipo === 'comprobante') {
+      const c = (await pool.query('SELECT token, numero FROM tz_comprobantes WHERE id = $1', [h.ref_id])).rows[0];
+      if (c) return res.json({ tipo: 'comprobante', numero: c.numero, url: `/comprobantes/${c.token}` });
+    }
+  } else if ((m = Q.match(/^REC-?(\d{1,9})$/))) {
+    const v = await vistaReciclador(Number(m[1]));
+    if (v) return res.json(v);
+  } else if (/^BM-\d{8}-\d{4}-[0-9A-F]{6}$/.test(Q)) {
+    const c = (await pool.query('SELECT token, numero FROM tz_comprobantes WHERE numero = $1', [Q])).rows[0];
+    if (c) return res.json({ tipo: 'comprobante', numero: c.numero, url: `/comprobantes/${c.token}` });
+  }
+  res.status(404).json({ error: 'No se encontró ningún registro sellado con ese código.' });
+}));
+
+// GET /comprobantes/sello-dia/:codigo/prueba.json -> prueba tecnica de un sello diario.
+router.get('/sello-dia/:codigo/prueba.json', asyncRoute(async (req, res) => {
+  const s = (await pool.query('SELECT * FROM tz_sellos_asociacion WHERE codigo = $1', [String(req.params.codigo).toUpperCase()])).rows[0];
+  if (!s) return res.status(404).json({ error: 'Sello no encontrado.' });
+  const h = (await pool.query("SELECT * FROM tz_huellas WHERE tipo = 'dia' AND ref_id = $1", [s.id])).rows[0];
+  const d = h ? (await pool.query('SELECT fecha, raiz, total, archivo, estado, bloque FROM tz_sellos_diarios WHERE fecha = $1', [h.fecha_sello])).rows[0] : null;
+  res.set('Content-Disposition', `attachment; filename="prueba_${s.codigo}.json"`);
+  res.json({
+    como_verificar: [
+      '1. sha256(contenido_canonico) debe ser igual a huella_dato.',
+      '2. sha256(bytes(huella_prev) + bytes(huella_dato)) debe ser igual a huella.',
+      '3. Aplicando prueba_merkle a huella (der: sha256(actual+h), izq: sha256(h+actual)) se obtiene sello_diario.raiz.',
+      '4. sha256(sello_diario.archivo) es lo que se ancló en Bitcoin: verifique el archivo .ots en https://opentimestamps.org',
+    ],
+    codigo: s.codigo,
+    contenido_canonico: h ? huella.canonico(huella.FORMATOS[h.version](s)) : null,
+    huella_dato: h && h.huella_dato, huella_prev: h && h.huella_prev, huella: h && h.huella, fecha_sello: h && h.fecha_sello, prueba_merkle: h && h.prueba,
+    sello_diario: d ? { ...d, archivo_ots: `/comprobantes/sellos/${d.fecha}/sello.ots`, archivo_texto: `/comprobantes/sellos/${d.fecha}/sello.txt` } : null,
+  });
 }));
 
 module.exports = router;

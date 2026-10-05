@@ -847,6 +847,9 @@ CREATE OR REPLACE FUNCTION tz_bloquear_comprobantes() RETURNS trigger AS $$
 BEGIN
   RAISE EXCEPTION 'Los comprobantes son inmutables: no se pueden modificar ni borrar.';
 END $$ LANGUAGE plpgsql;
+-- created_by sin llave foranea: con ON DELETE SET NULL, borrar un usuario intentaba modificar
+-- comprobantes inmutables y fallaba. Queda el id como dato historico.
+ALTER TABLE tz_comprobantes DROP CONSTRAINT IF EXISTS tz_comprobantes_created_by_fkey;
 DROP TRIGGER IF EXISTS tz_comprobantes_inmutables ON tz_comprobantes;
 CREATE TRIGGER tz_comprobantes_inmutables BEFORE UPDATE OR DELETE ON tz_comprobantes
   FOR EACH ROW EXECUTE FUNCTION tz_bloquear_comprobantes();
@@ -882,3 +885,62 @@ END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS tz_sellos_inmutables ON tz_sellos_diarios;
 CREATE TRIGGER tz_sellos_inmutables BEFORE UPDATE OR DELETE ON tz_sellos_diarios
   FOR EACH ROW EXECUTE FUNCTION tz_bloquear_sellos();
+
+-- Sello diario por asociacion (utils/selloDia.js): copia congelada de los datos transaccionales
+-- del dia de cada centro, con su huella encadenada. Si un dia sellado cambia despues, se sella una
+-- version nueva con el detalle de los cambios y el motivo; las versiones anteriores no se borran.
+CREATE TABLE IF NOT EXISTS tz_sellos_asociacion (
+  id BIGSERIAL PRIMARY KEY,
+  id_centro INT NOT NULL,
+  fecha DATE NOT NULL,
+  version INT NOT NULL,
+  datos JSONB NOT NULL,
+  cambios JSONB,
+  motivo TEXT,
+  codigo VARCHAR(40) NOT NULL,
+  huella CHAR(64),
+  creado TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (id_centro, fecha, version)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS tz_sellos_asociacion_codigo_idx ON tz_sellos_asociacion (codigo) WHERE codigo <> 'pendiente';
+
+-- Motivos que da el usuario al cambiar un dia ya sellado (se adjuntan a la siguiente version).
+CREATE TABLE IF NOT EXISTS tz_cambios_sellados (
+  id BIGSERIAL PRIMARY KEY,
+  id_centro INT NOT NULL,
+  fecha DATE NOT NULL,
+  motivo TEXT NOT NULL,
+  accion VARCHAR(60),
+  user_id INT,
+  usuario VARCHAR(150),
+  creado TIMESTAMPTZ DEFAULT NOW()
+);
+-- Sin llave foranea a users: borrar un usuario no debe tocar este historial inmutable.
+ALTER TABLE tz_cambios_sellados DROP CONSTRAINT IF EXISTS tz_cambios_sellados_user_id_fkey;
+ALTER TABLE tz_cambios_sellados ADD COLUMN IF NOT EXISTS usuario VARCHAR(150);
+CREATE INDEX IF NOT EXISTS tz_cambios_sellados_idx ON tz_cambios_sellados (id_centro, fecha);
+
+CREATE OR REPLACE FUNCTION tz_bloquear_sellos_asociacion() RETURNS trigger AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    RAISE EXCEPTION 'Los sellos diarios de una asociacion no se pueden borrar.';
+  END IF;
+  -- Solo se permite completar el codigo y la huella una vez, justo despues de crearlo.
+  IF OLD.huella IS NOT NULL OR NEW.id_centro <> OLD.id_centro OR NEW.fecha <> OLD.fecha OR NEW.version <> OLD.version
+     OR NEW.datos::text <> OLD.datos::text OR NEW.cambios::text IS DISTINCT FROM OLD.cambios::text
+     OR NEW.motivo IS DISTINCT FROM OLD.motivo OR NEW.creado <> OLD.creado THEN
+    RAISE EXCEPTION 'Los sellos diarios de una asociacion son inmutables.';
+  END IF;
+  RETURN NEW;
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tz_sellos_asociacion_inmutables ON tz_sellos_asociacion;
+CREATE TRIGGER tz_sellos_asociacion_inmutables BEFORE UPDATE OR DELETE ON tz_sellos_asociacion
+  FOR EACH ROW EXECUTE FUNCTION tz_bloquear_sellos_asociacion();
+
+CREATE OR REPLACE FUNCTION tz_bloquear_cambios_sellados() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'El historial de motivos no se puede modificar ni borrar.';
+END $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tz_cambios_sellados_inmutables ON tz_cambios_sellados;
+CREATE TRIGGER tz_cambios_sellados_inmutables BEFORE UPDATE OR DELETE ON tz_cambios_sellados
+  FOR EACH ROW EXECUTE FUNCTION tz_bloquear_cambios_sellados();

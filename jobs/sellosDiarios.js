@@ -6,6 +6,7 @@ const cron = require('node-cron');
 const pool = require('../db/pool');
 const { merkle, archivoSello, sha256, fechaBogota } = require('../utils/huella');
 const ots = require('../utils/ots');
+const { sellarDias } = require('../utils/selloDia');
 
 let ocupado = false;
 
@@ -67,7 +68,14 @@ async function ciclo() {
   finally { ocupado = false; }
 }
 
+// 23:59: sello del dia de cada asociacion (y nuevas versiones de dias que cambiaron).
+async function selloAsociaciones() {
+  try { const r = await sellarDias(); console.log(`[sello-dia] dias nuevos ${r.nuevos}, versiones nuevas ${r.versiones}`); }
+  catch (e) { console.error('[sello-dia] error general:', e.message); }
+}
+
 function startSellosDiarios() {
+  cron.schedule('59 23 * * *', selloAsociaciones, { timezone: 'America/Bogota' });
   cron.schedule('10 0 * * *', ciclo, { timezone: 'America/Bogota' }); // sello del dia anterior
   cron.schedule('25 * * * *', ciclo, { timezone: 'America/Bogota' }); // reintentos y confirmaciones
   setTimeout(ciclo, 60 * 1000); // al arrancar, pone al dia lo que haya quedado pendiente
@@ -75,3 +83,4 @@ function startSellosDiarios() {
 
 module.exports = startSellosDiarios;
 module.exports.ciclo = ciclo;
+module.exports.selloAsociaciones = selloAsociaciones;

@@ -72,9 +72,23 @@ function gtApiFetch(path, options){
     .then(function(r){
       return r.json().catch(function(){ return {}; }).then(function(data){
         if(r.status === 401){ gtLogout('expired'); }
+        // Dia ya sellado: se pide el motivo del cambio y se reintenta una sola vez con el.
+        if(r.status === 409 && data && data.requiereMotivo && !options._conMotivo){
+          var motivo = gtPedirMotivo(data.error);
+          if(motivo){
+            var extra = Object.assign({}, options.headers || {}, { 'X-Motivo-Cambio': encodeURIComponent(motivo) });
+            return gtApiFetch(path, Object.assign({}, options, { headers: extra, _conMotivo: true }));
+          }
+          return { ok: false, status: r.status, data: { error: 'Cambio cancelado: el día está sellado y no se escribió el motivo.' } };
+        }
         return { ok: r.ok, status: r.status, data: data };
       });
     });
+}
+
+function gtPedirMotivo(mensaje){
+  var m = window.prompt((mensaje || 'Este día ya está sellado.') + '\n\nMotivo del cambio:');
+  return m && m.trim() ? m.trim().slice(0, 500) : '';
 }
 
 function gtEscapeHtml(v){

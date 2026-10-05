@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta de trazabilidad — Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{ --blue:#0B3D80; --blue2:#1E6FD6; --orange:#F2941F; --green:#1E7E42; --greenbg:#E7F6EC; --red:#C0392B; --redbg:#FDECEA; --amber:#B8730B; --amberbg:#FFF5E3; --line:#DCE3EA; --soft:#5B6B7C; --bg:#F4F7FC; }
+*{ box-sizing:border-box; }
+body{ margin:0; font-family:Inter,"Segoe UI",Arial,sans-serif; background:var(--bg); color:#1B2733; font-size:14px; }
+header{ background:var(--blue); color:#fff; border-bottom:4px solid var(--orange); }
+header .in{ max-width:960px; margin:0 auto; padding:12px 16px; display:flex; align-items:center; gap:12px; }
+header .marca{ font-family:Poppins,sans-serif; font-weight:700; font-size:18px; color:#fff; text-decoration:none; padding-right:12px; border-right:1px solid rgba(255,255,255,.3); }
+header .marca span{ color:var(--orange); }
+header h1{ font-family:Poppins,sans-serif; font-size:17px; margin:0; font-weight:600; }
+main{ max-width:960px; margin:0 auto; padding:16px; }
+.buscar{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; display:flex; gap:8px; flex-wrap:wrap; }
+.buscar input{ flex:1; min-width:220px; font:inherit; font-size:15px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; }
+.buscar button{ font:inherit; font-weight:600; background:var(--blue2); color:#fff; border:0; border-radius:8px; padding:10px 18px; cursor:pointer; }
+.ayuda{ font-size:12px; color:var(--soft); margin:6px 2px 0; }
+.card{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:14px; }
+.titulo{ display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:flex-start; }
+.titulo h2{ font-family:Poppins,sans-serif; font-size:18px; margin:0; color:var(--blue); }
+.titulo .sub{ color:var(--soft); font-size:13px; margin-top:2px; }
+.estado{ display:flex; gap:10px; align-items:flex-start; border-radius:10px; padding:10px 12px; margin-top:10px; font-size:13.5px; }
+.estado b{ display:block; font-size:14px; }
+.estado.ok{ background:var(--greenbg); color:var(--green); } .estado.bad{ background:var(--redbg); color:var(--red); } .estado.wait{ background:var(--amberbg); color:var(--amber); }
+.estado .ic{ flex:none; width:24px; height:24px; border-radius:50%; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+.ok .ic{ background:var(--green); } .bad .ic{ background:var(--red); } .wait .ic{ background:var(--amber); }
+.version{ border:2px solid var(--line); border-radius:12px; padding:12px; margin-top:12px; }
+.version.actual{ border-color:var(--green); background:#FBFEFC; }
+.version.antigua{ border-color:var(--red); background:#FFFBFA; }
+.etq{ display:inline-block; font-size:11.5px; font-weight:700; border-radius:20px; padding:2px 10px; color:#fff; }
+.actual .etq{ background:var(--green); } .antigua .etq{ background:var(--red); }
+.vhead{ display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; align-items:center; }
+.vhead .cod{ font-family:Consolas,monospace; font-size:12.5px; color:var(--soft); }
+.motivo{ margin-top:8px; font-size:13px; background:var(--amberbg); border-radius:8px; padding:8px 10px; color:#6B4A06; }
+.cambios{ margin:6px 0 0; padding-left:18px; font-size:13px; }
+table{ width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+th{ background:var(--blue); color:#fff; text-align:left; padding:7px 8px; font-size:11.5px; font-weight:600; }
+td{ padding:6px 8px; border-bottom:1px solid var(--line); }
+td.n, th.n{ text-align:right; }
+tr.mod-old td{ background:#FDECEA; color:var(--red); font-weight:600; }
+tr.mod-new td{ background:#E7F6EC; color:var(--green); font-weight:600; }
+tfoot td{ font-weight:700; background:#EEF3FA; }
+button.link{ background:none; border:0; color:var(--blue2); font:inherit; cursor:pointer; padding:0; text-decoration:underline; }
+.acciones{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+.acciones button{ font:inherit; font-size:13px; border:1px solid var(--line); background:#fff; border-radius:8px; padding:7px 12px; cursor:pointer; }
+details.tec{ margin-top:12px; font-size:12.5px; color:var(--soft); }
+details.tec summary{ cursor:pointer; color:var(--blue2); font-weight:600; }
+details.tec code{ word-break:break-all; font-size:11.5px; }
+details.tec ol{ padding-left:18px; } details.tec a{ color:var(--blue2); }
+.vacio{ color:var(--soft); text-align:center; padding:26px 10px; }
+.error{ color:var(--red); }
+.foot{ text-align:center; font-size:11px; color:#94A3B4; margin:22px 0 10px; }
+@media (max-width:560px){ td, th{ padding:5px 5px; font-size:12px; } }
+@media print{
+  header, .buscar, .ayuda, .acciones, details.tec{ display:none !important; }
+  body{ background:#fff; } main{ padding:0; } .card{ border:0; padding:0; }
+  .version{ break-inside:avoid; }
+  .imprimir-cab{ display:block !important; }
+}
+.imprimir-cab{ display:none; border-bottom:3px solid var(--orange); padding-bottom:8px; margin-bottom:10px; }
+.imprimir-cab h1{ font-family:Poppins,sans-serif; color:var(--blue); font-size:18px; margin:0; }
+</style>
+</head>
+<body>
+<header><div class="in"><a class="marca" href="/">Genesis <span>Traza</span></a><h1>Consulta de trazabilidad</h1></div></header>
+<main>
+  <form class="buscar" id="form">
+    <input id="q" autocomplete="off" placeholder="Código del sello (GT8-20261001-V1-…), ID del reciclador (REC-0044), huella o N° de comprobante">
+    <button type="submit">Consultar</button>
+  </form>
+  <p class="ayuda">El código del sello está en la planilla del día y en cada comprobante. Por privacidad, aquí el reciclador aparece con su ID codificado.</p>
+  <div id="out"></div>
+  <div class="foot">Genesis Traza · Los datos se sellan cada día a las 23:59 (hora Colombia) y su huella se registra en Bitcoin mediante OpenTimestamps.</div>
+</main>
+<script>
+var out = document.getElementById('out');
+function esc(v){ return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c){ return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; }); }
+function kg(v){ return Number(v || 0).toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function plata(v){ return '$ ' + Number(v || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }); }
+var MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function fechaTxt(ymd){ var p = String(ymd).split('-'); return Number(p[2]) + ' de ' + MESES[Number(p[1]) - 1] + ' de ' + p[0]; } // sin new Date: evita el corrimiento de un dia
+function horaTxt(iso){ return new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' }); }
+var CAMPO = { cantidad: 'Cantidad (kg)', valor: 'Valor/kg', rechazo: 'Rechazo (kg)', nosui: 'No SUI (kg)', eca: 'ECA', macrorruta: 'Macrorruta' };
+
+function estado(tipo, titulo, detalle){
+  var ic = tipo === 'ok' ? '✓' : tipo === 'bad' ? '✕' : '…';
+  return '<div class="estado ' + tipo + '"><span class="ic">' + ic + '</span><div><b>' + titulo + '</b>' + detalle + '</div></div>';
+}
+function bloqueBitcoin(v){
+  var b = v.verificacion.bitcoin;
+  if(!b) return estado('wait', 'Pendiente de registro en Bitcoin', 'Se registra en la madrugada siguiente al sello.');
+  if(b.estado === 'confirmado') return estado('ok', 'Registrado en Bitcoin', 'Bloque ' + Number(b.bloque).toLocaleString('es-CO') + '. Nadie, ni Genesis Traza, puede modificarlo.');
+  return estado('wait', 'En proceso de registro en Bitcoin', 'Enviado a OpenTimestamps; Bitcoin lo confirma en unas horas.');
+}
+function bloqueIntegridad(v, esActual){
+  var x = v.verificacion;
+  if(x.integro && x.cadena) return estado('ok', esActual ? 'Datos verificados' : 'Versión original verificada', 'Coinciden exactamente con lo sellado el ' + esc(horaTxt(v.creado)));
+  return estado('bad', 'Los datos no coinciden con su huella', 'Esta versión fue alterada fuera del sistema.');
+}
+function detalleTecnico(v){
+  var x = v.verificacion, b = x.bitcoin;
+  return '<details class="tec"><summary>Ver detalle técnico</summary>' +
+    '<p>Huella: <code>' + esc(x.huella) + '</code></p><ol>' +
+    '<li><a href="/comprobantes/sello-dia/' + encodeURIComponent(v.codigo) + '/prueba.json">Descargar la prueba completa (JSON)</a></li>' +
+    (b && b.ots ? '<li>Descargar <a href="' + b.txt + '">sello del día (.txt)</a> y <a href="' + b.ots + '">prueba OpenTimestamps (.ots)</a> y arrastrarlos a <a href="https://opentimestamps.org" target="_blank" rel="noopener">opentimestamps.org</a>.</li>' : '') +
+    (b && b.bloque ? '<li>Ver el <a href="https://blockstream.info/block-height/' + Number(b.bloque) + '" target="_blank" rel="noopener">bloque ' + Number(b.bloque) + ' en un explorador de Bitcoin</a>.</li>' : '') +
+    '</ol></details>';
+}
+
+// Claves de filas que cambiaron entre versiones, para marcarlas en rojo (antes) o verde (despues).
+function clavesCambiadas(cambios){
+  var s = {};
+  (cambios || []).forEach(function(c){ s[c.reciclador + '|' + c.material] = c.tipo; });
+  return s;
+}
+function tablaFilas(filas, marcar, clase, filtroRec){
+  var lista = filtroRec ? filas.filter(function(f){ return f.reciclador === filtroRec; }) : filas;
+  if(!lista.length) return '<p class="vacio">Sin registros' + (filtroRec ? ' de ' + esc(filtroRec) : '') + ' en esta versión.</p>';
+  var tot = { c: 0, r: 0 };
+  var body = lista.map(function(f){
+    tot.c += Number(f.cantidad || 0); tot.r += Number(f.rechazo || 0);
+    var cls = marcar[f.reciclador + '|' + f.material] ? clase : '';
+    return '<tr class="' + cls + '"><td>' + (filtroRec ? esc(f.reciclador) : '<button type="button" class="link" data-rec="' + esc(f.reciclador) + '">' + esc(f.reciclador) + '</button>') + '</td><td>' + esc(f.material) + '</td><td class="n">' + kg(f.cantidad) + '</td><td class="n">' + kg(f.rechazo) + '</td><td class="n">' + plata(f.valor) + '</td></tr>';
+  }).join('');
+  return '<table><thead><tr><th>Reciclador</th><th>Material</th><th class="n">Kg</th><th class="n">Rechazo</th><th class="n">Valor/kg</th></tr></thead><tbody>' + body +
+    '</tbody><tfoot><tr><td colspan="2">Total</td><td class="n">' + kg(tot.c) + '</td><td class="n">' + kg(tot.r) + '</td><td></td></tr></tfoot></table>';
+}
+function listaCambios(cambios){
+  return '<ul class="cambios">' + (cambios || []).map(function(c){
+    if(c.tipo === 'agregado') return '<li><b>' + esc(c.reciclador) + ' · ' + esc(c.material) + ':</b> registro agregado (' + kg(c.despues.cantidad) + ' kg).</li>';
+    if(c.tipo === 'eliminado') return '<li><b>' + esc(c.reciclador) + ' · ' + esc(c.material) + ':</b> registro eliminado (tenía ' + kg(c.antes.cantidad) + ' kg).</li>';
+    return '<li><b>' + esc(c.reciclador) + ' · ' + esc(c.material) + ':</b> ' + c.campos.map(function(x){
+      var num = ['cantidad','rechazo','nosui','valor'].indexOf(x.campo) >= 0;
+      return esc(CAMPO[x.campo] || x.campo) + ' de <span style="color:var(--red)">' + (num ? kg(x.antes) : esc(x.antes)) + '</span> a <span style="color:var(--green)">' + (num ? kg(x.despues) : esc(x.despues)) + '</span>';
+    }).join(', ') + '.</li>';
+  }).join('') + '</ul>';
+}
+
+function renderDia(d, filtroRec){
+  var n = d.versiones.length, actual = d.versiones[n - 1];
+  var html = '<div class="card"><div class="imprimir-cab"><h1>Certificado de trazabilidad</h1><div>Consulta del ' + esc(horaTxt(new Date().toISOString())) + '</div></div>' +
+    '<div class="titulo"><div><h2>' + esc(d.centro || 'Asociación') + '</h2><div class="sub">Día transaccional: <b>' + fechaTxt(d.fecha) + '</b>' + (filtroRec ? ' · Reciclador <b>' + esc(filtroRec) + '</b>' : '') + '</div></div>' +
+    '<div class="sub">' + (n > 1 ? n + ' versiones' : '1 versión') + '</div></div>';
+  if(n > 1) html += estado('wait', 'Este día fue corregido después de sellado', 'La versión anterior se conserva en rojo; la actual, en verde. Ninguna se puede borrar.');
+  // Actual primero (verde) y luego las antiguas (rojo), de la mas reciente a la mas vieja.
+  for(var i = n - 1; i >= 0; i--){
+    var v = d.versiones[i], esActual = i === n - 1;
+    var marcarAqui = clavesCambiadas(esActual ? v.cambios : (d.versiones[i + 1] || {}).cambios);
+    html += '<div class="version ' + (n > 1 ? (esActual ? 'actual' : 'antigua') : 'actual') + '">' +
+      '<div class="vhead"><span class="etq">' + (esActual ? 'Versión actual' : 'Versión antigua (reemplazada)') + ' · V' + v.version + '</span><span class="cod">Código ' + esc(v.codigo) + ' · sellado el ' + esc(horaTxt(v.creado)) + '</span></div>' +
+      bloqueIntegridad(v, esActual) + bloqueBitcoin(v) +
+      (v.version > 1 ? '<div class="motivo"><b>Motivo del cambio:</b> ' + esc(v.motivo) + listaCambios(v.cambios) + '</div>' : '') +
+      tablaFilas(v.filas, marcarAqui, esActual ? 'mod-new' : 'mod-old', filtroRec) +
+      detalleTecnico(v) + '</div>';
+  }
+  html += '<div class="acciones"><button type="button" onclick="window.print()">Imprimir certificado</button>' + (filtroRec ? '<button type="button" data-dia-completo="1">Ver el día completo de la asociación</button>' : '') + '</div></div>';
+  out.innerHTML = html;
+}
+
+function renderReciclador(r){
+  var cambiados = r.dias.filter(function(d){ return d.cambiado; }).length;
+  var html = '<div class="card"><div class="imprimir-cab"><h1>Certificado de trazabilidad del reciclador</h1></div>' +
+    '<div class="titulo"><div><h2>Reciclador ' + esc(r.reciclador) + '</h2><div class="sub">' + esc(r.dias[0].centro || '') + ' · ' + r.dias.length + ' días sellados</div></div></div>' +
+    (cambiados ? estado('wait', cambiados + (cambiados === 1 ? ' día tuvo correcciones' : ' días tuvieron correcciones') + ' después de sellados', 'Están marcados abajo; al abrirlos se ven la versión antigua y la actual.') : estado('ok', 'Sin correcciones', 'Todos sus días coinciden con lo sellado originalmente.')) +
+    '<table><thead><tr><th>Día</th><th>Materiales</th><th class="n">Kg</th><th class="n">Rechazo</th><th>Estado</th></tr></thead><tbody>' +
+    r.dias.map(function(d){
+      var b = d.verificacion.bitcoin;
+      var est = !d.verificacion.integro ? '<span style="color:var(--red)">✕ Alterado</span>' : d.cambiado ? '<span style="color:var(--amber)">⚠ Corregido</span>' : (b && b.estado === 'confirmado' ? '<span style="color:var(--green)">✓ En Bitcoin</span>' : '<span style="color:var(--amber)">✓ Sellado</span>');
+      return '<tr' + (d.cambiado ? ' class="mod-old"' : '') + '><td><button type="button" class="link" data-codigo="' + esc(d.codigo) + '" data-rec="' + esc(r.reciclador) + '">' + fechaTxt(d.fecha) + '</button></td><td>' + esc(d.filas.map(function(f){ return f.material; }).join(', ')) + '</td><td class="n">' + kg(d.cantidad) + '</td><td class="n">' + kg(d.rechazo) + '</td><td>' + est + '</td></tr>';
+    }).join('') + '</tbody></table>' +
+    '<div class="acciones"><button type="button" onclick="window.print()">Imprimir certificado</button></div></div>';
+  out.innerHTML = html;
+}
+
+var ultimo = null;
+function consultar(q, filtroRec){
+  q = String(q || '').trim();
+  if(!q){ out.innerHTML = ''; return; }
+  document.getElementById('q').value = q;
+  out.innerHTML = '<div class="card vacio">Consultando…</div>';
+  history.replaceState(null, '', '?q=' + encodeURIComponent(q) + (filtroRec ? '&rec=' + encodeURIComponent(filtroRec) : ''));
+  fetch('/comprobantes/consulta?q=' + encodeURIComponent(q)).then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+    .then(function(res){
+      if(!res.ok){ out.innerHTML = '<div class="card vacio error">' + esc(res.d.error || 'No se encontró.') + '</div>'; return; }
+      ultimo = res.d;
+      if(res.d.tipo === 'comprobante'){ window.location.href = res.d.url; return; }
+      if(res.d.tipo === 'reciclador') renderReciclador(res.d); else renderDia(res.d, filtroRec);
+    })
+    .catch(function(){ out.innerHTML = '<div class="card vacio error">No se pudo consultar. Revisa tu conexión.</div>'; });
+}
+
+document.getElementById('form').addEventListener('submit', function(e){ e.preventDefault(); consultar(document.getElementById('q').value); });
+out.addEventListener('click', function(e){
+  var t = e.target.closest('button'); if(!t) return;
+  if(t.getAttribute('data-codigo')) consultar(t.getAttribute('data-codigo'), t.getAttribute('data-rec'));
+  else if(t.getAttribute('data-rec')) consultar(t.getAttribute('data-rec'));
+  else if(t.getAttribute('data-dia-completo') && ultimo) renderDia(ultimo, null);
+});
+var p = new URLSearchParams(location.search);
+if(p.get('q')) consultar(p.get('q'), p.get('rec'));
+</script>
+</body>
+</html>
