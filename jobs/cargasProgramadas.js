@@ -66,7 +66,7 @@ async function aplicarSimulaciones() {
     // La carga queda 'en_curso' mientras le falten filas, y 'ejecutada' cuando termina.
     const pend = (await pool.query("SELECT count(*)::int n FROM tz_cargas_filas WHERE id_carga = $1 AND estado IN ('pendiente', 'aplicando')", [fila.id_carga])).rows[0].n;
     const tot = (await pool.query("SELECT count(*) FILTER (WHERE estado = 'aplicada')::int insertadas, count(*) FILTER (WHERE estado = 'omitida')::int omitidas FROM tz_cargas_filas WHERE id_carga = $1", [fila.id_carga])).rows[0];
-    await pool.query(`UPDATE tz_cargas_programadas SET estado = $1, resultado = $2, ejecutada_en = CASE WHEN $1 = 'ejecutada' THEN NOW() ELSE ejecutada_en END
+    await pool.query(`UPDATE tz_cargas_programadas SET estado = $1::varchar, resultado = $2, ejecutada_en = CASE WHEN $1::varchar = 'ejecutada' THEN NOW() ELSE ejecutada_en END
                       WHERE id = $3 AND estado IN ('programada', 'en_curso')`, [pend ? 'en_curso' : 'ejecutada', JSON.stringify(tot), fila.id_carga]);
     console.log(`[simulacion] carga #${fila.id_carga} fila ${fila.id}: ${r.aplicada ? 'aplicada' : 'omitida'}`);
   }
