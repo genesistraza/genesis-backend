@@ -977,3 +977,17 @@ CREATE TABLE IF NOT EXISTS tz_cargas_programadas (
   resultado JSONB
 );
 CREATE INDEX IF NOT EXISTS tz_cargas_programadas_pend_idx ON tz_cargas_programadas (estado, programada_para);
+
+-- Compras anexadas: cuando un reciclador vuelve el mismo dia, lo nuevo se SUMA a su registro del dia
+-- (cantidad, rechazo y no SUI; valor/kg queda como promedio ponderado). Aqui queda cada compra
+-- anexada por separado, con su hora, para poder reconstruir el detalle.
+CREATE TABLE IF NOT EXISTS tz_balance_anexos (
+  id BIGSERIAL PRIMARY KEY,
+  id_centro INT NOT NULL,
+  id_reciclador INT NOT NULL,
+  fecha DATE NOT NULL,
+  materiales JSONB NOT NULL,
+  user_id INT,
+  creado TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS tz_balance_anexos_idx ON tz_balance_anexos (id_reciclador, fecha);

@@ -154,6 +154,7 @@
       <input type="date" id="bmFecha" title="Fecha" onchange="onBmFechaChange()">
       <button type="button" class="bm-ic" title="Guardar el día" onclick="saveBmDia()"><svg viewBox="0 0 24 24"><path d="M4 3h13l3 3v15H4z M7 3v5h9V3 M7 13h10v8H7z" fill-rule="evenodd"/></svg></button>
       <button type="button" class="bm-ic" title="Borrar el día de este reciclador" onclick="deleteBmDia()"><svg viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4z M6 8h12l-1 13H7z"/></svg></button>
+      <button type="button" class="btn" id="bmAnexoBtn" style="display:none;font-size:11.5px;padding:4px 10px;" title="El reciclador volvió hoy con más material: lo nuevo se suma a lo ya registrado" onclick="iniciarAnexo()">+ Anexar otra compra</button>
       <span class="bm-sep"></span>
       <div class="bm-print-item no-print" id="bmPrintItem">
         <button type="button" class="bm-ic" title="Imprimir comprobante" onclick="toggleBmPrintMenu(event)"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7z M4 8h16a1 1 0 0 1 1 1v8h-4v4H7v-4H3V9a1 1 0 0 1 1-1z M9 15h6v4H9z" fill-rule="evenodd"/></svg></button>
@@ -197,6 +198,10 @@
       <label>Microruta 2</label><select id="bmMicrorruta2" disabled><option value="">— Seleccionar —</option></select>
     </div>
 
+    <div id="bmAnexoAviso" class="no-print" style="display:none;margin:6px 0;padding:8px 12px;border-radius:8px;background:#FFF5E3;border:1px solid #F2C46D;color:#6B4A06;font-size:12.5px;">
+      <b>Anexando otra compra</b> de <span id="bmAnexoNombre"></span>: lo que escribas abajo <b>se SUMA</b> a lo ya registrado hoy (<span id="bmAnexoPrevio"></span> kg). Guarda con el botón de guardar.
+      <button type="button" class="btn" style="font-size:11px;padding:3px 8px;margin-left:8px;" onclick="cancelarAnexo()">Cancelar</button>
+    </div>
     <div class="bm-gridwrap">
       <table class="bm-grid">
         <thead>
@@ -244,6 +249,7 @@
         <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv">
         <label>Aplicar el <input type="datetime-local" id="cargaCuando"></label>
         <button type="button" class="btn btn-primary" onclick="programarCarga()">Validar y programar</button>
+        <button type="button" class="btn" onclick="downloadPruebasTemplate()">Descargar formato</button>
       </div>
       <p id="cargaMsg" style="margin:6px 0 0;"></p>
       <div id="cargasLista" style="margin-top:8px;"></div>
@@ -1058,6 +1064,7 @@
       var rows = res.ok ? res.data : [];
       rows.forEach(function(row){ bmExistingByMaterial[row.id_tipo_material] = row; });
       bmValuesFromExisting();
+      salirDeAnexo();
       // Los selectores del encabezado son del dia completo: se restauran desde la primera fila guardada.
       var first = rows[0] || {};
       document.getElementById('bmBodega').value = first.id_bodega || '';
@@ -1150,8 +1157,69 @@
     });
   }
 
+  // ---- Anexar otra compra: el reciclador volvio el mismo dia y lo nuevo se suma a lo registrado ----
+  var bmAnexo = false;
+  function salirDeAnexo(){
+    bmAnexo = false;
+    document.getElementById('bmAnexoAviso').style.display = 'none';
+    var hay = bmSelectedReciclador && Object.keys(bmExistingByMaterial).length > 0;
+    document.getElementById('bmAnexoBtn').style.display = hay ? '' : 'none';
+  }
+  function iniciarAnexo(){
+    if(!bmSelectedReciclador || !Object.keys(bmExistingByMaterial).length) return;
+    if(bmDirty && !confirm('Hay cambios sin guardar en la compra actual. Si anexas otra compra se descartan. ¿Continuar?')) return;
+    var previo = 0;
+    Object.keys(bmExistingByMaterial).forEach(function(id){ previo += Number(bmExistingByMaterial[id].cantidad) || 0; });
+    bmAnexo = true;
+    bmValues = {};
+    bmDirty = false;
+    document.getElementById('bmAnexoNombre').textContent = bmSelectedReciclador.nombre_completo;
+    document.getElementById('bmAnexoPrevio').textContent = fmtNum(previo);
+    document.getElementById('bmAnexoAviso').style.display = '';
+    document.getElementById('bmAnexoBtn').style.display = 'none';
+    renderBmGrid();
+  }
+  function cancelarAnexo(){
+    if(bmDirty && !confirm('¿Descartar la compra que estabas anexando?')) return;
+    bmValuesFromExisting();
+    bmDirty = false;
+    salirDeAnexo();
+    renderBmGrid();
+  }
+  function guardarAnexo(){
+    var msg = document.getElementById('bmSaveMsg');
+    var problems = bmProblems();
+    if(problems.length){ msg.style.color = '#C0392B'; msg.textContent = problems[0]; return; }
+    var materiales = Object.keys(bmValues).map(function(id){
+      var v = bmValues[id];
+      return { id_tipo_material: Number(id), cantidad: bmNum(v.cantidad), valor: bmNum(v.valor), cantidad_rechazo: bmNum(v.cantidad_rechazo), cantidad_nosui: bmNum(v.cantidad_nosui) };
+    }).filter(function(m){ return m.cantidad || m.valor || m.cantidad_rechazo || m.cantidad_nosui; });
+    if(!materiales.length){ msg.style.color = '#C0392B'; msg.textContent = 'Escribe al menos un material de la compra que vas a anexar.'; return; }
+    msg.style.color = 'var(--ink-soft)';
+    msg.textContent = 'Sumando la compra…';
+    gtApiFetch('/trazabilidad/balance-masas-dia/anexar', {
+      method: 'POST',
+      body: JSON.stringify({
+        id_centro: bmSelectedReciclador.id_centro, id_reciclador: bmSelectedReciclador.id,
+        id_bodega: document.getElementById('bmBodega').value || null,
+        id_macrorruta: document.getElementById('bmMacrorruta').value || null,
+        id_microrruta_1: document.getElementById('bmMicrorruta1').value || null,
+        id_microrruta_2: document.getElementById('bmMicrorruta2').value || null,
+        fecha: document.getElementById('bmFecha').value,
+        materiales: materiales
+      })
+    }).then(function(res){
+      if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo anexar.'; return; }
+      msg.style.color = 'var(--green)';
+      msg.textContent = 'Compra anexada: se sumaron ' + fmtNum(res.data.kg) + ' kg a lo registrado hoy.';
+      bmDirty = false;
+      loadBmDia();
+    });
+  }
+
   function saveBmDia(){
     if(!bmSelectedReciclador) return;
+    if(bmAnexo) return guardarAnexo();
     var msg = document.getElementById('bmSaveMsg');
     var problems = bmProblems();
     if(problems.length){
@@ -1292,6 +1360,7 @@
   function crearYImprimirComprobante(formato){
     document.getElementById('bmPrintItem').classList.remove('open');
     if(!bmSelectedReciclador){ alert('Busca y selecciona un reciclador primero.'); return; }
+    if(bmAnexo){ alert('Primero guarda (o cancela) la compra que estás anexando; el comprobante muestra el total del día.'); return; }
     var problemas = bmProblems();
     if(problemas.length){ alert('Corrige esto antes de imprimir:\n' + problemas.slice(0, 5).join('\n')); return; }
     if(bmDirty && !confirm('Hay cantidades sin guardar. El comprobante y su QR solo pueden mostrar lo que YA está guardado. ¿Guardar ahora y continuar?')){ return; }

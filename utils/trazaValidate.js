@@ -161,7 +161,10 @@ const UNIQUE_RULES = {
   macrorrutas: { cols: ['id_centro', 'cod_macrorruta'], msg: 'Ya existe una macrorruta con ese código en este centro.' },
   numacros: { cols: ['id_centro', 'cod_numacro'], msg: 'Ya existe una zona con ese código en este centro.' },
   usuarios: { cols: ['id_centro', 'nuis_nuid'], msg: 'Ya existe un usuario con ese NUIS/NUID en este centro.' },
-  areas_prestacion: { cols: ['id_centro', 'nombre_area'], msg: 'Ya existe un área de prestación con ese nombre en este centro.' }
+  areas_prestacion: { cols: ['id_centro', 'nombre_area'], msg: 'Ya existe un área de prestación con ese nombre en este centro.' },
+  // Un material una sola vez por reciclador y dia (igual que la grilla diaria): evita que una
+  // importacion o carga masiva duplique lo que ya estaba registrado.
+  balance_masas: { cols: ['id_centro', 'id_reciclador', 'fecha', 'id_tipo_material'], msg: 'Ese reciclador ya tiene ese material registrado ese día.' }
 };
 
 // ---- Pertenencia al mismo centro / existencia de lo referenciado ----

@@ -23,26 +23,35 @@ async function datosDelDia(q, idCentro, fecha) {
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
      LEFT JOIN tz_macrorrutas m ON m.id = bm.id_macrorruta
-     WHERE bm.id_centro = $1 AND bm.fecha = $2`, [idCentro, fecha]);
+     WHERE bm.id_centro = $1 AND bm.fecha = $2 ORDER BY bm.id`, [idCentro, fecha]);
   const filas = r.rows.map((x) => ({
     reciclador: codReciclador(x.id_reciclador), material_codigo: x.mat_cod == null ? null : String(x.mat_cod), material: x.mat,
     cantidad: x.cantidad, valor: x.valor, rechazo: x.rechazo, nosui: x.nosui, eca: x.eca, macrorruta: x.macrorruta,
     // Hora (Colombia) en que el dato entro al sistema y su ultima modificacion. El origen (manual,
     // Excel o carga programada) queda solo en la base de datos, no en el sello publico.
     registrado: x.registrado, modificado: x.modificado,
-  })).sort((a, b) => (a.reciclador + '|' + a.material).localeCompare(b.reciclador + '|' + b.material));
+  })).sort((a, b) => (a.reciclador + '|' + a.material).localeCompare(b.reciclador + '|' + b.material) || huella.canonico(a).localeCompare(huella.canonico(b)));
   return { filas };
 }
 
 const claveFila = (f) => f.reciclador + '|' + (f.material_codigo || f.material);
+// Proyeccion de negocio de una fila y llaves unicas aun con filas repetidas (mismo reciclador y
+// material dos veces el mismo dia): se ordenan por contenido y se numeran (#1, #2...).
+const proyectar = (f) => Object.fromEntries(CAMPOS_BASE.map((c) => [c, f[c] === undefined ? null : f[c]]));
+function conLlaves(filas) {
+  const orden = filas.map((f) => ({ f, k: claveFila(f), c: huella.canonico(proyectar(f)) })).sort((a, b) => a.k.localeCompare(b.k) || a.c.localeCompare(b.c));
+  const vistos = {};
+  return orden.map((x) => { vistos[x.k] = (vistos[x.k] || 0) + 1; return { llave: x.k + '#' + vistos[x.k], f: x.f, c: x.c }; });
+}
 const CAMPOS = ['cantidad', 'valor', 'rechazo', 'nosui', 'eca', 'macrorruta'];
+const CAMPOS_BASE = CAMPOS;
 // Contenido de negocio de las filas (sin horas ni origen): es lo que decide si el dia cambio. Asi
 // los dias sellados antes de existir las horas no generan versiones nuevas solo por agregarlas.
-const negocio = (filas) => huella.canonico(filas.map((f) => ({ k: claveFila(f), ...Object.fromEntries(CAMPOS.map((c) => [c, f[c] === undefined ? null : f[c]])) })));
+const negocio = (filas) => huella.canonico(conLlaves(filas).map((x) => x.llave + '=' + x.c));
 
 // Diferencias entre dos versiones del mismo dia, fila por fila.
 function diferencias(antes, despues) {
-  const A = new Map(antes.map((f) => [claveFila(f), f])), B = new Map(despues.map((f) => [claveFila(f), f]));
+  const A = new Map(conLlaves(antes).map((x) => [x.llave, x.f])), B = new Map(conLlaves(despues).map((x) => [x.llave, x.f]));
   const out = [];
   for (const [k, f] of B) {
     const a = A.get(k);

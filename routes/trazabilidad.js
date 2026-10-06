@@ -626,6 +626,7 @@ router.get('/:entity/template', guard(async (req, res) => {
   const headers = entity.fields.map((f) => f.label);
   const exampleRow = {};
   const instructions = [['Columna', 'Obligatorio', 'Tipo de dato', 'Formato / valores permitidos']];
+  const listas = []; // hojas extra con la lista completa de cada campo que se refiere a otro modulo
 
   for (const f of entity.fields) {
     let formato = '';
@@ -648,11 +649,18 @@ router.get('/:entity/template', guard(async (req, res) => {
     } else if (f.type === 'select-entity') {
       const refEntity = getEntity(f.entity);
       const labelCol = f.labelField === 'id' ? 'id::text' : f.labelField;
-      const sample = await pool.query(`SELECT ${labelCol} AS label FROM ${refEntity.table} ORDER BY 1 LIMIT 5`);
-      const nombres = sample.rows.map((r) => r.label).filter(Boolean);
-      formato = 'Escribe el nombre exacto de "' + refEntity.label + '" (como aparece en ese módulo), o su número de ID.' +
-        (nombres.length ? ' Ejemplos ya cargados: ' + nombres.join(', ') + '.' : '');
-      ejemplo = nombres[0] || '';
+      // Lista completa en su propia hoja: ID, codigo (si el modulo tiene) y nombre, con la asociacion.
+      const cols = (await pool.query(`SELECT * FROM ${refEntity.table} LIMIT 0`)).fields.map((x) => x.name);
+      const codCol = cols.find((c) => c.startsWith('cod_') && c !== f.labelField);
+      const conCentro = cols.includes('id_centro');
+      const lista = (await pool.query(
+        `SELECT t.id, ${labelCol.replace(/^id::text$/, 't.id::text')} AS nombre${codCol ? ', t.' + codCol + '::text AS codigo' : ''}${conCentro ? ', c.desc_centro AS centro' : ''}
+         FROM ${refEntity.table} t ${conCentro ? 'LEFT JOIN tz_centros c ON c.id = t.id_centro' : ''} ORDER BY ${conCentro ? 'c.desc_centro, ' : ''}2 LIMIT 20000`)).rows;
+      const hoja = refEntity.label.replace(/[\/?*[]:]/g, ' ').slice(0, 28);
+      listas.push({ hoja, filas: lista.map((r) => ({ ID: r.id, ...(codCol ? { 'Código': r.codigo } : {}), Nombre: r.nombre, ...(conCentro ? { 'Asociación': r.centro } : {}) })) });
+      formato = 'Escribe el ID (número) o el nombre exacto. Lista completa en la hoja "' + hoja + '" (' + lista.length + ' registros).' +
+        (conCentro ? ' Debe pertenecer a la misma asociación de la columna Centro.' : '');
+      ejemplo = lista[0] ? lista[0].nombre : '';
     } else if (f.type === 'select-catalogo') {
       const options = await pool.query(
         'SELECT descripcion FROM tz_catalogos WHERE categoria = $1 ORDER BY orden, descripcion',
@@ -674,6 +682,14 @@ router.get('/:entity/template', guard(async (req, res) => {
   const wsInstrucciones = XLSX.utils.aoa_to_sheet(instructions);
   wsInstrucciones['!cols'] = [{ wch: 26 }, { wch: 12 }, { wch: 16 }, { wch: 80 }];
   XLSX.utils.book_append_sheet(wb, wsInstrucciones, 'Instrucciones');
+  const usadas = new Set(['Plantilla', 'Instrucciones']);
+  for (const l of listas) {
+    if (usadas.has(l.hoja)) continue;
+    usadas.add(l.hoja);
+    const ws = XLSX.utils.json_to_sheet(l.filas.length ? l.filas : [{ ID: '', Nombre: '(sin registros)' }]);
+    ws['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 40 }, { wch: 36 }];
+    XLSX.utils.book_append_sheet(wb, ws, l.hoja);
+  }
 
   const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -854,6 +870,63 @@ router.post('/balance-masas-dia', guard(async (req, res) => {
   } finally {
     client.release();
   }
+}));
+
+// POST /trazabilidad/balance-masas-dia/anexar -> el reciclador volvio el mismo dia con otra compra:
+// lo que llega se SUMA a lo ya registrado (cantidad, rechazo y no SUI). El valor/kg queda como
+// promedio ponderado para que el total en pesos sea exacto. Solo si ya tenia registro ese dia.
+router.post('/balance-masas-dia/anexar', guard(async (req, res) => {
+  const v = await validateBalanceDia(req.body);
+  if (v.errors.length) return sendValidationErrors(res, v.errors);
+  const { idCentro, idReciclador, fecha, opcionales, filas } = v.data;
+  if (!filas.length) return res.status(400).json({ error: 'Escribe al menos un material de la compra que vas a anexar.' });
+  const existentes = (await pool.query(
+    'SELECT * FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2 ORDER BY id', [idReciclador, fecha])).rows;
+  if (!existentes.length) return res.status(409).json({ error: 'Este reciclador no tiene compra registrada ese día. Usa Guardar para registrar la primera.' });
+  const anotar = await exigirMotivoSellado(req, res, [{ idCentro, fecha }]);
+  if (!anotar) return;
+
+  const porMaterial = new Map();
+  for (const e of existentes) if (!porMaterial.has(e.id_tipo_material)) porMaterial.set(e.id_tipo_material, e);
+  const base = existentes[0];
+  const sel = (k) => (opcionales[k] !== null && opcionales[k] !== undefined ? opcionales[k] : base[k]);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  let kgSumados = 0;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const m of filas) {
+      kgSumados += m.cantidad;
+      const e = porMaterial.get(m.id_tipo_material);
+      if (!e) {
+        await client.query(
+          `INSERT INTO tz_formulario_balance_masas
+           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual')`,
+          [idCentro, idReciclador, m.id_tipo_material, sel('id_numacro'), sel('id_bodega'), sel('id_macrorruta'), sel('id_microrruta_1'), sel('id_microrruta_2'),
+            fecha, m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id]);
+        continue;
+      }
+      const q0 = Number(e.cantidad), v0 = Number(e.valor);
+      const q = q0 + m.cantidad;
+      const valor = q > 0 ? r2((q0 * v0 + m.cantidad * m.valor) / q) : v0;
+      await client.query(
+        `UPDATE tz_formulario_balance_masas SET cantidad = $1, valor = $2, cantidad_rechazo = cantidad_rechazo + $3, cantidad_nosui = cantidad_nosui + $4,
+           modificado_en = NOW(), modificado_por = $5 WHERE id = $6`,
+        [q, valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id]);
+    }
+    await client.query('INSERT INTO tz_balance_anexos (id_centro, id_reciclador, fecha, materiales, user_id) VALUES ($1,$2,$3,$4,$5)',
+      [idCentro, idReciclador, fecha, JSON.stringify(filas), req.user.id]);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+  await anotar('balance_compra_anexada');
+  await logActivity(req.user.id, 'pruebas_balance_compra_anexada', { id_reciclador: idReciclador, fecha, materiales: filas.length, kg: kgSumados }, req.ip);
+  res.json({ message: 'Compra anexada.', materiales: filas.length, kg: kgSumados });
 }));
 
 // GET /trazabilidad/balance-masas-export?desde=&hasta=&id_centro= -> todas las filas de balance
