@@ -185,6 +185,15 @@
         <button type="button" class="btn" onclick="descargarPlanillasZip()">Descargar todas (.zip)</button>
         <span class="pruebas-msg" id="bmPlanillaMsg"></span>
       </div>
+      <div class="bm-rep-row" style="flex-wrap:wrap;">
+        <strong>Carga masiva</strong>
+        <button type="button" class="btn" onclick="downloadBmFormato()">Descargar formato</button>
+        <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv" style="max-width:210px;">
+        <span class="sep">Aplicar el</span><input type="datetime-local" id="cargaCuando">
+        <button type="button" class="btn" onclick="programarCarga()">Validar y programar</button>
+        <span class="pruebas-msg" id="cargaMsg"></span>
+      </div>
+      <div id="cargasLista" style="margin-top:4px;font-size:12px;"></div>
     </div>
 
     <div class="bm-form">
@@ -238,22 +247,10 @@
       <button type="button" class="btn" id="pruebasImportBtn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
       <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
       <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
-      <button type="button" class="btn" id="pruebasProgramarBtn" style="display:none;" onclick="toggleCargasPanel()">Programar carga</button>
       <button type="button" class="btn" onclick="exportPruebasExcel()">Exportar Excel</button>
       <button type="button" class="btn" onclick="exportPruebasCsv()">Exportar CSV</button>
     </div>
     <p class="pruebas-msg no-print" id="pruebasImportMsg"></p>
-    <div id="cargasPanel" class="no-print" style="display:none;border:1px solid var(--line,#DCE3EA);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#FBFCFE;font-size:12.5px;">
-      <b>Carga masiva programada</b> <span style="color:#5B6B7C;">· el archivo se valida ahora y se aplica solo a la hora elegida.</span>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
-        <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv">
-        <label>Aplicar el <input type="datetime-local" id="cargaCuando"></label>
-        <button type="button" class="btn btn-primary" onclick="programarCarga()">Validar y programar</button>
-        <button type="button" class="btn" onclick="downloadPruebasTemplate()">Descargar formato</button>
-      </div>
-      <p id="cargaMsg" style="margin:6px 0 0;"></p>
-      <div id="cargasLista" style="margin-top:8px;"></div>
-    </div>
     <div class="table-scroll">
       <table class="data-table">
         <thead id="pruebasTableHead"></thead>
@@ -471,8 +468,6 @@
     var isCentrosAsCliente = pruebasCurrentEntity === 'centros' && pruebasVista === 'asociacion';
     document.getElementById('pruebasNewBtn').style.display = isCentrosAsCliente ? 'none' : '';
     document.getElementById('pruebasImportBtn').style.display = isCentrosAsCliente ? 'none' : '';
-    document.getElementById('pruebasProgramarBtn').style.display = pruebasCurrentEntity === 'balance_masas' ? '' : 'none';
-    if(pruebasCurrentEntity !== 'balance_masas') document.getElementById('cargasPanel').style.display = 'none';
 
     // En Vista Asociación el filtro por centro lo hace el servidor (el LIMIT de 500 se aplica después
     // de filtrar, así los datos de la asociación nunca quedan tapados por los de otras).
@@ -633,11 +628,17 @@
   }
 
   // ---- Cargas masivas programadas (balance de masas) ----
-  function toggleCargasPanel(){
-    var p = document.getElementById('cargasPanel');
-    var abrir = p.style.display === 'none';
-    p.style.display = abrir ? '' : 'none';
-    if(abrir) cargarListaCargas();
+  // Formato del cargue masivo de balance de masas (plantilla + instrucciones + listas de codigos).
+  function downloadBmFormato(){
+    var msg = document.getElementById('cargaMsg');
+    msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Generando formato…';
+    fetch(API_BASE + '/trazabilidad/balance_masas/template', { headers: { 'Authorization': 'Bearer ' + gtGetToken() } })
+      .then(function(r){ if(!r.ok) throw new Error(); return r.blob(); })
+      .then(function(blob){
+        var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'formato_balance_masas.xlsx';
+        document.body.appendChild(a); a.click(); a.remove(); msg.textContent = '';
+      })
+      .catch(function(){ msg.style.color = '#C0392B'; msg.textContent = 'No se pudo generar el formato.'; });
   }
   function fechaHoraCO(iso){ return iso ? new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
   function cargarListaCargas(){
@@ -810,6 +811,7 @@
   function toggleBmReportes(){
     var box = document.getElementById('bmReportes');
     box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    if(box.style.display === 'block') cargarListaCargas();
   }
 
   function fmtNum(n){
@@ -846,6 +848,7 @@
     bmExistingByMaterial = {};
     bmValues = {};
     bmDirty = false;
+    salirDeAnexo();
     bmAllRecicladores = null; // se vuelve a pedir cada vez: si se creo un reciclador en otro modulo, debe aparecer
     ['bmNombre', 'bmCedula', 'bmTipoVehiculo', 'bmPlaca'].forEach(function(id){ document.getElementById(id).value = ''; });
     ['bmBodega', 'bmMacrorruta', 'bmMicrorruta1', 'bmMicrorruta2'].forEach(function(id){ document.getElementById(id).innerHTML = '<option value="">— Seleccionar —</option>'; });
@@ -1049,7 +1052,7 @@
 
   function loadBmDia(){
     updateBmFechaTitulo();
-    if(!bmSelectedReciclador){ renderBmGrid(); return; }
+    if(!bmSelectedReciclador){ bmExistingByMaterial = {}; salirDeAnexo(); renderBmGrid(); return; }
     var fecha = document.getElementById('bmFecha').value;
     if(!fecha){ return; }
     bmLastFecha = fecha;
