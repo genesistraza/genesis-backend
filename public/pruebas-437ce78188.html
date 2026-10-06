@@ -239,7 +239,7 @@
     </div>
     <p class="pruebas-msg no-print" id="pruebasImportMsg"></p>
     <div id="cargasPanel" class="no-print" style="display:none;border:1px solid var(--line,#DCE3EA);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#FBFCFE;font-size:12.5px;">
-      <b>Carga masiva programada</b> <span style="color:#5B6B7C;">· el archivo se valida ahora y se aplica solo a la hora elegida. Queda registrado públicamente como carga programada (visible para la SSPD).</span>
+      <b>Carga masiva programada</b> <span style="color:#5B6B7C;">· el archivo se valida ahora y se aplica solo a la hora elegida.</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
         <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv">
         <label>Aplicar el <input type="datetime-local" id="cargaCuando"></label>
@@ -1334,7 +1334,6 @@
           win.document.close();
           return;
         }
-        cbSelloDia = res.data.selloDia || '';
         var builders = { carta: buildComprobanteCarta, media_carta: buildComprobanteMediaCarta, carta_horizontal: buildComprobanteCartaHorizontal, tirilla: buildComprobanteTirilla };
         var html = (builders[formato] || buildComprobanteCarta)(res.data.snapshot, res.data.qrDataUrl, res.data.codigoVerificacion, res.data.url);
         win.document.open();
@@ -1369,13 +1368,8 @@
       ? '<img class="' + cls + '" src="' + cbEsc(centro.logoUrl) + '" alt="">'
       : '<div class="' + cls + ' mono">' + cbEsc(gtAssocInitials(centro.nombre)) + '</div>';
   }
-  // Codigo corto del sello diario de la asociacion para ese dia (se sella a las 23:59).
-  var cbSelloDia = '';
-  function cbSelloTexto(){
-    return cbSelloDia ? '<br><span style="font-size:9px;">Sello del día: <b>' + cbEsc(cbSelloDia) + '</b><br>genesistraza.com/h/' + cbEsc(cbSelloDia) + '</span>' : '';
-  }
   function cbQrBlock(qrDataUrl, codigo, extraClass){
-    return '<div class="qrbox ' + (extraClass || '') + '"><img class="qrimg" src="' + qrDataUrl + '" alt="Código QR de verificación"><div class="qrtext">Escanea para ver este<br>comprobante en tu celular<br><b>' + cbEsc(codigo) + '</b>' + cbSelloTexto() + '</div></div>';
+    return '<div class="qrbox ' + (extraClass || '') + '"><img class="qrimg" src="' + qrDataUrl + '" alt="Código QR de verificación"><div class="qrtext">Escanea para ver este<br>comprobante en tu celular<br><b>' + cbEsc(codigo) + '</b></div></div>';
   }
 
   // ---- Formato Carta (el diseño completo, tamaño oficio de escritorio) ----
@@ -1594,7 +1588,7 @@
       (s.totales.nosui ? '<div class="row"><span>No SUI</span><span>' + cbNum(s.totales.nosui) + ' kg</span></div>' : '') +
       '<div class="row grand"><span>TOTAL</span><span>' + cbMoney(s.totales.valorTotal) + '</span></div>' +
       '</div>' +
-      '<div class="qrbox"><img class="qrimg" src="' + qrDataUrl + '" alt="QR"><div class="qrtext">Escanea para verificar<br><b>' + cbEsc(codigo) + '</b>' + cbSelloTexto() + '</div></div>' +
+      '<div class="qrbox"><img class="qrimg" src="' + qrDataUrl + '" alt="QR"><div class="qrtext">Escanea para verificar<br><b>' + cbEsc(codigo) + '</b></div></div>' +
       '<div class="foot">Genesis Traza - Modulo Pruebas<br>Comprobante de prueba, sin validez como factura.<br>Generado ' + cbEsc(cbGenerado()) + '</div>' +
       '</body></html>';
   }

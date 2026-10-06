@@ -54,13 +54,7 @@ details.tec code{ word-break:break-all; font-size:11.5px; }
 details.tec ol{ padding-left:18px; } details.tec a{ color:var(--blue2); }
 .vacio{ color:var(--soft); text-align:center; padding:26px 10px; }
 .error{ color:var(--red); }
-.origen{ display:inline-block; font-size:10.5px; font-weight:700; border-radius:10px; padding:1px 7px; background:#E6EFFB; color:var(--blue2); border:0; cursor:default; font-family:inherit; }
-button.origen{ cursor:pointer; background:#FFF0DA; color:#8A5200; }
 .hora{ font-size:11.5px; color:var(--soft); white-space:nowrap; }
-.carga{ margin-top:10px; border:1px dashed #E0A100; background:#FFFBF0; border-radius:10px; padding:10px 12px; font-size:13px; }
-.carga code{ word-break:break-all; font-size:11.5px; }
-.enlace{ margin-top:8px; font-size:12.5px; color:var(--soft); }
-.enlace code{ background:#EEF3FA; padding:2px 6px; border-radius:5px; color:var(--blue); }
 .foot{ text-align:center; font-size:11px; color:#94A3B4; margin:22px 0 10px; }
 @media (max-width:560px){ td, th{ padding:5px 5px; font-size:12px; } }
 @media print{
@@ -94,11 +88,8 @@ function fechaTxt(ymd){ var p = String(ymd).split('-'); return Number(p[2]) + ' 
 function horaTxt(iso){ return new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'long', timeStyle: 'short' }); }
 function horaCorta(txt){ if(!txt) return ''; var p = String(txt).split(' '); var d = p[0].split('-'); return Number(d[2]) + ' ' + MESES[Number(d[1]) - 1] + ' ' + (p[1] || ''); }
 function celdaRegistro(f){
-  if(!f.registrado && !f.origen) return '<span class="hora">—</span>';
-  var h = '<span class="hora">' + (f.registrado ? 'Reg. ' + esc(horaCorta(f.registrado)) : '') + (f.modificado ? '<br>Mod. ' + esc(horaCorta(f.modificado)) : '') + '</span>';
-  if(f.origen === 'carga_programada') h += '<br><button type="button" class="origen" data-carga="' + Number(f.carga) + '">Carga programada #' + Number(f.carga) + '</button>';
-  else if(f.origen === 'importacion') h += '<br><span class="origen">Importado (Excel)</span>';
-  return h;
+  if(!f.registrado) return '<span class="hora">—</span>';
+  return '<span class="hora">' + esc(horaCorta(f.registrado)) + (f.modificado ? '<br>Modificado ' + esc(horaCorta(f.modificado)) : '') + '</span>';
 }
 var CAMPO = { cantidad: 'Cantidad (kg)', valor: 'Valor/kg', rechazo: 'Rechazo (kg)', nosui: 'No SUI (kg)', eca: 'ECA', macrorruta: 'Macrorruta' };
 
@@ -142,7 +133,7 @@ function tablaFilas(filas, marcar, clase, filtroRec){
     var cls = marcar[f.reciclador + '|' + f.material] ? clase : '';
     return '<tr class="' + cls + '"><td>' + (filtroRec ? esc(f.reciclador) : '<button type="button" class="link" data-rec="' + esc(f.reciclador) + '">' + esc(f.reciclador) + '</button>') + '</td><td>' + esc(f.material) + '</td><td class="n">' + kg(f.cantidad) + '</td><td class="n">' + kg(f.rechazo) + '</td><td class="n">' + plata(f.valor) + '</td><td>' + celdaRegistro(f) + '</td></tr>';
   }).join('');
-  return '<table><thead><tr><th>Reciclador</th><th>Material</th><th class="n">Kg</th><th class="n">Rechazo</th><th class="n">Valor/kg</th><th>Registro</th></tr></thead><tbody>' + body +
+  return '<table><thead><tr><th>Reciclador</th><th>Material</th><th class="n">Kg</th><th class="n">Rechazo</th><th class="n">Valor/kg</th><th>Registrado en el sistema</th></tr></thead><tbody>' + body +
     '</tbody><tfoot><tr><td colspan="2">Total</td><td class="n">' + kg(tot.c) + '</td><td class="n">' + kg(tot.r) + '</td><td></td><td></td></tr></tfoot></table>';
 }
 function listaCambios(cambios){
@@ -161,10 +152,6 @@ function renderDia(d, filtroRec){
   var html = '<div class="card"><div class="imprimir-cab"><h1>Certificado de trazabilidad</h1><div>Consulta del ' + esc(horaTxt(new Date().toISOString())) + '</div></div>' +
     '<div class="titulo"><div><h2>' + esc(d.centro || 'Asociación') + '</h2><div class="sub">Día transaccional: <b>' + fechaTxt(d.fecha) + '</b>' + (filtroRec ? ' · Reciclador <b>' + esc(filtroRec) + '</b>' : '') + '</div></div>' +
     '<div class="sub">' + (n > 1 ? n + ' versiones' : '1 versión') + '</div></div>';
-  var corto = 'GT' + d.idCentro + '-' + String(d.fecha).replace(/-/g, '');
-  html += '<div class="enlace">Enlace directo a este día: <code>genesistraza.com/h/' + esc(corto) + '</code></div>';
-  var deCarga = actual.filas.filter(function(f){ return f.origen === 'carga_programada'; }).length;
-  if(deCarga) html += estado('wait', 'Parte de estos datos llegó por carga masiva programada', deCarga + ' de ' + actual.filas.length + ' registros se cargaron desde un archivo, a una hora programada. Toque "Carga programada" en la tabla para ver cuándo se subió el archivo y su huella.');
   if(n > 1) html += estado('wait', 'Este día fue corregido después de sellado', 'La versión anterior se conserva en rojo; la actual, en verde. Ninguna se puede borrar.');
   // Actual primero (verde) y luego las antiguas (rojo), de la mas reciente a la mas vieja.
   for(var i = n - 1; i >= 0; i--){
@@ -177,7 +164,7 @@ function renderDia(d, filtroRec){
       tablaFilas(v.filas, marcarAqui, esActual ? 'mod-new' : 'mod-old', filtroRec) +
       detalleTecnico(v) + '</div>';
   }
-  html += '<div class="acciones"><button type="button" onclick="window.print()">Imprimir certificado</button><button type="button" data-descargar="' + esc(actual.codigo) + '">Descargar datos y prueba</button>' + (filtroRec ? '<button type="button" data-dia-completo="1">Ver el día completo de la asociación</button>' : '') + '</div></div>';
+  html += '<div class="acciones"><button type="button" onclick="window.print()">Imprimir certificado</button>' + (filtroRec ? '<button type="button" data-dia-completo="1">Ver el día completo de la asociación</button>' : '') + '</div></div>';
   out.innerHTML = html;
 }
 
@@ -194,24 +181,6 @@ function renderReciclador(r){
     }).join('') + '</tbody></table>' +
     '<div class="acciones"><button type="button" onclick="window.print()">Imprimir certificado</button></div></div>';
   out.innerHTML = html;
-}
-
-// Detalle publico de una carga programada, debajo de la tabla donde se toco.
-function verCarga(boton, id){
-  var caja = boton.closest('.version') || out;
-  var previa = caja.querySelector('.carga[data-id="' + id + '"]');
-  if(previa){ previa.remove(); return; }
-  fetch('/comprobantes/carga/' + encodeURIComponent(id)).then(function(r){ return r.json(); }).then(function(c){
-    if(c.error) return;
-    var div = document.createElement('div'); div.className = 'carga'; div.setAttribute('data-id', id);
-    div.innerHTML = '<b>Carga masiva programada #' + Number(c.id) + '</b><br>' +
-      'Archivo subido: <b>' + esc(horaTxt(c.subido_en)) + '</b><br>' +
-      'Programada para: <b>' + esc(horaTxt(c.programada_para)) + '</b><br>' +
-      'Aplicada: <b>' + (c.ejecutada_en ? esc(horaTxt(c.ejecutada_en)) : '—') + '</b> · Estado: ' + esc(c.estado) + '<br>' +
-      'Registros válidos: ' + Number(c.filas_validas) + (c.filas_omitidas ? ' · omitidos: ' + Number(c.filas_omitidas) : '') + '<br>' +
-      'Huella del archivo (SHA-256): <code>' + esc(c.archivo_sha256) + '</code>';
-    caja.appendChild(div);
-  });
 }
 
 var ultimo = null;
@@ -234,8 +203,6 @@ function consultar(q, filtroRec){
 document.getElementById('form').addEventListener('submit', function(e){ e.preventDefault(); consultar(document.getElementById('q').value); });
 out.addEventListener('click', function(e){
   var t = e.target.closest('button'); if(!t) return;
-  if(t.getAttribute('data-carga')){ verCarga(t, t.getAttribute('data-carga')); return; }
-  if(t.getAttribute('data-descargar')){ window.location.href = '/comprobantes/sello-dia/' + encodeURIComponent(t.getAttribute('data-descargar')) + '/prueba.json'; return; }
   if(t.getAttribute('data-codigo')) consultar(t.getAttribute('data-codigo'), t.getAttribute('data-rec'));
   else if(t.getAttribute('data-rec')) consultar(t.getAttribute('data-rec'));
   else if(t.getAttribute('data-dia-completo') && ultimo) renderDia(ultimo, null);

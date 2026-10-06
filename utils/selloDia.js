@@ -18,8 +18,7 @@ async function datosDelDia(q, idCentro, fecha) {
             bm.cantidad::text AS cantidad, bm.valor::text AS valor, bm.cantidad_rechazo::text AS rechazo,
             bm.cantidad_nosui::text AS nosui, b.cod_bodega AS eca, m.cod_macrorruta AS macrorruta,
             to_char(bm.creado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS registrado,
-            to_char(bm.modificado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS modificado,
-            COALESCE(bm.origen, 'manual') AS origen, bm.id_carga
+            to_char(bm.modificado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS modificado
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
@@ -28,8 +27,9 @@ async function datosDelDia(q, idCentro, fecha) {
   const filas = r.rows.map((x) => ({
     reciclador: codReciclador(x.id_reciclador), material_codigo: x.mat_cod == null ? null : String(x.mat_cod), material: x.mat,
     cantidad: x.cantidad, valor: x.valor, rechazo: x.rechazo, nosui: x.nosui, eca: x.eca, macrorruta: x.macrorruta,
-    // Hora (Colombia) en que se registro y ultima modificacion, y de donde vino el dato.
-    registrado: x.registrado, modificado: x.modificado, origen: x.origen, carga: x.id_carga ? Number(x.id_carga) : null,
+    // Hora (Colombia) en que el dato entro al sistema y su ultima modificacion. El origen (manual,
+    // Excel o carga programada) queda solo en la base de datos, no en el sello publico.
+    registrado: x.registrado, modificado: x.modificado,
   })).sort((a, b) => (a.reciclador + '|' + a.material).localeCompare(b.reciclador + '|' + b.material));
   return { filas };
 }

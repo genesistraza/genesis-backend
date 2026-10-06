@@ -610,7 +610,7 @@ async function aplicarCargaProgramada(c) {
   for (const r of p.parsedRows) porCentro.set(r.id_centro, (porCentro.get(r.id_centro) || []).concat(r.fecha));
   for (const [idCentro, fechas] of porCentro) {
     const sel = await fechasSelladas(idCentro, fechas);
-    if (sel.length) await registrarMotivo(idCentro, sel, `Carga masiva programada #${c.id}`, c.subido_por, 'carga_programada');
+    if (sel.length) await registrarMotivo(idCentro, sel, 'Registro de datos posterior al cierre del día', c.subido_por, 'carga_programada');
   }
   return { insertadas: p.parsedRows.length, omitidas: p.omitidas, errores: p.errores };
 }

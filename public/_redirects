@@ -3,10 +3,6 @@
 # de la marca (genesistraza.com/comprobantes/...) aunque el que responde sea el backend.
 /comprobantes/*  https://genesis-backend-production-edc7.up.railway.app/comprobantes/:splat  200
 
-# Enlace corto de trazabilidad: genesistraza.com/h/<codigo del sello, REC-#### o huella> abre la
-# consulta publica directo en ese registro (el codigo va impreso en planillas y comprobantes).
-/h/:codigo  /verificar.html?q=:codigo  302
-
 # Redirige URLs viejas del sitio anterior (Wix) que Google ya indexó,
 # para que no den 404.
 /nosotros        /#nosotros     301
