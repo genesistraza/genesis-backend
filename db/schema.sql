@@ -944,3 +944,36 @@ END $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS tz_cambios_sellados_inmutables ON tz_cambios_sellados;
 CREATE TRIGGER tz_cambios_sellados_inmutables BEFORE UPDATE OR DELETE ON tz_cambios_sellados
   FOR EACH ROW EXECUTE FUNCTION tz_bloquear_cambios_sellados();
+
+-- Hora y autor de cada registro de balance de masas (entran en el sello diario). creado_en se
+-- conserva aunque el registro se edite; modificado_en/por guardan la ultima modificacion.
+-- origen: 'manual' (pantalla), 'importacion' (Excel subido a mano) o 'carga_programada'.
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS creado_en TIMESTAMPTZ;
+UPDATE tz_formulario_balance_masas SET creado_en = created_at AT TIME ZONE 'UTC' WHERE creado_en IS NULL;
+ALTER TABLE tz_formulario_balance_masas ALTER COLUMN creado_en SET DEFAULT NOW();
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS creado_por INT;
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS modificado_en TIMESTAMPTZ;
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS modificado_por INT;
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS origen VARCHAR(20) DEFAULT 'manual';
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_carga BIGINT;
+
+-- Cargas masivas programadas: el archivo se sube y valida de inmediato, y se aplica solo a la hora
+-- programada. Queda registro publico (para la SSPD) de cuando se subio, su huella y cuando se aplico.
+CREATE TABLE IF NOT EXISTS tz_cargas_programadas (
+  id BIGSERIAL PRIMARY KEY,
+  entidad VARCHAR(40) NOT NULL,
+  archivo_nombre TEXT NOT NULL,
+  archivo BYTEA NOT NULL,
+  archivo_sha256 CHAR(64) NOT NULL,
+  filas_validas INT NOT NULL DEFAULT 0,
+  filas_omitidas INT NOT NULL DEFAULT 0,
+  errores JSONB,
+  programada_para TIMESTAMPTZ NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'programada', -- programada | ejecutando | ejecutada | error | cancelada
+  subido_por INT,
+  subido_en TIMESTAMPTZ DEFAULT NOW(),
+  ejecutada_en TIMESTAMPTZ,
+  cancelada_en TIMESTAMPTZ,
+  resultado JSONB
+);
+CREATE INDEX IF NOT EXISTS tz_cargas_programadas_pend_idx ON tz_cargas_programadas (estado, programada_para);

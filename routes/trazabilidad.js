@@ -414,19 +414,13 @@ function toTextValue(v) {
   return s === '' ? null : s;
 }
 
-// POST /trazabilidad/:entity/import -> sube un Excel/CSV y crea filas nuevas (no reemplaza nada).
-// Las columnas del archivo pueden llamarse como el nombre interno del campo o como su etiqueta
-// (p.ej. "id_centro" o "Centro" son equivalentes); para select-entity/select-catalogo tambien
-// acepta el texto de la etiqueta en vez del id (se resuelve contra la tabla/catalogo referenciado).
-router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res) => {
-  const entity = getEntity(req.params.entity);
-  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
-  if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
-
-  const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
+// Lee un Excel/CSV y valida cada fila como lo hace el formulario. Devuelve las filas validas y los
+// errores (maximo 20). Lo usan la importacion inmediata y las cargas programadas (al subir y al aplicar).
+async function parsearArchivo(key, entity, buffer) {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: null });
-  if (rawRows.length === 0) return res.status(400).json({ error: 'El archivo no tiene filas.' });
+  if (rawRows.length === 0) return { error: 'El archivo no tiene filas.' };
   const rows = rawRows.map(normalizeRowKeys);
 
   const lookupMaps = {};
@@ -482,7 +476,7 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
       if (r.error) rowErrors.push(r.error); else parsed[f.name] = r.value;
     });
     if (rowErrors.length === 0) {
-      const v = await validateRecord(ENTITIES, req.params.entity, parsed, { ctx });
+      const v = await validateRecord(ENTITIES, key, parsed, { ctx });
       if (v.errors.length) rowErrors.push(...v.errors);
       else Object.assign(parsed, v.values);
     }
@@ -493,7 +487,41 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
     }
     parsedRows.push(parsed);
   }
+  return { parsedRows, errores, omitidas };
+}
 
+// Inserta las filas ya validadas. En balance de masas agrega quien la creo y su origen.
+async function insertarFilas(client, key, entity, parsedRows, meta = {}) {
+  const columns = entity.fields.map((f) => f.name);
+  const extra = key === 'balance_masas' ? { creado_por: meta.userId || null, origen: meta.origen || 'importacion', id_carga: meta.idCarga || null } : {};
+  const extraCols = Object.keys(extra);
+  const allCols = columns.concat(extraCols);
+  const chunkSize = 500;
+  for (let i = 0; i < parsedRows.length; i += chunkSize) {
+    const chunk = parsedRows.slice(i, i + chunkSize);
+    const values = [];
+    const placeholders = chunk.map((row, cIdx) => {
+      const base = cIdx * allCols.length;
+      columns.forEach((col) => values.push(row[col]));
+      extraCols.forEach((col) => values.push(extra[col]));
+      return '(' + allCols.map((_, k) => '$' + (base + k + 1)).join(',') + ')';
+    }).join(',');
+    await client.query(`INSERT INTO ${entity.table} (${allCols.join(',')}) VALUES ${placeholders}`, values);
+  }
+}
+
+// POST /trazabilidad/:entity/import -> sube un Excel/CSV y crea filas nuevas (no reemplaza nada).
+// Las columnas del archivo pueden llamarse como el nombre interno del campo o como su etiqueta
+// (p.ej. "id_centro" o "Centro" son equivalentes); para select-entity/select-catalogo tambien
+// acepta el texto de la etiqueta en vez del id (se resuelve contra la tabla/catalogo referenciado).
+router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res) => {
+  const entity = getEntity(req.params.entity);
+  if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
+
+  const p = await parsearArchivo(req.params.entity, entity, req.file.buffer);
+  if (p.error) return res.status(400).json({ error: p.error });
+  const { parsedRows, errores, omitidas } = p;
   if (parsedRows.length === 0) {
     return res.status(400).json({ error: 'Ninguna fila fue válida.' + (errores[0] ? ' ' + errores[0] : ''), detalles: errores });
   }
@@ -503,21 +531,10 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
     anotar = await exigirMotivoSellado(req, res, parsedRows.map((r) => ({ idCentro: r.id_centro, fecha: r.fecha })));
     if (!anotar) return;
   }
-  const columns = entity.fields.map((f) => f.name);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const chunkSize = 500;
-    for (let i = 0; i < parsedRows.length; i += chunkSize) {
-      const chunk = parsedRows.slice(i, i + chunkSize);
-      const values = [];
-      const placeholders = chunk.map((row, cIdx) => {
-        const base = cIdx * columns.length;
-        columns.forEach((col) => values.push(row[col]));
-        return '(' + columns.map((_, k) => '$' + (base + k + 1)).join(',') + ')';
-      }).join(',');
-      await client.query(`INSERT INTO ${entity.table} (${columns.join(',')}) VALUES ${placeholders}`, values);
-    }
+    await insertarFilas(client, req.params.entity, entity, parsedRows, { userId: req.user.id, origen: 'importacion' });
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
@@ -531,6 +548,73 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
     { entity: req.params.entity, filas: parsedRows.length, omitidas }, req.ip);
   res.json({ message: 'Importación completa.', importados: parsedRows.length, omitidos: omitidas, detalles: errores });
 }));
+
+// ---- Cargas masivas programadas (solo balance de masas): el archivo se valida al subirlo y se
+// aplica solo a la hora indicada (jobs/cargasProgramadas.js). Todo queda a la vista de la SSPD:
+// la consulta publica muestra que esos registros vinieron de una carga programada, cuando se subio
+// el archivo, su huella (sha256) y cuando se aplico.
+router.get('/cargas-programadas', guard(async (req, res) => {
+  const r = await pool.query(
+    `SELECT c.id, c.entidad, c.archivo_nombre, c.archivo_sha256, c.filas_validas, c.filas_omitidas, c.errores, c.programada_para,
+            c.estado, c.subido_en, c.ejecutada_en, c.cancelada_en, c.resultado, u.email AS subido_por
+     FROM tz_cargas_programadas c LEFT JOIN users u ON u.id = c.subido_por ORDER BY c.programada_para DESC LIMIT 100`);
+  res.json(r.rows);
+}));
+
+router.post('/cargas-programadas', uploadExcel.single('file'), guard(async (req, res) => {
+  const key = 'balance_masas';
+  const entity = getEntity(key);
+  if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
+  const cuando = new Date(String(req.body.programada_para || ''));
+  if (isNaN(cuando)) return res.status(400).json({ error: 'La fecha y hora programada no es válida.' });
+  if (cuando.getTime() < Date.now() - 60 * 1000) return res.status(400).json({ error: 'La hora programada ya pasó.' });
+  if (cuando.getTime() > Date.now() + 31 * 24 * 3600 * 1000) return res.status(400).json({ error: 'Solo se puede programar hasta 31 días adelante.' });
+  const p = await parsearArchivo(key, entity, req.file.buffer);
+  if (p.error) return res.status(400).json({ error: p.error });
+  if (p.parsedRows.length === 0) return res.status(400).json({ error: 'Ninguna fila fue válida.' + (p.errores[0] ? ' ' + p.errores[0] : ''), detalles: p.errores });
+  const sha = require('crypto').createHash('sha256').update(req.file.buffer).digest('hex');
+  const r = await pool.query(
+    `INSERT INTO tz_cargas_programadas (entidad, archivo_nombre, archivo, archivo_sha256, filas_validas, filas_omitidas, errores, programada_para, subido_por)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, programada_para`,
+    [key, String(req.file.originalname || 'archivo').slice(0, 200), req.file.buffer, sha, p.parsedRows.length, p.omitidas, JSON.stringify(p.errores), cuando.toISOString(), req.user.id]);
+  await logActivity(req.user.id, 'pruebas_carga_programada', { id: r.rows[0].id, filas: p.parsedRows.length, programada_para: cuando.toISOString() }, req.ip);
+  res.json({ id: r.rows[0].id, programada_para: r.rows[0].programada_para, validas: p.parsedRows.length, omitidas: p.omitidas, detalles: p.errores });
+}));
+
+router.post('/cargas-programadas/:id/cancelar', guard(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Id inválido.' });
+  const r = await pool.query("UPDATE tz_cargas_programadas SET estado = 'cancelada', cancelada_en = NOW() WHERE id = $1 AND estado = 'programada' RETURNING id", [id]);
+  if (!r.rows.length) return res.status(409).json({ error: 'Solo se puede cancelar una carga que aún no se ha aplicado.' });
+  await logActivity(req.user.id, 'pruebas_carga_cancelada', { id }, req.ip);
+  res.json({ message: 'Carga cancelada.' });
+}));
+
+// Aplica una carga programada (lo llama el job). Si toca dias ya sellados, deja el motivo automatico.
+async function aplicarCargaProgramada(c) {
+  const key = c.entidad, entity = getEntity(key);
+  const p = await parsearArchivo(key, entity, c.archivo);
+  if (p.error) throw new Error(p.error);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    if (p.parsedRows.length) await insertarFilas(client, key, entity, p.parsedRows, { userId: c.subido_por, origen: 'carga_programada', idCarga: c.id });
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  const porCentro = new Map();
+  for (const r of p.parsedRows) porCentro.set(r.id_centro, (porCentro.get(r.id_centro) || []).concat(r.fecha));
+  for (const [idCentro, fechas] of porCentro) {
+    const sel = await fechasSelladas(idCentro, fechas);
+    if (sel.length) await registrarMotivo(idCentro, sel, `Carga masiva programada #${c.id}`, c.subido_por, 'carga_programada');
+  }
+  return { insertadas: p.parsedRows.length, omitidas: p.omitidas, errores: p.errores };
+}
+router.aplicarCargaProgramada = aplicarCargaProgramada;
 
 // GET /trazabilidad/:entity/template -> plantilla .xlsx con 2 hojas: "Plantilla" (encabezados +
 // una fila de ejemplo, lista para llenar y volver a importar) e "Instrucciones" (que va en cada
@@ -725,17 +809,41 @@ router.post('/balance-masas-dia', guard(async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('DELETE FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2', [idReciclador, fecha]);
+    // Fila por fila (no borrar y recrear todo): asi cada registro conserva su hora de creacion y
+    // solo los que de verdad cambian quedan con hora y usuario de la ultima modificacion.
+    const existentes = (await client.query(
+      `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
+       FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2 ORDER BY id`, [idReciclador, fecha])).rows;
+    const porMaterial = new Map();
+    const sobrantes = [];
+    for (const e of existentes) { if (porMaterial.has(e.id_tipo_material)) sobrantes.push(e.id); else porMaterial.set(e.id_tipo_material, e); }
+    const OPC = ['id_numacro', 'id_bodega', 'id_macrorruta', 'id_microrruta_1', 'id_microrruta_2'];
     for (const m of filas) {
+      const e = porMaterial.get(m.id_tipo_material);
+      if (!e) {
+        await client.query(
+          `INSERT INTO tz_formulario_balance_masas
+           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual')`,
+          [idCentro, idReciclador, m.id_tipo_material, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta,
+            opcionales.id_microrruta_1, opcionales.id_microrruta_2, fecha,
+            m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id]
+        );
+        continue;
+      }
+      porMaterial.delete(m.id_tipo_material);
+      const igual = Number(e.cantidad) === m.cantidad && Number(e.valor) === m.valor && Number(e.cantidad_rechazo) === m.cantidad_rechazo
+        && Number(e.cantidad_nosui) === m.cantidad_nosui && OPC.every((k) => (e[k] || null) === (opcionales[k] || null));
+      if (igual) continue;
       await client.query(
-        `INSERT INTO tz_formulario_balance_masas
-         (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-        [idCentro, idReciclador, m.id_tipo_material, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta,
-          opcionales.id_microrruta_1, opcionales.id_microrruta_2, fecha,
-          m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui]
+        `UPDATE tz_formulario_balance_masas SET id_centro = $1, id_numacro = $2, id_bodega = $3, id_macrorruta = $4, id_microrruta_1 = $5, id_microrruta_2 = $6,
+           cantidad = $7, valor = $8, cantidad_rechazo = $9, cantidad_nosui = $10, modificado_en = NOW(), modificado_por = $11 WHERE id = $12`,
+        [idCentro, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta, opcionales.id_microrruta_1, opcionales.id_microrruta_2,
+          m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id]
       );
     }
+    const borrar = sobrantes.concat([...porMaterial.values()].map((e) => e.id));
+    if (borrar.length) await client.query('DELETE FROM tz_formulario_balance_masas WHERE id = ANY($1::int[])', [borrar]);
     await client.query('COMMIT');
     await anotar('balance_dia_guardado');
     await logActivity(req.user.id, 'pruebas_balance_masas_dia_guardado', { id_reciclador: idReciclador, fecha, filas: filas.length }, req.ip);
@@ -1028,8 +1136,9 @@ router.post('/:entity', guard(async (req, res) => {
     if (!anotar) return;
   }
 
-  const cols = Object.keys(v.values);
-  const values = cols.map((c) => v.values[c]);
+  const datos = req.params.entity === 'balance_masas' ? { ...v.values, creado_por: req.user.id, origen: 'manual' } : v.values;
+  const cols = Object.keys(datos);
+  const values = cols.map((c) => datos[c]);
   const sql = `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')}) RETURNING id`;
   const result = await pool.query(sql, values);
   await anotar('balance_registro_creado');
@@ -1060,7 +1169,8 @@ router.put('/:entity/:id', guard(async (req, res) => {
   if (cols.length === 0) return res.status(400).json({ error: 'Nada para actualizar.' });
   const values = cols.map((c) => v.values[c]);
   values.push(id);
-  const sql = `UPDATE ${entity.table} SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${values.length} RETURNING id`;
+  const marca = req.params.entity === 'balance_masas' ? `, modificado_en = NOW(), modificado_por = ${Number(req.user.id) || 'NULL'}` : '';
+  const sql = `UPDATE ${entity.table} SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}${marca} WHERE id = $${values.length} RETURNING id`;
   const result = await pool.query(sql, values);
   await anotar('balance_registro_editado');
   await logActivity(req.user.id, 'pruebas_trazabilidad_editado', { entity: req.params.entity, id }, req.ip);

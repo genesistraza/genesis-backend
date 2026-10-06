@@ -233,10 +233,21 @@
       <button type="button" class="btn" id="pruebasImportBtn" onclick="document.getElementById('pruebasImportInput').click()">Importar</button>
       <input type="file" id="pruebasImportInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="onPruebasImportFile(this)">
       <button type="button" class="btn" onclick="downloadPruebasTemplate()">Plantilla</button>
+      <button type="button" class="btn" id="pruebasProgramarBtn" style="display:none;" onclick="toggleCargasPanel()">Programar carga</button>
       <button type="button" class="btn" onclick="exportPruebasExcel()">Exportar Excel</button>
       <button type="button" class="btn" onclick="exportPruebasCsv()">Exportar CSV</button>
     </div>
     <p class="pruebas-msg no-print" id="pruebasImportMsg"></p>
+    <div id="cargasPanel" class="no-print" style="display:none;border:1px solid var(--line,#DCE3EA);border-radius:8px;padding:10px 12px;margin:0 0 10px;background:#FBFCFE;font-size:12.5px;">
+      <b>Carga masiva programada</b> <span style="color:#5B6B7C;">· el archivo se valida ahora y se aplica solo a la hora elegida. Queda registrado públicamente como carga programada (visible para la SSPD).</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;">
+        <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv">
+        <label>Aplicar el <input type="datetime-local" id="cargaCuando"></label>
+        <button type="button" class="btn btn-primary" onclick="programarCarga()">Validar y programar</button>
+      </div>
+      <p id="cargaMsg" style="margin:6px 0 0;"></p>
+      <div id="cargasLista" style="margin-top:8px;"></div>
+    </div>
     <div class="table-scroll">
       <table class="data-table">
         <thead id="pruebasTableHead"></thead>
@@ -454,6 +465,8 @@
     var isCentrosAsCliente = pruebasCurrentEntity === 'centros' && pruebasVista === 'asociacion';
     document.getElementById('pruebasNewBtn').style.display = isCentrosAsCliente ? 'none' : '';
     document.getElementById('pruebasImportBtn').style.display = isCentrosAsCliente ? 'none' : '';
+    document.getElementById('pruebasProgramarBtn').style.display = pruebasCurrentEntity === 'balance_masas' ? '' : 'none';
+    if(pruebasCurrentEntity !== 'balance_masas') document.getElementById('cargasPanel').style.display = 'none';
 
     // En Vista Asociación el filtro por centro lo hace el servidor (el LIMIT de 500 se aplica después
     // de filtrar, así los datos de la asociación nunca quedan tapados por los de otras).
@@ -610,6 +623,56 @@
       pruebasOptionsCache = {}; // los desplegables de otros módulos deben ver el registro nuevo/editado
       closePruebasFormModal();
       fetchAndRenderPruebasTable();
+    });
+  }
+
+  // ---- Cargas masivas programadas (balance de masas) ----
+  function toggleCargasPanel(){
+    var p = document.getElementById('cargasPanel');
+    var abrir = p.style.display === 'none';
+    p.style.display = abrir ? '' : 'none';
+    if(abrir) cargarListaCargas();
+  }
+  function fechaHoraCO(iso){ return iso ? new Date(iso).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' }) : '—'; }
+  function cargarListaCargas(){
+    gtApiFetch('/trazabilidad/cargas-programadas').then(function(res){
+      var box = document.getElementById('cargasLista');
+      if(!res.ok){ box.textContent = res.data.error || 'No se pudo cargar la lista.'; return; }
+      if(!res.data.length){ box.innerHTML = '<span style="color:#5B6B7C;">No hay cargas programadas.</span>'; return; }
+      var ESTADO = { programada: 'Programada', ejecutando: 'Aplicando…', ejecutada: 'Aplicada', error: 'Error', cancelada: 'Cancelada' };
+      box.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;">#</th><th style="text-align:left;">Archivo</th><th>Filas</th><th style="text-align:left;">Programada para</th><th style="text-align:left;">Estado</th><th></th></tr></thead><tbody>' +
+        res.data.map(function(c){
+          var det = c.estado === 'ejecutada' && c.resultado ? ' (' + c.resultado.insertadas + ' cargadas)' : (c.estado === 'error' && c.resultado ? ': ' + gtEscapeHtml(c.resultado.error) : '');
+          return '<tr><td>' + c.id + '</td><td>' + gtEscapeHtml(c.archivo_nombre) + '</td><td style="text-align:center;">' + c.filas_validas + (c.filas_omitidas ? ' <span style="color:#B45F06;">(+' + c.filas_omitidas + ' con error)</span>' : '') + '</td><td>' + fechaHoraCO(c.programada_para) + '</td><td>' + (ESTADO[c.estado] || c.estado) + det + '</td><td>' +
+            (c.estado === 'programada' ? '<button type="button" class="cell-action" style="color:#C0392B;" onclick="cancelarCarga(' + c.id + ')">Cancelar</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    });
+  }
+  function programarCarga(){
+    var file = document.getElementById('cargaArchivo').files[0];
+    var cuando = document.getElementById('cargaCuando').value;
+    var msg = document.getElementById('cargaMsg');
+    if(!file || !cuando){ msg.style.color = '#C0392B'; msg.textContent = 'Elige el archivo y la fecha y hora en que se debe aplicar.'; return; }
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('programada_para', new Date(cuando).toISOString()); // datetime-local viene en hora de este computador
+    msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Validando el archivo…';
+    fetch(API_BASE + '/trazabilidad/cargas-programadas', { method: 'POST', headers: { 'Authorization': 'Bearer ' + gtGetToken() }, body: fd })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
+      .then(function(res){
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo programar.'; if(res.data.detalles) console.warn('Filas con problemas:', res.data.detalles); return; }
+        msg.style.color = res.data.omitidas ? '#B45F06' : 'var(--green)';
+        msg.textContent = 'Carga #' + res.data.id + ' programada para ' + fechaHoraCO(res.data.programada_para) + ': ' + res.data.validas + ' filas válidas' + (res.data.omitidas ? ', ' + res.data.omitidas + ' con error (no se cargarán): ' + (res.data.detalles || []).slice(0, 2).join(' | ') : '.');
+        document.getElementById('cargaArchivo').value = '';
+        cargarListaCargas();
+      })
+      .catch(function(){ msg.style.color = '#C0392B'; msg.textContent = 'No se pudo programar.'; });
+  }
+  function cancelarCarga(id){
+    if(!confirm('¿Cancelar la carga #' + id + '? No se aplicará.')) return;
+    gtApiFetch('/trazabilidad/cargas-programadas/' + id + '/cancelar', { method: 'POST' }).then(function(res){
+      if(!res.ok) alert(res.data.error || 'No se pudo cancelar.');
+      cargarListaCargas();
     });
   }
 
@@ -1271,6 +1334,7 @@
           win.document.close();
           return;
         }
+        cbSelloDia = res.data.selloDia || '';
         var builders = { carta: buildComprobanteCarta, media_carta: buildComprobanteMediaCarta, carta_horizontal: buildComprobanteCartaHorizontal, tirilla: buildComprobanteTirilla };
         var html = (builders[formato] || buildComprobanteCarta)(res.data.snapshot, res.data.qrDataUrl, res.data.codigoVerificacion, res.data.url);
         win.document.open();
@@ -1305,8 +1369,13 @@
       ? '<img class="' + cls + '" src="' + cbEsc(centro.logoUrl) + '" alt="">'
       : '<div class="' + cls + ' mono">' + cbEsc(gtAssocInitials(centro.nombre)) + '</div>';
   }
+  // Codigo corto del sello diario de la asociacion para ese dia (se sella a las 23:59).
+  var cbSelloDia = '';
+  function cbSelloTexto(){
+    return cbSelloDia ? '<br><span style="font-size:9px;">Sello del día: <b>' + cbEsc(cbSelloDia) + '</b><br>genesistraza.com/h/' + cbEsc(cbSelloDia) + '</span>' : '';
+  }
   function cbQrBlock(qrDataUrl, codigo, extraClass){
-    return '<div class="qrbox ' + (extraClass || '') + '"><img class="qrimg" src="' + qrDataUrl + '" alt="Código QR de verificación"><div class="qrtext">Escanea para ver este<br>comprobante en tu celular<br><b>' + cbEsc(codigo) + '</b></div></div>';
+    return '<div class="qrbox ' + (extraClass || '') + '"><img class="qrimg" src="' + qrDataUrl + '" alt="Código QR de verificación"><div class="qrtext">Escanea para ver este<br>comprobante en tu celular<br><b>' + cbEsc(codigo) + '</b>' + cbSelloTexto() + '</div></div>';
   }
 
   // ---- Formato Carta (el diseño completo, tamaño oficio de escritorio) ----
@@ -1525,7 +1594,7 @@
       (s.totales.nosui ? '<div class="row"><span>No SUI</span><span>' + cbNum(s.totales.nosui) + ' kg</span></div>' : '') +
       '<div class="row grand"><span>TOTAL</span><span>' + cbMoney(s.totales.valorTotal) + '</span></div>' +
       '</div>' +
-      '<div class="qrbox"><img class="qrimg" src="' + qrDataUrl + '" alt="QR"><div class="qrtext">Escanea para verificar<br><b>' + cbEsc(codigo) + '</b></div></div>' +
+      '<div class="qrbox"><img class="qrimg" src="' + qrDataUrl + '" alt="QR"><div class="qrtext">Escanea para verificar<br><b>' + cbEsc(codigo) + '</b>' + cbSelloTexto() + '</div></div>' +
       '<div class="foot">Genesis Traza - Modulo Pruebas<br>Comprobante de prueba, sin validez como factura.<br>Generado ' + cbEsc(cbGenerado()) + '</div>' +
       '</body></html>';
   }

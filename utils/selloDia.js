@@ -16,7 +16,10 @@ async function datosDelDia(q, idCentro, fecha) {
   const r = await q.query(
     `SELECT bm.id_reciclador, tm.cod_tipo_material AS mat_cod, tm.desc_tipo_material AS mat,
             bm.cantidad::text AS cantidad, bm.valor::text AS valor, bm.cantidad_rechazo::text AS rechazo,
-            bm.cantidad_nosui::text AS nosui, b.cod_bodega AS eca, m.cod_macrorruta AS macrorruta
+            bm.cantidad_nosui::text AS nosui, b.cod_bodega AS eca, m.cod_macrorruta AS macrorruta,
+            to_char(bm.creado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS registrado,
+            to_char(bm.modificado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS modificado,
+            COALESCE(bm.origen, 'manual') AS origen, bm.id_carga
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
@@ -25,12 +28,17 @@ async function datosDelDia(q, idCentro, fecha) {
   const filas = r.rows.map((x) => ({
     reciclador: codReciclador(x.id_reciclador), material_codigo: x.mat_cod == null ? null : String(x.mat_cod), material: x.mat,
     cantidad: x.cantidad, valor: x.valor, rechazo: x.rechazo, nosui: x.nosui, eca: x.eca, macrorruta: x.macrorruta,
+    // Hora (Colombia) en que se registro y ultima modificacion, y de donde vino el dato.
+    registrado: x.registrado, modificado: x.modificado, origen: x.origen, carga: x.id_carga ? Number(x.id_carga) : null,
   })).sort((a, b) => (a.reciclador + '|' + a.material).localeCompare(b.reciclador + '|' + b.material));
   return { filas };
 }
 
 const claveFila = (f) => f.reciclador + '|' + (f.material_codigo || f.material);
 const CAMPOS = ['cantidad', 'valor', 'rechazo', 'nosui', 'eca', 'macrorruta'];
+// Contenido de negocio de las filas (sin horas ni origen): es lo que decide si el dia cambio. Asi
+// los dias sellados antes de existir las horas no generan versiones nuevas solo por agregarlas.
+const negocio = (filas) => huella.canonico(filas.map((f) => ({ k: claveFila(f), ...Object.fromEntries(CAMPOS.map((c) => [c, f[c] === undefined ? null : f[c]])) })));
 
 // Diferencias entre dos versiones del mismo dia, fila por fila.
 function diferencias(antes, despues) {
@@ -65,9 +73,9 @@ async function sellarDias({ hasta = huella.fechaBogota() } = {}) {
       const { filas } = await datosDelDia(client, idCentro, fecha);
       const centro = (await client.query('SELECT desc_centro FROM tz_centros WHERE id = $1', [idCentro])).rows[0];
       const version = ult ? ult.version + 1 : 1;
-      const datos = { tipo: 'dia-asociacion', v: 1, id_centro: idCentro, centro: centro ? centro.desc_centro : null, fecha, filas };
+      const datos = { tipo: 'dia-asociacion', v: 2, id_centro: idCentro, centro: centro ? centro.desc_centro : null, fecha, filas };
       // Solo se compara el contenido (filas): si el dia no cambio, no se sella otra version.
-      if (ult && huella.canonico(ult.datos.filas) === huella.canonico(filas)) { await client.query('ROLLBACK'); continue; }
+      if (ult && negocio(ult.datos.filas) === negocio(filas)) { await client.query('ROLLBACK'); continue; }
       if (!ult && !filas.length) { await client.query('ROLLBACK'); continue; }
       let cambios = null, motivo = null;
       if (ult) {

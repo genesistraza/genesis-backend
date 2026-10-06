@@ -125,7 +125,7 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
     const url = `${PUBLIC_BASE}/comprobantes/${previo.token}`;
     const qrDataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'H', margin: 1, width: 320 });
     return res.json({ token: previo.token, numero: previo.numero, codigoVerificacion: previo.codigo_verificacion, url, qrDataUrl,
-      snapshot: { ...previo.snapshot, formato }, reutilizado: true });
+      snapshot: { ...previo.snapshot, formato }, reutilizado: true, selloDia: `GT${rec.id_centro}-${fecha.replace(/-/g, '')}` });
   }
 
   const codigo = codigoVerificacion(token, snapshot);
@@ -153,7 +153,7 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
   const url = `${PUBLIC_BASE}/comprobantes/${token}`;
   const qrDataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'H', margin: 1, width: 320 });
 
-  res.json({ token, numero, codigoVerificacion: codigo, url, qrDataUrl, snapshot });
+  res.json({ token, numero, codigoVerificacion: codigo, url, qrDataUrl, snapshot, selloDia: `GT${rec.id_centro}-${fecha.replace(/-/g, '')}` });
 }));
 
 // Bloque de integridad de la pagina publica: resultado de cada comprobacion de la cadena.
@@ -400,8 +400,12 @@ router.get('/consulta', asyncRoute(async (req, res) => {
   if (!q) return res.status(400).json({ error: 'Escribe un código para consultar.' });
   const Q = q.toUpperCase();
   let m;
-  if ((m = Q.match(/^GT(\d+)-(\d{4})(\d{2})(\d{2})-V\d+-[0-9A-F]{6}$/))) {
-    const s = (await pool.query('SELECT id_centro, fecha, version FROM tz_sellos_asociacion WHERE codigo = $1', [Q])).rows[0];
+  // Codigo del sello completo (GT8-20261001-V2-EF4D44) o corto: GT8-20261001 (version actual) o GT8-20261001-V2.
+  if ((m = Q.match(/^GT(\d+)-(\d{4})(\d{2})(\d{2})(?:-V(\d+))?(?:-[0-9A-F]{6})?$/))) {
+    const fecha = `${m[2]}-${m[3]}-${m[4]}`;
+    const s = (await pool.query(
+      `SELECT id_centro, fecha, version FROM tz_sellos_asociacion WHERE id_centro = $1 AND fecha = $2 AND huella IS NOT NULL
+       AND ($3::int IS NULL OR version = $3) ORDER BY version DESC LIMIT 1`, [Number(m[1]), fecha, m[5] ? Number(m[5]) : null])).rows[0];
     if (s) { const v = await vistaDia(s.id_centro, s.fecha); return res.json({ ...v, buscada: s.version }); }
   } else if (/^[0-9A-F]{64}$/.test(Q)) {
     const h = (await pool.query('SELECT tipo, ref_id FROM tz_huellas WHERE huella = $1 OR huella_dato = $1 LIMIT 1', [q.toLowerCase()])).rows[0];
@@ -421,6 +425,18 @@ router.get('/consulta', asyncRoute(async (req, res) => {
     if (c) return res.json({ tipo: 'comprobante', numero: c.numero, url: `/comprobantes/${c.token}` });
   }
   res.status(404).json({ error: 'No se encontró ningún registro sellado con ese código.' });
+}));
+
+// GET /comprobantes/carga/:id -> detalle publico de una carga masiva programada (transparencia ante
+// la SSPD): cuando se subio el archivo, su huella sha256, a que hora se programo y cuando se aplico.
+router.get('/carga/:id', asyncRoute(async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(404).json({ error: 'Carga no encontrada.' });
+  const c = (await pool.query(
+    `SELECT id, entidad, archivo_nombre, archivo_sha256, filas_validas, filas_omitidas, programada_para, estado, subido_en, ejecutada_en, cancelada_en
+     FROM tz_cargas_programadas WHERE id = $1`, [id])).rows[0];
+  if (!c) return res.status(404).json({ error: 'Carga no encontrada.' });
+  res.json(c);
 }));
 
 // GET /comprobantes/sello-dia/:codigo/prueba.json -> prueba tecnica de un sello diario.
