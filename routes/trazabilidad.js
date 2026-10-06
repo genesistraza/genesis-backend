@@ -485,9 +485,10 @@ async function parsearArchivo(key, entity, buffer) {
       if (errores.length < 20) errores.push('Fila ' + (idx + 2) + ': ' + rowErrors.join(' '));
       continue;
     }
+    parsed._idx = idx; // fila de origen en el archivo (para leer columnas extra, como Hora)
     parsedRows.push(parsed);
   }
-  return { parsedRows, errores, omitidas };
+  return { parsedRows, errores, omitidas, rows };
 }
 
 // Inserta las filas ya validadas. En balance de masas agrega quien la creo y su origen.
@@ -550,21 +551,83 @@ router.post('/:entity/import', uploadExcel.single('file'), guard(async (req, res
 }));
 
 // ---- Cargas masivas programadas (solo balance de masas): el archivo se valida al subirlo y se
-// aplica solo a la hora indicada (jobs/cargasProgramadas.js). Todo queda a la vista de la SSPD:
-// la consulta publica muestra que esos registros vinieron de una carga programada, cuando se subio
-// el archivo, su huella (sha256) y cuando se aplico.
+// aplica solo a la hora indicada (jobs/cargasProgramadas.js). El origen de cada fila queda guardado
+// internamente (no se publica).
+// Modo 'simulacion' (solo asociaciones de prueba): cada fila trae su columna Hora y entra sola a esa
+// hora; las filas quedan marcadas como simulacion y la consulta publica las muestra como datos de prueba.
 router.get('/cargas-programadas', guard(async (req, res) => {
   const r = await pool.query(
     `SELECT c.id, c.entidad, c.archivo_nombre, c.archivo_sha256, c.filas_validas, c.filas_omitidas, c.errores, c.programada_para,
-            c.estado, c.subido_en, c.ejecutada_en, c.cancelada_en, c.resultado, u.email AS subido_por
-     FROM tz_cargas_programadas c LEFT JOIN users u ON u.id = c.subido_por ORDER BY c.programada_para DESC LIMIT 100`);
+            c.estado, c.subido_en, c.ejecutada_en, c.cancelada_en, c.resultado, c.modo, u.email AS subido_por,
+            (SELECT count(*) FROM tz_cargas_filas f WHERE f.id_carga = c.id AND f.estado = 'aplicada')::int AS filas_aplicadas,
+            (SELECT count(*) FROM tz_cargas_filas f WHERE f.id_carga = c.id AND f.estado = 'pendiente')::int AS filas_pendientes,
+            (SELECT min(aplicar_en) FROM tz_cargas_filas f WHERE f.id_carga = c.id AND f.estado = 'pendiente') AS proxima_fila
+     FROM tz_cargas_programadas c LEFT JOIN users u ON u.id = c.subido_por ORDER BY c.subido_en DESC LIMIT 100`);
   res.json(r.rows);
 }));
+
+// "9:00", "09:00", "9", "3 pm", "3:30pm", "15:30" o una hora de Excel (fraccion de dia / Date) -> "HH:MM".
+function leerHora(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (v instanceof Date && !isNaN(v)) return String(v.getUTCHours()).padStart(2, '0') + ':' + String(v.getUTCMinutes()).padStart(2, '0');
+  if (typeof v === 'number' && v >= 0 && v < 1) { const min = Math.round(v * 1440); return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0'); }
+  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?\s*$/i.exec(String(v));
+  if (!m) return null;
+  let h = Number(m[1]); const mi = Number(m[2] || 0);
+  const ap = m[3] ? m[3].toLowerCase().replace(/[^ap]/g, '') : '';
+  if (ap === 'p' && h < 12) h += 12;
+  if (ap === 'a' && h === 12) h = 0;
+  if (h > 23 || mi > 59) return null;
+  return String(h).padStart(2, '0') + ':' + String(mi).padStart(2, '0');
+}
+
+async function programarSimulacion(req, res, key, entity, p) {
+  const centros = [...new Set(p.parsedRows.map((r) => r.id_centro))];
+  const prueba = (await pool.query('SELECT id FROM tz_centros WHERE id = ANY($1::int[]) AND es_prueba = TRUE', [centros])).rows.map((x) => x.id);
+  const noPrueba = centros.filter((c) => !prueba.includes(c));
+  if (noPrueba.length) return res.status(400).json({ error: 'La simulación por hora solo se permite en asociaciones de prueba. Este archivo trae filas de una asociación real.' });
+  const filas = [], errores = p.errores.slice();
+  for (const r of p.parsedRows) {
+    const crudo = p.rows[r._idx] || {};
+    const hora = leerHora(crudo.hora);
+    if (!hora) { if (errores.length < 20) errores.push('Fila ' + (r._idx + 2) + ': falta la Hora o no se entiende (usa 09:00, 3 pm o 15:30).'); continue; }
+    // Colombia no tiene horario de verano: la hora local es siempre UTC-5.
+    const aplicar = new Date(`${r.fecha}T${hora}:00-05:00`);
+    const { _idx, ...valores } = r;
+    filas.push({ valores, aplicar, hora });
+  }
+  if (!filas.length) return res.status(400).json({ error: 'Ninguna fila tiene una hora válida.', detalles: errores });
+  const primera = new Date(Math.min(...filas.map((x) => x.aplicar.getTime())));
+  const sha = require('crypto').createHash('sha256').update(req.file.buffer).digest('hex');
+  const client = await pool.connect();
+  let id;
+  try {
+    await client.query('BEGIN');
+    id = (await client.query(
+      `INSERT INTO tz_cargas_programadas (entidad, archivo_nombre, archivo, archivo_sha256, filas_validas, filas_omitidas, errores, programada_para, subido_por, modo, estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'simulacion','programada') RETURNING id`,
+      [key, String(req.file.originalname || 'archivo').slice(0, 200), req.file.buffer, sha, filas.length, p.omitidas + (p.parsedRows.length - filas.length), JSON.stringify(errores), primera.toISOString(), req.user.id])).rows[0].id;
+    for (const x of filas) await client.query('INSERT INTO tz_cargas_filas (id_carga, fila, aplicar_en) VALUES ($1,$2,$3)', [id, JSON.stringify(x.valores), x.aplicar.toISOString()]);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+  await logActivity(req.user.id, 'pruebas_simulacion_programada', { id, filas: filas.length }, req.ip);
+  res.json({ id, modo: 'simulacion', programada_para: primera.toISOString(), validas: filas.length, omitidas: p.omitidas + (p.parsedRows.length - filas.length), detalles: errores,
+    horas: filas.map((x) => x.hora).sort() });
+}
 
 router.post('/cargas-programadas', uploadExcel.single('file'), guard(async (req, res) => {
   const key = 'balance_masas';
   const entity = getEntity(key);
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
+  if (req.body.modo === 'simulacion') {
+    const ps = await parsearArchivo(key, entity, req.file.buffer);
+    if (ps.error) return res.status(400).json({ error: ps.error });
+    if (!ps.parsedRows.length) return res.status(400).json({ error: 'Ninguna fila fue válida.' + (ps.errores[0] ? ' ' + ps.errores[0] : ''), detalles: ps.errores });
+    return programarSimulacion(req, res, key, entity, ps);
+  }
   const cuando = new Date(String(req.body.programada_para || ''));
   if (isNaN(cuando)) return res.status(400).json({ error: 'La fecha y hora programada no es válida.' });
   if (cuando.getTime() < Date.now() - 60 * 1000) return res.status(400).json({ error: 'La hora programada ya pasó.' });
@@ -584,11 +647,51 @@ router.post('/cargas-programadas', uploadExcel.single('file'), guard(async (req,
 router.post('/cargas-programadas/:id/cancelar', guard(async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Id inválido.' });
-  const r = await pool.query("UPDATE tz_cargas_programadas SET estado = 'cancelada', cancelada_en = NOW() WHERE id = $1 AND estado = 'programada' RETURNING id", [id]);
+  const r = await pool.query("UPDATE tz_cargas_programadas SET estado = 'cancelada', cancelada_en = NOW() WHERE id = $1 AND estado IN ('programada', 'en_curso') RETURNING id", [id]);
   if (!r.rows.length) return res.status(409).json({ error: 'Solo se puede cancelar una carga que aún no se ha aplicado.' });
+  await pool.query("UPDATE tz_cargas_filas SET estado = 'cancelada' WHERE id_carga = $1 AND estado = 'pendiente'", [id]);
   await logActivity(req.user.id, 'pruebas_carga_cancelada', { id }, req.ip);
   res.json({ message: 'Carga cancelada.' });
 }));
+
+// Borra todo lo que inserto una simulacion (y cancela lo que le faltaba). Solo modo simulacion.
+router.post('/cargas-programadas/:id/borrar-simulacion', guard(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Id inválido.' });
+  const c = (await pool.query('SELECT modo FROM tz_cargas_programadas WHERE id = $1', [id])).rows[0];
+  if (!c || c.modo !== 'simulacion') return res.status(409).json({ error: 'Solo se pueden borrar simulaciones.' });
+  const filas = (await pool.query("SELECT id_centro, fecha FROM tz_formulario_balance_masas WHERE id_carga = $1 AND origen = 'simulacion'", [id])).rows;
+  const del = await pool.query("DELETE FROM tz_formulario_balance_masas WHERE id_carga = $1 AND origen = 'simulacion'", [id]);
+  await pool.query("UPDATE tz_cargas_filas SET estado = 'cancelada' WHERE id_carga = $1 AND estado = 'pendiente'", [id]);
+  await pool.query("UPDATE tz_cargas_programadas SET estado = 'borrada', cancelada_en = NOW() WHERE id = $1", [id]);
+  const porCentro = new Map();
+  for (const r of filas) porCentro.set(r.id_centro, (porCentro.get(r.id_centro) || []).concat(r.fecha));
+  for (const [idCentro, fechas] of porCentro) {
+    const sel = await fechasSelladas(idCentro, fechas);
+    if (sel.length) await registrarMotivo(idCentro, sel, 'Borrado de datos de simulación (asociación de prueba)', req.user.id, 'simulacion_borrada');
+  }
+  await logActivity(req.user.id, 'pruebas_simulacion_borrada', { id, filas: del.rowCount }, req.ip);
+  res.json({ message: 'Simulación borrada.', filas: del.rowCount });
+}));
+
+// Aplica una fila de simulacion a su hora (lo llama el job). Se vuelve a validar: si entre tanto se
+// registro lo mismo a mano, la fila se omite.
+async function aplicarFilaSimulacion(fr, idUsuario) {
+  const entity = getEntity('balance_masas');
+  const v = await validateRecord(ENTITIES, 'balance_masas', fr.fila);
+  if (v.errors.length) return { aplicada: false, motivo: v.errors.join(' ') };
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await insertarFilas(client, 'balance_masas', entity, [v.values], { userId: idUsuario, origen: 'simulacion', idCarga: fr.id_carga });
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+  return { aplicada: true };
+}
+router.aplicarFilaSimulacion = aplicarFilaSimulacion;
 
 // Aplica una carga programada (lo llama el job). Si toca dias ya sellados, deja el motivo automatico.
 async function aplicarCargaProgramada(c) {
@@ -674,6 +777,12 @@ router.get('/:entity/template', guard(async (req, res) => {
     instructions.push([f.label, f.required ? 'Sí' : 'No', f.type, formato]);
   }
 
+  if (req.params.entity === 'balance_masas') {
+    // Columna extra para la simulacion por hora (asociaciones de prueba); en las demas cargas se ignora.
+    headers.push('Hora');
+    exampleRow['Hora'] = '09:00';
+    instructions.push(['Hora', 'Solo simulación', 'hora', 'Solo para la simulación por hora en asociaciones de prueba: hora en que esa fila entra al sistema (09:00, 3 pm o 15:30). En las demás cargas se ignora.']);
+  }
   const wb = XLSX.utils.book_new();
   const wsPlantilla = XLSX.utils.json_to_sheet([exampleRow], { header: headers });
   wsPlantilla['!cols'] = headers.map(() => ({ wch: 28 }));

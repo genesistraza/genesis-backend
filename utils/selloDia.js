@@ -18,7 +18,8 @@ async function datosDelDia(q, idCentro, fecha) {
             bm.cantidad::text AS cantidad, bm.valor::text AS valor, bm.cantidad_rechazo::text AS rechazo,
             bm.cantidad_nosui::text AS nosui, b.cod_bodega AS eca, m.cod_macrorruta AS macrorruta,
             to_char(bm.creado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS registrado,
-            to_char(bm.modificado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS modificado
+            to_char(bm.modificado_en AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS modificado,
+            bm.origen = 'simulacion' AS simulacion
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
@@ -30,6 +31,8 @@ async function datosDelDia(q, idCentro, fecha) {
     // Hora (Colombia) en que el dato entro al sistema y su ultima modificacion. El origen (manual,
     // Excel o carga programada) queda solo en la base de datos, no en el sello publico.
     registrado: x.registrado, modificado: x.modificado,
+    // Las filas de simulacion (solo asociaciones de prueba) quedan marcadas en el sello.
+    ...(x.simulacion ? { simulacion: true } : {}),
   })).sort((a, b) => (a.reciclador + '|' + a.material).localeCompare(b.reciclador + '|' + b.material) || huella.canonico(a).localeCompare(huella.canonico(b)));
   return { filas };
 }
@@ -80,9 +83,9 @@ async function sellarDias({ hasta = huella.fechaBogota() } = {}) {
       await client.query('SELECT pg_advisory_xact_lock(7102, $1)', [idCentro]);
       const ult = (await client.query('SELECT * FROM tz_sellos_asociacion WHERE id_centro = $1 AND fecha = $2 ORDER BY version DESC LIMIT 1', [idCentro, fecha])).rows[0];
       const { filas } = await datosDelDia(client, idCentro, fecha);
-      const centro = (await client.query('SELECT desc_centro FROM tz_centros WHERE id = $1', [idCentro])).rows[0];
+      const centro = (await client.query('SELECT desc_centro, es_prueba FROM tz_centros WHERE id = $1', [idCentro])).rows[0];
       const version = ult ? ult.version + 1 : 1;
-      const datos = { tipo: 'dia-asociacion', v: 2, id_centro: idCentro, centro: centro ? centro.desc_centro : null, fecha, filas };
+      const datos = { tipo: 'dia-asociacion', v: 2, id_centro: idCentro, centro: centro ? centro.desc_centro : null, fecha, filas, ...(centro && centro.es_prueba ? { prueba: true } : {}) };
       // Solo se compara el contenido (filas): si el dia no cambio, no se sella otra version.
       if (ult && negocio(ult.datos.filas) === negocio(filas)) { await client.query('ROLLBACK'); continue; }
       if (!ult && !filas.length) { await client.query('ROLLBACK'); continue; }

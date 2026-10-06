@@ -360,7 +360,8 @@ async function vistaDia(idCentro, fecha) {
     versiones.push({ version: r.version, codigo: r.codigo, creado: r.creado, motivo: r.motivo, cambios: r.cambios, filas: r.datos.filas,
       totales: { cantidad: t.cantidad, rechazo: t.rechazo, recicladores: t.recicladores.size }, verificacion: await estadoSello('dia', r) });
   }
-  return { tipo: 'dia', centro: rows[rows.length - 1].datos.centro, idCentro, fecha, versiones };
+  const prueba = (await pool.query('SELECT es_prueba FROM tz_centros WHERE id = $1', [idCentro])).rows[0];
+  return { tipo: 'dia', centro: rows[rows.length - 1].datos.centro, idCentro, fecha, versiones, prueba: !!(prueba && prueba.es_prueba) };
 }
 
 async function vistaReciclador(id) {
@@ -391,7 +392,8 @@ async function vistaReciclador(id) {
       verificacion: await estadoSello('dia', actual) });
   }
   if (!dias.length) return null;
-  return { tipo: 'reciclador', reciclador: cod, dias };
+  const prueba = (await pool.query('SELECT bool_or(es_prueba) p FROM tz_centros WHERE id = ANY($1::int[])', [centros])).rows[0];
+  return { tipo: 'reciclador', reciclador: cod, dias, prueba: !!(prueba && prueba.p) };
 }
 
 // GET /comprobantes/consulta?q=...

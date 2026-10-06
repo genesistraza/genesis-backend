@@ -55,6 +55,7 @@ details.tec ol{ padding-left:18px; } details.tec a{ color:var(--blue2); }
 .vacio{ color:var(--soft); text-align:center; padding:26px 10px; }
 .error{ color:var(--red); }
 .hora{ font-size:11.5px; color:var(--soft); white-space:nowrap; }
+.sim{ display:inline-block; font-size:10.5px; font-weight:700; border-radius:10px; padding:1px 7px; background:#EDE7F6; color:#5E35B1; }
 .foot{ text-align:center; font-size:11px; color:#94A3B4; margin:22px 0 10px; }
 @media (max-width:560px){ td, th{ padding:5px 5px; font-size:12px; } }
 @media print{
@@ -89,7 +90,7 @@ function horaTxt(iso){ return new Date(iso).toLocaleString('es-CO', { timeZone: 
 function horaCorta(txt){ if(!txt) return ''; var p = String(txt).split(' '); var d = p[0].split('-'); return Number(d[2]) + ' ' + MESES[Number(d[1]) - 1] + ' ' + (p[1] || ''); }
 function celdaRegistro(f){
   if(!f.registrado) return '<span class="hora">—</span>';
-  return '<span class="hora">' + esc(horaCorta(f.registrado)) + (f.modificado ? '<br>Modificado ' + esc(horaCorta(f.modificado)) : '') + '</span>';
+  return '<span class="hora">' + esc(horaCorta(f.registrado)) + (f.modificado ? '<br>Modificado ' + esc(horaCorta(f.modificado)) : '') + '</span>' + (f.simulacion ? '<br><span class="sim">Simulación</span>' : '');
 }
 var CAMPO = { cantidad: 'Cantidad (kg)', valor: 'Valor/kg', rechazo: 'Rechazo (kg)', nosui: 'No SUI (kg)', eca: 'ECA', macrorruta: 'Macrorruta' };
 
@@ -152,6 +153,7 @@ function renderDia(d, filtroRec){
   var html = '<div class="card"><div class="imprimir-cab"><h1>Certificado de trazabilidad</h1><div>Consulta del ' + esc(horaTxt(new Date().toISOString())) + '</div></div>' +
     '<div class="titulo"><div><h2>' + esc(d.centro || 'Asociación') + '</h2><div class="sub">Día transaccional: <b>' + fechaTxt(d.fecha) + '</b>' + (filtroRec ? ' · Reciclador <b>' + esc(filtroRec) + '</b>' : '') + '</div></div>' +
     '<div class="sub">' + (n > 1 ? n + ' versiones' : '1 versión') + '</div></div>';
+  if(d.prueba) html += estado('wait', 'Asociación de prueba', 'Estos datos son de prueba o simulación y no corresponden a operación real.');
   if(n > 1) html += estado('wait', 'Este día fue corregido después de sellado', 'La versión anterior se conserva en rojo; la actual, en verde. Ninguna se puede borrar.');
   // Actual primero (verde) y luego las antiguas (rojo), de la mas reciente a la mas vieja.
   for(var i = n - 1; i >= 0; i--){
@@ -172,6 +174,7 @@ function renderReciclador(r){
   var cambiados = r.dias.filter(function(d){ return d.cambiado; }).length;
   var html = '<div class="card"><div class="imprimir-cab"><h1>Certificado de trazabilidad del reciclador</h1></div>' +
     '<div class="titulo"><div><h2>Reciclador ' + esc(r.reciclador) + '</h2><div class="sub">' + esc(r.dias[0].centro || '') + ' · ' + r.dias.length + ' días sellados</div></div></div>' +
+    (r.prueba ? estado('wait', 'Asociación de prueba', 'Estos datos son de prueba o simulación y no corresponden a operación real.') : '') +
     (cambiados ? estado('wait', cambiados + (cambiados === 1 ? ' día tuvo correcciones' : ' días tuvieron correcciones') + ' después de sellados', 'Están marcados abajo; al abrirlos se ven la versión antigua y la actual.') : estado('ok', 'Sin correcciones', 'Todos sus días coinciden con lo sellado originalmente.')) +
     '<table><thead><tr><th>Día</th><th>Materiales</th><th class="n">Kg</th><th class="n">Rechazo</th><th>Estado</th></tr></thead><tbody>' +
     r.dias.map(function(d){

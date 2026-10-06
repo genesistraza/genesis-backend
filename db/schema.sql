@@ -991,3 +991,22 @@ CREATE TABLE IF NOT EXISTS tz_balance_anexos (
   creado TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS tz_balance_anexos_idx ON tz_balance_anexos (id_reciclador, fecha);
+
+-- Asociaciones de prueba: solo en ellas se permite la simulacion de cargas por hora. Sus datos se
+-- muestran en la consulta publica como "datos de prueba".
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS es_prueba BOOLEAN DEFAULT FALSE;
+UPDATE tz_centros SET es_prueba = TRUE WHERE cod_centro = 'DEMO-01' AND es_prueba IS NOT TRUE;
+
+-- Simulacion de cargas por hora (solo asociaciones de prueba): cada fila del archivo entra sola a la
+-- hora indicada en su columna Hora. Las filas quedan con origen 'simulacion'.
+ALTER TABLE tz_cargas_programadas ADD COLUMN IF NOT EXISTS modo VARCHAR(20) DEFAULT 'completa'; -- completa | simulacion
+CREATE TABLE IF NOT EXISTS tz_cargas_filas (
+  id BIGSERIAL PRIMARY KEY,
+  id_carga BIGINT NOT NULL,
+  fila JSONB NOT NULL,
+  aplicar_en TIMESTAMPTZ NOT NULL,
+  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente', -- pendiente | aplicada | omitida | cancelada
+  resultado TEXT,
+  aplicada_en TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS tz_cargas_filas_pend_idx ON tz_cargas_filas (estado, aplicar_en);

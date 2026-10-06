@@ -189,7 +189,8 @@
         <strong>Carga masiva</strong>
         <button type="button" class="btn" onclick="downloadBmFormato()">Descargar formato</button>
         <input type="file" id="cargaArchivo" accept=".xlsx,.xls,.csv" style="max-width:210px;">
-        <span class="sep">Aplicar el</span><input type="datetime-local" id="cargaCuando">
+        <span class="sep" id="cargaCuandoLbl">Aplicar el</span><input type="datetime-local" id="cargaCuando">
+        <label style="font-size:12px;" title="Solo asociaciones de prueba: el archivo lleva una columna Hora y cada fila entra sola a su hora. Queda marcado como simulación."><input type="checkbox" id="cargaSimulacion" onchange="onCargaModo()"> Simulación por hora (asociaciones de prueba)</label>
         <button type="button" class="btn" onclick="programarCarga()">Validar y programar</button>
         <span class="pruebas-msg" id="cargaMsg"></span>
       </div>
@@ -646,34 +647,54 @@
       var box = document.getElementById('cargasLista');
       if(!res.ok){ box.textContent = res.data.error || 'No se pudo cargar la lista.'; return; }
       if(!res.data.length){ box.innerHTML = '<span style="color:#5B6B7C;">No hay cargas programadas.</span>'; return; }
-      var ESTADO = { programada: 'Programada', ejecutando: 'Aplicando…', ejecutada: 'Aplicada', error: 'Error', cancelada: 'Cancelada' };
+      var ESTADO = { programada: 'Programada', ejecutando: 'Aplicando…', en_curso: 'En curso', ejecutada: 'Aplicada', error: 'Error', cancelada: 'Cancelada', borrada: 'Borrada' };
       box.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr><th style="text-align:left;">#</th><th style="text-align:left;">Archivo</th><th>Filas</th><th style="text-align:left;">Programada para</th><th style="text-align:left;">Estado</th><th></th></tr></thead><tbody>' +
         res.data.map(function(c){
-          var det = c.estado === 'ejecutada' && c.resultado ? ' (' + c.resultado.insertadas + ' cargadas)' : (c.estado === 'error' && c.resultado ? ': ' + gtEscapeHtml(c.resultado.error) : '');
-          return '<tr><td>' + c.id + '</td><td>' + gtEscapeHtml(c.archivo_nombre) + '</td><td style="text-align:center;">' + c.filas_validas + (c.filas_omitidas ? ' <span style="color:#B45F06;">(+' + c.filas_omitidas + ' con error)</span>' : '') + '</td><td>' + fechaHoraCO(c.programada_para) + '</td><td>' + (ESTADO[c.estado] || c.estado) + det + '</td><td>' +
-            (c.estado === 'programada' ? '<button type="button" class="cell-action" style="color:#C0392B;" onclick="cancelarCarga(' + c.id + ')">Cancelar</button>' : '') + '</td></tr>';
+          var sim = c.modo === 'simulacion';
+          var det = sim ? ' (' + c.filas_aplicadas + ' de ' + c.filas_validas + ' filas' + (c.proxima_fila ? '; próxima ' + fechaHoraCO(c.proxima_fila) : '') + ')'
+            : (c.estado === 'ejecutada' && c.resultado ? ' (' + c.resultado.insertadas + ' cargadas)' : (c.estado === 'error' && c.resultado ? ': ' + gtEscapeHtml(c.resultado.error) : ''));
+          return '<tr><td>' + c.id + '</td><td>' + gtEscapeHtml(c.archivo_nombre) + (sim ? ' <span style="color:#5E35B1;font-weight:600;">· simulación</span>' : '') + '</td><td style="text-align:center;">' + c.filas_validas + (c.filas_omitidas ? ' <span style="color:#B45F06;">(+' + c.filas_omitidas + ' con error)</span>' : '') + '</td><td>' + fechaHoraCO(c.programada_para) + '</td><td>' + (ESTADO[c.estado] || c.estado) + det + '</td><td>' +
+            ((c.estado === 'programada' || c.estado === 'en_curso') ? '<button type="button" class="cell-action" style="color:#C0392B;" onclick="cancelarCarga(' + c.id + ')">Cancelar</button>' : '') +
+            (sim && c.estado !== 'borrada' ? ' <button type="button" class="cell-action" style="color:#C0392B;" onclick="borrarSimulacion(' + c.id + ')">Borrar simulación</button>' : '') + '</td></tr>';
         }).join('') + '</tbody></table>';
     });
   }
+  function onCargaModo(){
+    var sim = document.getElementById('cargaSimulacion').checked;
+    document.getElementById('cargaCuando').style.display = sim ? 'none' : '';
+    document.getElementById('cargaCuandoLbl').textContent = sim ? 'Cada fila entra a la hora de su columna "Hora" ·' : 'Aplicar el';
+  }
   function programarCarga(){
     var file = document.getElementById('cargaArchivo').files[0];
+    var sim = document.getElementById('cargaSimulacion').checked;
     var cuando = document.getElementById('cargaCuando').value;
     var msg = document.getElementById('cargaMsg');
-    if(!file || !cuando){ msg.style.color = '#C0392B'; msg.textContent = 'Elige el archivo y la fecha y hora en que se debe aplicar.'; return; }
+    if(!file || (!sim && !cuando)){ msg.style.color = '#C0392B'; msg.textContent = sim ? 'Elige el archivo (con una columna Hora).' : 'Elige el archivo y la fecha y hora en que se debe aplicar.'; return; }
     var fd = new FormData();
     fd.append('file', file);
-    fd.append('programada_para', new Date(cuando).toISOString()); // datetime-local viene en hora de este computador
+    if(sim) fd.append('modo', 'simulacion');
+    else fd.append('programada_para', new Date(cuando).toISOString()); // datetime-local viene en hora de este computador
     msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Validando el archivo…';
     fetch(API_BASE + '/trazabilidad/cargas-programadas', { method: 'POST', headers: { 'Authorization': 'Bearer ' + gtGetToken() }, body: fd })
       .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, data: d }; }); })
       .then(function(res){
         if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.data.error || 'No se pudo programar.'; if(res.data.detalles) console.warn('Filas con problemas:', res.data.detalles); return; }
         msg.style.color = res.data.omitidas ? '#B45F06' : 'var(--green)';
-        msg.textContent = 'Carga #' + res.data.id + ' programada para ' + fechaHoraCO(res.data.programada_para) + ': ' + res.data.validas + ' filas válidas' + (res.data.omitidas ? ', ' + res.data.omitidas + ' con error (no se cargarán): ' + (res.data.detalles || []).slice(0, 2).join(' | ') : '.');
+        msg.textContent = (res.data.modo === 'simulacion'
+          ? 'Simulación #' + res.data.id + ': ' + res.data.validas + ' filas, entran entre las ' + res.data.horas[0] + ' y las ' + res.data.horas[res.data.horas.length - 1]
+          : 'Carga #' + res.data.id + ' programada para ' + fechaHoraCO(res.data.programada_para) + ': ' + res.data.validas + ' filas válidas')
+          + (res.data.omitidas ? ', ' + res.data.omitidas + ' con error (no se cargarán): ' + (res.data.detalles || []).slice(0, 2).join(' | ') : '.');
         document.getElementById('cargaArchivo').value = '';
         cargarListaCargas();
       })
       .catch(function(){ msg.style.color = '#C0392B'; msg.textContent = 'No se pudo programar.'; });
+  }
+  function borrarSimulacion(id){
+    if(!confirm('¿Borrar todos los registros que cargó la simulación #' + id + ' y cancelar lo que falte?')) return;
+    gtApiFetch('/trazabilidad/cargas-programadas/' + id + '/borrar-simulacion', { method: 'POST' }).then(function(res){
+      alert(res.ok ? 'Simulación borrada (' + res.data.filas + ' registros).' : (res.data.error || 'No se pudo borrar.'));
+      cargarListaCargas();
+    });
   }
   function cancelarCarga(id){
     if(!confirm('¿Cancelar la carga #' + id + '? No se aplicará.')) return;
