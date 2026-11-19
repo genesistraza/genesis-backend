@@ -73,6 +73,7 @@
   .bm-head label{ display:block;font-size:10.5px;font-weight:600;color:var(--ink-soft); }
   .bm-head input, .bm-head select{ width:100%;box-sizing:border-box;font-size:12px;padding:5px 6px;border:1px solid var(--line);border-radius:5px;font-family:inherit; }
   .bm-grid input{ width:96px;font-size:12px;padding:3px 5px;border:1px solid var(--line);border-radius:4px;text-align:right; }
+  .bm-grid input::placeholder{ color:#8C99A8;font-style:italic; }
   .bm-grid input.bad{ border-color:#C0392B;background:#FDF1EF; }
   .bm-fecha{ font-weight:700;color:var(--blue-deep); }
   .pick-row{ display:grid;grid-template-columns:120px 1fr 160px;gap:6px;padding:6px 8px;border-bottom:1px solid #F0F2F6;cursor:pointer;font-size:12px; }
@@ -505,7 +506,7 @@
       '<div class="tw bm-grid"><table class="t"><thead><tr><th>Material</th><th class="num">Cantidad (kg)</th><th class="num">Valor por kg</th><th class="num">Total</th>' +
       '<th class="num" title="Lo que el reciclador trajo y no sirve. Nunca puede ser mayor que los kilos recibidos.">Rechazo (kg) ⓘ</th><th class="num" title="Kilos que no se reportan al SUI. Nunca mayor que los kilos recibidos.">No SUI (kg) ⓘ</th></tr></thead>' +
       '<tbody id="bmBody"></tbody><tfoot><tr><td>Totales del día</td><td class="num" id="bmTq"></td><td></td><td class="num" id="bmTv"></td><td class="num" id="bmTr"></td><td class="num" id="bmTn"></td></tr></tfoot></table></div>' +
-      '<p class="muted" style="margin:6px 0 0;font-size:11.5px;">El rechazo y el no SUI nunca pueden ser mayores que los kilos recibidos del material.</p></div>';
+      '<p class="muted" style="margin:6px 0 0;font-size:11.5px;">Si no escribes el rechazo, el sistema pone el ' + String(1.8).replace('.', ',') + ' % de los kilos (se ve en gris, "est."). Si lo pesaste, escribe el valor real. El rechazo y el no SUI nunca pueden ser mayores que los kilos recibidos.</p></div>';
     $('bmFecha').onchange = function(){ guardarYa(); cargarDiaBm(); };
     $('bmBuscar').onclick = function(){ guardarYa(); abrirPickerBm(); };
     $('bmFamilia').onchange = pintarGridBm;
@@ -579,7 +580,11 @@
   }
   function desdeExistentes(){
     BM.valores = {};
-    Object.keys(BM.existentes).forEach(function(id){ var e = BM.existentes[id]; BM.valores[id] = {}; BM_CAMPOS.forEach(function(c){ var n = Number(e[c]); BM.valores[id][c] = n ? String(n) : ''; }); });
+    Object.keys(BM.existentes).forEach(function(id){ var e = BM.existentes[id]; BM.valores[id] = {}; BM_CAMPOS.forEach(function(c){
+      var n = Number(e[c]);
+      if(c === 'cantidad_rechazo') BM.valores[id][c] = e.rechazo_estimado ? '' : (Number(e.cantidad) > 0 && e[c] !== undefined && e[c] !== null ? String(n) : '');
+      else BM.valores[id][c] = n ? String(n) : '';
+    }); });
   }
   function cargarDiaBm(){
     tituloBm();
@@ -631,12 +636,14 @@
   }
   function totalesBm(){
     var q = 0, v = 0, r = 0, s = 0;
-    Object.keys(BM.valores).forEach(function(id){ var x = BM.valores[id]; q += n0(x.cantidad) || 0; v += (n0(x.cantidad) * n0(x.valor)) || 0; r += n0(x.cantidad_rechazo) || 0; s += n0(x.cantidad_nosui) || 0; });
+    Object.keys(BM.valores).forEach(function(id){ var x = BM.valores[id]; q += n0(x.cantidad) || 0; v += (n0(x.cantidad) * n0(x.valor)) || 0; r += (vacioRech(x) ? rechEstimado(x) : n0(x.cantidad_rechazo)) || 0; s += n0(x.cantidad_nosui) || 0; });
     document.querySelectorAll('#bmBody tr').forEach(function(tr){
       var id = tr.getAttribute('data-m'), x = BM.valores[id] || {}, t = n0(x.cantidad) * n0(x.valor), p = problemaFila(id);
       tr.querySelector('.bm-t').textContent = t ? num(t) : '';
       tr.classList.toggle('con-datos', n0(x.cantidad) > 0);
       tr.querySelectorAll('input').forEach(function(i){ i.classList.toggle('bad', !!p); i.title = p; });
+      var ir = tr.querySelector('input[data-c="cantidad_rechazo"]'), est = rechEstimado(x);
+      if(ir){ ir.placeholder = est ? num(est) + ' est.' : ''; if(!p) ir.title = est ? 'Estimado: ' + String(pctRech()).replace('.', ',') + ' % de los kilos. Escribe el rechazo real si lo pesaste.' : ''; }
     });
     $('bmTq').textContent = num(q); $('bmTv').textContent = num(v); $('bmTr').textContent = num(r); $('bmTn').textContent = num(s);
     $('bmImprimir').disabled = !(BM.sel && (Object.keys(BM.existentes).length || q > 0));
@@ -659,8 +666,12 @@
       id_bodega: $('bmBodega').value || null, id_macrorruta: $('bmMacro').value || null, id_microrruta_1: $('bmMicro1').value || null, id_microrruta_2: $('bmMicro2').value || null });
   }
   function materialesBm(){
-    return Object.keys(BM.valores).map(function(id){ var v = BM.valores[id]; return { id_tipo_material: Number(id), cantidad: n0(v.cantidad), valor: n0(v.valor), cantidad_rechazo: n0(v.cantidad_rechazo), cantidad_nosui: n0(v.cantidad_nosui) }; });
+    return Object.keys(BM.valores).map(function(id){ var v = BM.valores[id]; return { id_tipo_material: Number(id), cantidad: n0(v.cantidad), valor: n0(v.valor), cantidad_rechazo: vacioRech(v) ? null : n0(v.cantidad_rechazo), cantidad_nosui: n0(v.cantidad_nosui) }; });
   }
+  // Rechazo sin escribir -> se usa el porcentaje fijo de la asociacion (queda marcado como estimado).
+  function vacioRech(v){ return v.cantidad_rechazo === undefined || v.cantidad_rechazo === null || v.cantidad_rechazo === ''; }
+  function pctRech(){ return BM.sel ? Number(BM.sel.pct_rechazo) || 0 : 0; }
+  function rechEstimado(v){ var q = n0(v.cantidad); return vacioRech(v) && q > 0 ? Math.round(q * pctRech()) / 100 : 0; }
   function programarGuardado(ms){ clearTimeout(BM.timer); BM.timer = setTimeout(guardarAuto, ms); }
   function guardarYa(){ if(BM.dirty && !BM.anexo){ clearTimeout(BM.timer); guardarAuto(); } }
   // Guarda el dia completo (el servidor solo toca los materiales que cambiaron).

@@ -1230,3 +1230,9 @@ CREATE TABLE IF NOT EXISTS tz_nuaps (
 -- Facturas del sistema de usuarios: se guardan en tz_comprobantes (para que el QR abra la factura)
 -- pero sin huella ni sello: la cadena de integridad queda solo en Pruebas.
 ALTER TABLE tz_comprobantes ADD COLUMN IF NOT EXISTS sin_cadena BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Rechazo estimado (sistema de usuarios): si el usuario no escribe el rechazo de un material, se
+-- calcula el porcentaje fijo de la asociacion sobre los kilos recibidos y la fila queda marcada.
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS rechazo_estimado BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS pct_rechazo_estimado NUMERIC(5,2);
+UPDATE tz_centros SET pct_rechazo_estimado = 1.8 WHERE modulo = 'sistema' AND pct_rechazo_estimado IS NULL;

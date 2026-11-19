@@ -841,7 +841,7 @@ router.get('/balance-masas-dia', HANDLERS.bmDiaGet = guard(async (req, res) => {
   const idReciclador = parseId(req.query.id_reciclador);
   if (!idReciclador || !isValidYmd(req.query.fecha)) return res.status(400).json({ error: 'Falta id_reciclador o la fecha no es válida.' });
   const result = await pool.query(
-    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui,
+    `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, rechazo_estimado,
             id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
     [idReciclador, req.query.fecha]
@@ -922,7 +922,9 @@ async function validateBalanceDia(body) {
       return n;
     };
     const row = { id_tipo_material: id, cantidad: num(m.cantidad, 'Cantidad'), valor: num(m.valor, 'Valor'),
-      cantidad_rechazo: num(m.cantidad_rechazo, 'Cantidad rechazo'), cantidad_nosui: num(m.cantidad_nosui, 'Cantidad no SUI') };
+      cantidad_rechazo: num(m.cantidad_rechazo, 'Cantidad rechazo'), cantidad_nosui: num(m.cantidad_nosui, 'Cantidad no SUI'),
+      // Rechazo estimado (porcentaje fijo de la asociacion cuando no se escribio): queda marcado.
+      rechazo_estimado: m.rechazo_estimado === true };
     if (!(row.cantidad || row.valor || row.cantidad_rechazo || row.cantidad_nosui)) return; // fila vacia de la grilla
     const rowErrors = [];
     CROSS.balance_masas(row, rowErrors);
@@ -947,10 +949,10 @@ router.post('/balance-masas-dia', HANDLERS.bmDiaPost = guard(async (req, res) =>
   // Si lo que llega es igual a lo guardado (p. ej. al reimprimir), no se toca nada: ni se reescribe
   // el dia ni se pide motivo, porque no hay ningun cambio.
   const actuales = (await pool.query(
-    `SELECT id_centro, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui,
+    `SELECT id_centro, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, rechazo_estimado,
             id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`, [idReciclador, fecha])).rows;
-  const firma = (list) => list.map((r) => [r.id_tipo_material, Number(r.cantidad), Number(r.valor), Number(r.cantidad_rechazo), Number(r.cantidad_nosui)].join('|')).sort().join(';');
+  const firma = (list) => list.map((r) => [r.id_tipo_material, Number(r.cantidad), Number(r.valor), Number(r.cantidad_rechazo), Number(r.cantidad_nosui), !!r.rechazo_estimado].join('|')).sort().join(';');
   const mismosOpcionales = actuales.every((r) => r.id_centro === idCentro && ['id_numacro', 'id_bodega', 'id_macrorruta', 'id_microrruta_1', 'id_microrruta_2'].every((k) => (r[k] || null) === (opcionales[k] || null)));
   if (actuales.length && filas.length && mismosOpcionales && firma(actuales) === firma(filas)) {
     return res.json({ message: 'Sin cambios.', filas: filas.length, sinCambios: true });
@@ -965,7 +967,7 @@ router.post('/balance-masas-dia', HANDLERS.bmDiaPost = guard(async (req, res) =>
     // Fila por fila (no borrar y recrear todo): asi cada registro conserva su hora de creacion y
     // solo los que de verdad cambian quedan con hora y usuario de la ultima modificacion.
     const existentes = (await client.query(
-      `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
+      `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, rechazo_estimado, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
        FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2 ORDER BY id`, [idReciclador, fecha])).rows;
     const porMaterial = new Map();
     const sobrantes = [];
@@ -976,23 +978,24 @@ router.post('/balance-masas-dia', HANDLERS.bmDiaPost = guard(async (req, res) =>
       if (!e) {
         await client.query(
           `INSERT INTO tz_formulario_balance_masas
-           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual')`,
+           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen, rechazo_estimado)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual',$15)`,
           [idCentro, idReciclador, m.id_tipo_material, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta,
             opcionales.id_microrruta_1, opcionales.id_microrruta_2, fecha,
-            m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id]
+            m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, m.rechazo_estimado]
         );
         continue;
       }
       porMaterial.delete(m.id_tipo_material);
       const igual = Number(e.cantidad) === m.cantidad && Number(e.valor) === m.valor && Number(e.cantidad_rechazo) === m.cantidad_rechazo
-        && Number(e.cantidad_nosui) === m.cantidad_nosui && OPC.every((k) => (e[k] || null) === (opcionales[k] || null));
+        && Number(e.cantidad_nosui) === m.cantidad_nosui && !!e.rechazo_estimado === m.rechazo_estimado
+        && OPC.every((k) => (e[k] || null) === (opcionales[k] || null));
       if (igual) continue;
       await client.query(
         `UPDATE tz_formulario_balance_masas SET id_centro = $1, id_numacro = $2, id_bodega = $3, id_macrorruta = $4, id_microrruta_1 = $5, id_microrruta_2 = $6,
-           cantidad = $7, valor = $8, cantidad_rechazo = $9, cantidad_nosui = $10, modificado_en = NOW(), modificado_por = $11 WHERE id = $12`,
+           cantidad = $7, valor = $8, cantidad_rechazo = $9, cantidad_nosui = $10, modificado_en = NOW(), modificado_por = $11, rechazo_estimado = $13 WHERE id = $12`,
         [idCentro, opcionales.id_numacro, opcionales.id_bodega, opcionales.id_macrorruta, opcionales.id_microrruta_1, opcionales.id_microrruta_2,
-          m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id]
+          m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id, m.rechazo_estimado]
       );
     }
     const borrar = sobrantes.concat([...porMaterial.values()].map((e) => e.id));
@@ -1038,10 +1041,10 @@ router.post('/balance-masas-dia/anexar', HANDLERS.bmDiaAnexar = guard(async (req
       if (!e) {
         await client.query(
           `INSERT INTO tz_formulario_balance_masas
-           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual')`,
+           (id_centro, id_reciclador, id_tipo_material, id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2, fecha, cantidad, valor, cantidad_rechazo, cantidad_nosui, creado_por, origen, rechazo_estimado)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'manual',$15)`,
           [idCentro, idReciclador, m.id_tipo_material, sel('id_numacro'), sel('id_bodega'), sel('id_macrorruta'), sel('id_microrruta_1'), sel('id_microrruta_2'),
-            fecha, m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id]);
+            fecha, m.cantidad, m.valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, m.rechazo_estimado]);
         continue;
       }
       const q0 = Number(e.cantidad), v0 = Number(e.valor);
@@ -1049,8 +1052,8 @@ router.post('/balance-masas-dia/anexar', HANDLERS.bmDiaAnexar = guard(async (req
       const valor = q > 0 ? r2((q0 * v0 + m.cantidad * m.valor) / q) : v0;
       await client.query(
         `UPDATE tz_formulario_balance_masas SET cantidad = $1, valor = $2, cantidad_rechazo = cantidad_rechazo + $3, cantidad_nosui = cantidad_nosui + $4,
-           modificado_en = NOW(), modificado_por = $5 WHERE id = $6`,
-        [q, valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id]);
+           modificado_en = NOW(), modificado_por = $5, rechazo_estimado = rechazo_estimado OR $7 WHERE id = $6`,
+        [q, valor, m.cantidad_rechazo, m.cantidad_nosui, req.user.id, e.id, m.rechazo_estimado]);
     }
     await client.query('INSERT INTO tz_balance_anexos (id_centro, id_reciclador, fecha, materiales, user_id) VALUES ($1,$2,$3,$4,$5)',
       [idCentro, idReciclador, fecha, JSON.stringify(filas), req.user.id]);

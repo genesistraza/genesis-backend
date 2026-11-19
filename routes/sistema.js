@@ -298,7 +298,7 @@ router.post('/datos/:clave', guard(async (req, res) => {
   if (v.errors.length) return sendErrores(res, v.errors);
   let datos = v.values;
   if (key === 'balance_masas') datos = { ...datos, creado_por: req.user.id, origen: 'manual' };
-  if (key === 'centros') datos = { ...datos, modulo: 'sistema' };
+  if (key === 'centros') datos = { ...datos, modulo: 'sistema', pct_rechazo_estimado: 1.8 };
   const cols = Object.keys(datos);
   const r = await pool.query(
     `INSERT INTO ${entity.table} (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`,
@@ -427,7 +427,8 @@ router.delete('/catalogos/:clave/:id', guard(async (req, res) => {
 // GET /sistema/bm/contexto -> recicladores de las asociaciones visibles y materiales
 router.get('/bm/contexto', exigir('balance_masas'), guard(async (req, res) => {
   const rec = await pool.query(
-    `SELECT r.id, r.id_centro, c.desc_centro AS id_centro_label, r.nombre_completo, r.nro_documento, r.tipo_de_vehiculo, r.placa
+    `SELECT r.id, r.id_centro, c.desc_centro AS id_centro_label, r.nombre_completo, r.nro_documento, r.tipo_de_vehiculo, r.placa,
+            COALESCE(c.pct_rechazo_estimado, 0)::float AS pct_rechazo
      FROM tz_recicladores r JOIN tz_centros c ON c.id = r.id_centro WHERE r.id_centro = ANY($1::int[]) ORDER BY r.nombre_completo`, [req.sis.idsCentros]);
   const mat = await pool.query('SELECT id, cod_tipo_material, desc_tipo_material, desc_familia, secuencia_orden FROM tz_tipos_material ORDER BY secuencia_orden, desc_tipo_material');
   res.json({ recicladores: rec.rows, materiales: mat.rows });
@@ -523,6 +524,19 @@ async function prepararDia(req, res) {
   const rec = await recicladorVisible(req, req.body && req.body.id_reciclador);
   if (!rec) { res.status(404).json({ error: 'Reciclador no encontrado.' }); return false; }
   req.body.id_centro = rec.id_centro;
+  // Rechazo vacio (null o '') -> porcentaje fijo de la asociacion sobre los kilos, marcado como
+  // estimado. Si el usuario escribio un valor (aunque sea 0), se respeta tal cual.
+  const pct = Number((await pool.query('SELECT pct_rechazo_estimado FROM tz_centros WHERE id = $1', [rec.id_centro])).rows[0].pct_rechazo_estimado) || 0;
+  if (Array.isArray(req.body.materiales)) {
+    req.body.materiales = req.body.materiales.map((m) => {
+      const vacio = !m || m.cantidad_rechazo === null || m.cantidad_rechazo === undefined || m.cantidad_rechazo === '';
+      const kg = Number(m && m.cantidad);
+      if (vacio && pct > 0 && Number.isFinite(kg) && kg > 0) {
+        return { ...m, cantidad_rechazo: Math.round(kg * pct) / 100, rechazo_estimado: true };
+      }
+      return { ...m, rechazo_estimado: false };
+    });
+  }
   return true;
 }
 router.post('/bm/dia', exigir('balance_masas'), guard(async (req, res, next) => {
