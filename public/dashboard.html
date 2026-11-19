@@ -42,14 +42,20 @@
     <div class="side-link" data-tab="registro" id="sideRegistro" onclick="showTab('registro')" style="display:none;">Registro</div>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
     <div class="side-link side-group-toggle" id="dashboardGroupToggle" onclick="gtToggleDashboardGroup()">
-      <span>Dashboard</span><span class="caret">▾</span>
+      <span>Panel de control</span><span class="caret">▾</span>
     </div>
     <div id="dashboardSubmenu" style="display:none;">
       <div class="side-link sub" data-tab="balance" onclick="showTab('balance')">Balance de masas</div>
       <div class="side-link sub" data-tab="recicladores" onclick="showTab('recicladores')">Recicladores</div>
     </div>
     <a class="side-link" href="index.html#planes">Ver planes</a>
-    <a class="side-link" href="index.html">Ir a la web</a>
+    <div class="side-link side-group-toggle" id="salirGroupToggle" onclick="gtToggleSalirGroup()">
+      <span>Salir</span><span class="caret">▾</span>
+    </div>
+    <div id="salirSubmenu" style="display:none;">
+      <a class="side-link sub" href="index.html">Ir a la web inicial</a>
+      <div class="side-link sub" onclick="gtLogout()">Cerrar sesión</div>
+    </div>
     <div class="side-spacer"></div>
     <div class="side-user">
       <div class="name" id="sideUserName">—</div>
@@ -303,6 +309,13 @@
       gtRecicladoresLoadedOnce = true;
       loadRecicladores();
     }
+  }
+
+  function gtToggleSalirGroup(){
+    var submenu = document.getElementById('salirSubmenu');
+    var willOpen = submenu.style.display === 'none';
+    submenu.style.display = willOpen ? 'block' : 'none';
+    document.getElementById('salirGroupToggle').classList.toggle('open', willOpen);
   }
 
   function gtToggleDashboardGroup(){
