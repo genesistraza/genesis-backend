@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/favicon.png">
 <title>Sistema | Genesis Traza</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -163,7 +164,8 @@
 
   function pintarMenu(){
     var nav = $('sisMenu');
-    nav.innerHTML = SIS.menu.map(function(m, i){
+    // "Salir" no va en este menu: se sale desde el menu lateral del panel.
+    nav.innerHTML = SIS.menu.filter(function(m){ return m.clave !== 'salir'; }).map(function(m, i){
       if(!m.submenu.length) return '<div class="sis-mi" data-i="' + i + '"><button type="button" data-ir="' + esc(m.clave) + '">' + esc(m.descripcion) + '</button></div>';
       return '<div class="sis-mi" data-i="' + i + '"><button type="button" data-abrir="1">' + esc(m.descripcion) + ' ▾</button><div class="sis-fly">' +
         m.submenu.map(function(s){ return '<button type="button" data-ir="' + esc(s.clave) + '">' + esc(s.descripcion) + '</button>'; }).join('') + '</div></div>';
@@ -213,17 +215,9 @@
   }
 
   // ---------- Inicio ----------
+  // Inicio: igual que el sistema anterior (Default.aspx), solo la imagen de Genesis Traza.
   PANTALLAS.inicio = function(main){
-    main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Inicio</h2></div>' +
-      '<p style="margin:0 0 10px;">Bienvenido(a), <b>' + esc(SIS.me.nombre) + '</b>. Perfil: <b>' + esc(SIS.me.descPerfil) + '</b>.' +
-      (SIS.me.todasAsociaciones ? '' : ' &nbsp;<a class="b solo-solo" href="dashboard.html">Mi cuenta y pagos</a>') + '</p>' +
-      '<div class="cards" id="inicioCards"></div></div>';
-    var accesos = [];
-    SIS.menu.forEach(function(m){ if(/Formularios/i.test(m.descripcion)) accesos = accesos.concat(m.submenu); });
-    $('inicioCards').innerHTML = accesos.map(function(s){
-      return '<div class="card"><h4>' + esc(s.descripcion) + '</h4><button class="b pri" data-ir2="' + esc(s.clave) + '">Abrir</button></div>';
-    }).join('') || '<p class="muted">Usa el menú de arriba para empezar.</p>';
-    $('inicioCards').querySelectorAll('[data-ir2]').forEach(function(b){ b.onclick = function(){ ir(b.getAttribute('data-ir2')); }; });
+    main.innerHTML = '<div style="display:flex;justify-content:center;padding:24px 0;"><img src="sistema-inicio.jpg" alt="Genesis Traza" style="width:75%;max-width:1100px;height:auto;border-radius:8px;"></div>';
   };
 
   // ---------- Pantalla generica de una tabla (tablas de referencia y formularios) ----------

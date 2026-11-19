@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/favicon.png">
 <title>Mi cuenta | Genesis Traza</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -48,7 +49,7 @@
       <div class="side-link sub" data-tab="balance" onclick="showTab('balance')">Balance de masas</div>
       <div class="side-link sub" data-tab="recicladores" onclick="showTab('recicladores')">Recicladores</div>
     </div>
-    <a class="side-link" href="index.html#planes">Ver planes</a>
+    <div class="side-link" data-tab="planes" onclick="showTab('planes')">Ver planes</div>
     <div class="side-link side-group-toggle" id="salirGroupToggle" onclick="gtToggleSalirGroup()">
       <span>Salir</span><span class="caret">▾</span>
     </div>
@@ -79,6 +80,21 @@
     <!-- Registro: el sistema de usuarios (sistema.html) dentro del panel -->
     <section class="tab-panel" id="tab-registro" style="display:none;">
       <iframe id="registroFrame" title="Registro" style="width:100%;height:calc(100vh - 40px);border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+    </section>
+
+    <!-- Ver planes: dentro del panel, como las demas opciones del menu lateral -->
+    <section class="tab-panel" id="tab-planes" style="display:none;">
+      <div id="planPickerPanel" class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+          <h2 style="margin:0;">Planes</h2>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-primary" id="cycleMensualBtn" onclick="setPlanPickerCycle('mensual')">Mensual</button>
+            <button type="button" class="btn btn-outline" id="cycleAnualBtn" onclick="setPlanPickerCycle('anual')">Anual</button>
+          </div>
+        </div>
+        <div id="planPickerGrid" class="plan-preview-grid"></div>
+        <p id="planPickerMsg" style="margin-top:10px;font-size:13px;"></p>
+      </div>
     </section>
 
     <section class="tab-panel" id="tab-resumen">
@@ -115,7 +131,7 @@
       <div id="noAssociationPanel" class="panel" style="display:none;text-align:center;">
         <h2>Aún no tienes un plan activo</h2>
         <p style="color:var(--ink-soft);margin-top:8px;">Elige un plan desde la landing para empezar.</p>
-        <a class="btn btn-primary" href="index.html#planes" style="margin-top:18px;">Ver planes</a>
+        <button type="button" class="btn btn-primary" onclick="showTab('planes')" style="margin-top:18px;">Ver planes</button>
       </div>
 
       <div id="renewalPanel" class="panel" style="display:none;">
@@ -126,18 +142,6 @@
         <button class="btn btn-primary" id="renewBtn" onclick="renewSubscription()" style="display:none;">Continuar con el mismo plan</button>
         <button class="btn btn-outline" id="changePlanBtn" onclick="openPlanPicker()">Cambiar de plan</button>
         <p id="renewError" style="display:none;color:#C0392B;font-size:13px;margin-top:12px;"></p>
-
-        <div id="planPickerPanel" style="display:none;margin-top:20px;border-top:1px solid var(--border,#eee);padding-top:18px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
-            <h3 style="margin:0;font-size:15px;">Elige tu nuevo plan</h3>
-            <div style="display:flex;gap:8px;">
-              <button type="button" class="btn btn-primary" id="cycleMensualBtn" onclick="setPlanPickerCycle('mensual')">Mensual</button>
-              <button type="button" class="btn btn-outline" id="cycleAnualBtn" onclick="setPlanPickerCycle('anual')">Anual</button>
-            </div>
-          </div>
-          <div id="planPickerGrid" class="plan-preview-grid"></div>
-          <p id="planPickerMsg" style="margin-top:10px;font-size:13px;"></p>
-        </div>
       </div>
 
       <div class="panel" id="paymentsPanel" style="display:none;">
@@ -297,6 +301,7 @@
       var fr = document.getElementById('registroFrame');
       if(!fr.getAttribute('src')) fr.setAttribute('src', 'sistema.html?embebido=1');
     }
+    if(name === 'planes') cargarPlanes();
     if(name === 'rutas' && gtRoutesKmlUrl && !gtRoutesLoadedOnce){
       gtRoutesLoadedOnce = true;
       loadRoutesMap(gtRoutesKmlUrl);
@@ -580,19 +585,16 @@
   var gtAllPlans = [];
   var gtPlanPickerCycle = 'mensual';
 
-  function openPlanPicker(){
-    var panel = document.getElementById('planPickerPanel');
-    var willShow = panel.style.display === 'none';
-    panel.style.display = willShow ? 'block' : 'none';
-    if(willShow){
-      if(gtAllPlans.length === 0){
-        gtApiFetch('/plans').then(function(res){
-          if(res.ok) gtAllPlans = res.data;
-          renderPlanPicker();
-        });
-      } else {
+  // "Ver planes" y "Cambiar de plan" abren la pestaña Planes dentro del panel.
+  function openPlanPicker(){ showTab('planes'); }
+  function cargarPlanes(){
+    if(gtAllPlans.length === 0){
+      gtApiFetch('/plans').then(function(res){
+        if(res.ok) gtAllPlans = res.data;
         renderPlanPicker();
-      }
+      });
+    } else {
+      renderPlanPicker();
     }
   }
 

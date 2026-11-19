@@ -1040,12 +1040,12 @@ CREATE TABLE IF NOT EXISTS gt_menu (
 );
 INSERT INTO gt_menu (id, cod_item, descripcion, clave) VALUES
   (1, 10, 'Inicio', 'inicio'),
-  (2, 20, 'Tablas de referencia', NULL),
+  (2, 20, 'Tablas De Referencia', NULL),
   (16, 21, 'Documentos', NULL),
   (15, 30, 'Usuarios', NULL),
   (12, 31, 'Formularios', NULL),
-  (13, 40, 'Importar datos', NULL),
-  (17, 50, 'Resúmenes', NULL),
+  (13, 40, 'Importar Datos', NULL),
+  (17, 50, 'Resumenes', NULL),
   (14, 90, 'Salir', 'salir')
 ON CONFLICT (id) DO NOTHING;
 SELECT setval(pg_get_serial_sequence('gt_menu', 'id'), GREATEST((SELECT MAX(id) FROM gt_menu), 17));
@@ -1058,15 +1058,15 @@ CREATE TABLE IF NOT EXISTS gt_submenu (
   clave VARCHAR(60) NOT NULL
 );
 INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
-  (69, 2, 100, 'Perfiles acceso', 'perfiles'),
-  (68, 2, 200, 'Items menú', 'menu'),
+  (69, 2, 100, 'Perfiles Acceso', 'perfiles'),
+  (68, 2, 200, 'Items Menu', 'menu'),
   (70, 2, 300, 'Estados', 'estados'),
   (75, 2, 400, 'Colaboradores', 'colaboradores'),
   (77, 2, 500, 'Calendario', 'calendario'),
   (79, 2, 600, 'Asociaciones', 'centros'),
-  (81, 2, 701, 'Numacros asociaciones/localidades', 'numacros'),
+  (81, 2, 701, 'Numacros Asociaciones/Localidades', 'numacros'),
   (82, 2, 702, 'Localidades', 'localidades'),
-  (80, 2, 703, 'Tipos materiales', 'tipos_material'),
+  (80, 2, 703, 'Tipos Materiales', 'tipos_material'),
   (97, 2, 703, 'Ciudades', 'ciudades'),
   (98, 2, 704, 'Nuaps', 'nuaps'),
   (83, 2, 800, 'Recicladores', 'recicladores'),
@@ -1080,25 +1080,25 @@ INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
   (109, 2, 903, 'Lista cargues-Ventas', 'cargues_ventas'),
   (113, 2, 904, 'Lista cargues-Pago tarifas', 'cargues_pago_tarifa'),
   (115, 2, 905, 'Lista cargues-Pago seguridad', 'cargues_pago_seguridad'),
-  (84, 2, 999, 'Cambio password', 'cambio_password'),
+  (84, 2, 999, 'Cambio Password', 'cambio_password'),
   (105, 16, 100, 'Lista documentos', 'lista_documentos'),
   (106, 16, 200, 'Documentos asociaciones', 'documentos_asociaciones'),
   (119, 16, 300, 'Documentos referencia', 'documentos_referencia'),
   (89, 15, 200, 'Usuario uso', 'usuario_uso'),
   (90, 15, 300, 'Usuario tipo', 'usuario_tipo'),
-  (91, 15, 400, 'Usuario multiusuario', 'usuario_multiusuario'),
+  (91, 15, 400, 'Usuario Multiusuario', 'usuario_multiusuario'),
   (92, 15, 500, 'Usuario aforado', 'usuario_aforado'),
   (93, 15, 600, 'Usuario ubicación', 'usuario_ubicacion'),
   (94, 15, 700, 'Usuario clase de uso', 'usuario_clase_uso'),
   (95, 15, 800, 'Usuario tipo de aforo', 'usuario_tipo_aforo'),
   (96, 15, 900, 'Usuarios', 'usuarios'),
-  (74, 12, 1, 'Formulario balance de masas', 'balance_masas'),
-  (87, 12, 2, 'Formulario microrrutas', 'microrrutas'),
+  (74, 12, 1, 'Formulario Balance de Masas', 'balance_masas'),
+  (87, 12, 2, 'Formulario Microrrutas', 'microrrutas'),
   (99, 12, 3, 'Formulario aforados aprovechamiento', 'aprovechamiento'),
   (112, 12, 4, 'Formulario pago tarifas', 'pago_tarifa'),
   (114, 12, 5, 'Formulario pago seguridad', 'pago_seguridad'),
   (118, 12, 6, 'Formulario recursos', 'recursos'),
-  (78, 13, 100, 'Importar datos de Excel', 'importar'),
+  (78, 13, 100, 'Importar datos de excel', 'importar'),
   (107, 17, 100, 'Resumen formulario masas', 'resumen_masas'),
   (108, 17, 200, 'Dashboard', 'dashboard'),
   (110, 17, 200, 'SQL archivos locales', 'sql_archivos')
@@ -1147,18 +1147,21 @@ WHERE a.id = 7 AND NOT EXISTS (SELECT 1 FROM tz_centros WHERE association_id = 7
 -- Enlace del dashboard de cada asociacion (Resumenes > Dashboard), como centros.link_dashboard.
 ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS link_dashboard TEXT;
 
--- Tablas que el SUI exige y el sistema viejo no tenia en el menu (ECA, macrorrutas, areas de
--- prestacion): se agregan a Tablas de referencia y, solo al crearlas, a ADM_CENTROS y USUARIOS.
-WITH nuevos AS (
-  INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
-    (120, 2, 705, 'Bodegas / ECA', 'bodegas'),
-    (121, 2, 706, 'Macrorrutas', 'macrorrutas'),
-    (122, 2, 707, 'Áreas de prestación', 'areas_prestacion')
-  ON CONFLICT (id) DO NOTHING RETURNING id
-)
-INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
-SELECT p.id, n.id FROM nuevos n CROSS JOIN (VALUES (8), (9)) AS p(id)
-ON CONFLICT DO NOTHING;
+-- El menu queda identico al sistema viejo: se quitan las opciones que no tenia (ECA, macrorrutas,
+-- areas de prestacion; esas tablas se manejan desde Pruebas) ...
+DELETE FROM gt_submenu WHERE id IN (120, 121, 122);
+-- ... y los nombres vuelven a ser los del sistema viejo (solo si siguen con el nombre provisional,
+-- para no pisar lo que el administrador cambie en "Items Menu").
+UPDATE gt_menu m SET descripcion = v.nuevo FROM (VALUES
+  (2, 'Tablas de referencia', 'Tablas De Referencia'), (13, 'Importar datos', 'Importar Datos'), (17, 'Resúmenes', 'Resumenes')
+) AS v(id, antes, nuevo) WHERE m.id = v.id AND m.descripcion = v.antes;
+UPDATE gt_submenu s SET descripcion = v.nuevo FROM (VALUES
+  (69, 'Perfiles acceso', 'Perfiles Acceso'), (68, 'Items menú', 'Items Menu'), (79, 'Asociaciones', 'Asociaciones'),
+  (81, 'Numacros asociaciones/localidades', 'Numacros Asociaciones/Localidades'), (80, 'Tipos materiales', 'Tipos Materiales'),
+  (84, 'Cambio password', 'Cambio Password'), (91, 'Usuario multiusuario', 'Usuario Multiusuario'),
+  (74, 'Formulario balance de masas', 'Formulario Balance de Masas'), (87, 'Formulario microrrutas', 'Formulario Microrrutas'),
+  (78, 'Importar datos de Excel', 'Importar datos de excel')
+) AS v(id, antes, nuevo) WHERE s.id = v.id AND s.descripcion = v.antes;
 
 -- Cargues masivos del sistema de usuarios (Importar datos de Excel / Lista cargues-*): cada archivo
 -- queda registrado y sus filas llevan id_cargue, para listarlo o borrarlo completo.
