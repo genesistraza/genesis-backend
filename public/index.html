@@ -473,9 +473,16 @@
   }
 
   function redirectToPanel(role){
-    setTimeout(function(){
-      window.location.href = (role === 'pro' || role === 'admin') ? 'admin-1b98a0bb3a.html' : 'dashboard.html';
-    }, 300);
+    if(role === 'pro' || role === 'admin'){
+      setTimeout(function(){ window.location.href = 'admin-1b98a0bb3a.html'; }, 300);
+      return;
+    }
+    // Usuarios de una asociacion habilitada en el sistema de usuarios (o del equipo Genesis) entran
+    // al sistema; los demas siguen al panel de la cuenta.
+    fetch(API_BASE + '/sistema/me', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('gt_token') } })
+      .then(function(r){ return r.ok; })
+      .catch(function(){ return false; })
+      .then(function(ok){ window.location.href = ok ? 'sistema.html' : 'dashboard.html'; });
   }
 
   function redirectToFacturacion(){

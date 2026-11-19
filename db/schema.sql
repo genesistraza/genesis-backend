@@ -1143,3 +1143,83 @@ ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS modulo VARCHAR(20) NOT NULL DEFA
 INSERT INTO tz_centros (cod_centro, desc_centro, nit, association_id, modulo)
 SELECT '992', 'ASORETRIP', a.nit, a.id, 'sistema' FROM associations a
 WHERE a.id = 7 AND NOT EXISTS (SELECT 1 FROM tz_centros WHERE association_id = 7 OR cod_centro = '992');
+
+-- Enlace del dashboard de cada asociacion (Resumenes > Dashboard), como centros.link_dashboard.
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS link_dashboard TEXT;
+
+-- Tablas que el SUI exige y el sistema viejo no tenia en el menu (ECA, macrorrutas, areas de
+-- prestacion): se agregan a Tablas de referencia y, solo al crearlas, a ADM_CENTROS y USUARIOS.
+WITH nuevos AS (
+  INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
+    (120, 2, 705, 'Bodegas / ECA', 'bodegas'),
+    (121, 2, 706, 'Macrorrutas', 'macrorrutas'),
+    (122, 2, 707, 'Áreas de prestación', 'areas_prestacion')
+  ON CONFLICT (id) DO NOTHING RETURNING id
+)
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT p.id, n.id FROM nuevos n CROSS JOIN (VALUES (8), (9)) AS p(id)
+ON CONFLICT DO NOTHING;
+
+-- Cargues masivos del sistema de usuarios (Importar datos de Excel / Lista cargues-*): cada archivo
+-- queda registrado y sus filas llevan id_cargue, para listarlo o borrarlo completo.
+CREATE TABLE IF NOT EXISTS gt_cargues (
+  id BIGSERIAL PRIMARY KEY,
+  tipo VARCHAR(40) NOT NULL,
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  archivo VARCHAR(255),
+  filas INT NOT NULL DEFAULT 0,
+  user_id INT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE tz_formulario_balance_masas ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_formulario_aprovechamiento ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_usuarios ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_formulario_ventas ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_formulario_pago_tarifa ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_formulario_pago_seguridad ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_formulario_recursos ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+ALTER TABLE tz_recicladores ADD COLUMN IF NOT EXISTS id_cargue BIGINT;
+CREATE INDEX IF NOT EXISTS tz_bm_id_cargue_idx ON tz_formulario_balance_masas (id_cargue) WHERE id_cargue IS NOT NULL;
+
+-- Documentos: tipos (Lista documentos = catalogo tipos_documento_asociacion), documentos de cada
+-- asociacion (uno por tipo, con vigencia) y documentos de referencia (generales).
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, orden) VALUES
+  ('tipos_documento_asociacion', '001', 'CAMARA DE COMERCIO', 1), ('tipos_documento_asociacion', '002', 'RUT', 2),
+  ('tipos_documento_asociacion', '003', 'ESTATUTOS', 3), ('tipos_documento_asociacion', '004', 'CEDULA REPRESENTANTE LEGAL', 4),
+  ('tipos_documento_asociacion', '005', 'ACTA DE CONSTITUCION', 5), ('tipos_documento_asociacion', '006', 'RUPS', 6),
+  ('tipos_documento_asociacion', '007', 'CONTRATO DE CONDICIONES UNIFORMES CCU', 7), ('tipos_documento_asociacion', '008', 'CONCEPTO DE LEGALIDAD DE LA CRA', 8),
+  ('tipos_documento_asociacion', '009', 'RESOLUCION DE FACTURACION', 9), ('tipos_documento_asociacion', '010', 'RESOLUCION DOCUMENTO SOPORTE', 10),
+  ('tipos_documento_asociacion', '011', 'CERTIFICADO CALIBRACION DE BASCULAS', 11), ('tipos_documento_asociacion', '012', 'REGISTRO DE ESTACION DE CLASIFICACION Y ALMACENAMIENTO (ECA)', 12),
+  ('tipos_documento_asociacion', '014', 'RELACION DE MIEMBROS', 14), ('tipos_documento_asociacion', '015', 'DIAGRAMA DE FLUJO', 15),
+  ('tipos_documento_asociacion', '016', 'REGISTRO DE RUES', 16), ('tipos_documento_asociacion', '017', 'USO DE SUELOS', 17),
+  ('tipos_documento_asociacion', '018', 'SANIDAD', 18), ('tipos_documento_asociacion', '019', 'BOMBEROS', 19),
+  ('tipos_documento_asociacion', '020', 'PLAN DE SANEAMIENTO', 20), ('tipos_documento_asociacion', '021', 'PLAN DE EMERGENCIA Y CONTINGENCIA', 21),
+  ('tipos_documento_asociacion', '022', 'PLAN DE LIMPIEZA Y DESINFECCION', 22), ('tipos_documento_asociacion', '023', 'LAVADO DE TANQUES', 23),
+  ('tipos_documento_asociacion', '024', 'CONTROL DE PLAGAS', 24), ('tipos_documento_asociacion', '025', 'RECIBO PUBLICO', 25)
+ON CONFLICT (categoria, codigo) DO NOTHING;
+INSERT INTO tz_catalogos (categoria, codigo, descripcion, orden) VALUES
+  ('ciudades', '000', 'No aplica', 0), ('ciudades', '001', 'BOGOTA', 1), ('ciudades', '002', 'FUNZA', 2),
+  ('ciudades', '003', 'MADRID', 3), ('ciudades', '004', 'MELGAR', 4)
+ON CONFLICT (categoria, codigo) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS gt_documentos (
+  id SERIAL PRIMARY KEY,
+  grupo VARCHAR(20) NOT NULL,                 -- asociacion | referencia
+  id_centro INT REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_tipo INT REFERENCES tz_catalogos(id),    -- solo grupo asociacion
+  nombre VARCHAR(255) NOT NULL,               -- nombre del documento (referencia) o del archivo
+  archivo_url TEXT NOT NULL,
+  vigencia DATE,
+  user_id INT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS gt_documentos_asoc_uidx ON gt_documentos (id_centro, id_tipo) WHERE grupo = 'asociacion';
+
+-- NUAP por asociacion y ciudad (como la tabla nuaps del sistema viejo).
+CREATE TABLE IF NOT EXISTS tz_nuaps (
+  id SERIAL PRIMARY KEY,
+  id_centro INT NOT NULL REFERENCES tz_centros(id) ON DELETE CASCADE,
+  id_ciudad INT REFERENCES tz_catalogos(id),
+  cod_nuap VARCHAR(30) NOT NULL,
+  UNIQUE (cod_nuap)
+);

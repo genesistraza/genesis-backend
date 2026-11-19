@@ -18,6 +18,8 @@ const { fechasSelladas, registrarMotivo, leerMotivo } = require('../utils/selloD
 
 const router = express.Router();
 router.use(requireAuth, requireRole('pro'));
+// Manejadores reutilizados por el sistema de usuarios (que antes verifica la asociacion).
+const HANDLERS = {};
 const uploadExcel = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // Listas fijas (terminos que el usuario no debe escribir a mano). value se guarda tal cual.
@@ -48,7 +50,8 @@ const ENTITIES = {
       { name: 'rup_fecha_inscripcion', label: 'Fecha inscripción RUP', type: 'date' },
       { name: 'eca_numero', label: 'Número ECA', type: 'text' },
       { name: 'id_tipo_destino', label: 'Destino del rechazo: tipo de sitio (fijo)', type: 'select-catalogo', categoria: 'destinos_rechazo' },
-      { name: 'numero_sitio_destino', label: 'Destino del rechazo: número único del sitio (fijo)', type: 'text' }
+      { name: 'numero_sitio_destino', label: 'Destino del rechazo: número único del sitio (fijo)', type: 'text' },
+      { name: 'link_dashboard', label: 'Enlace del dashboard', type: 'text' }
     ]
   },
   catalogos: {
@@ -326,6 +329,14 @@ const ENTITIES = {
       { name: 'cantidad', label: 'Cantidad', type: 'decimal' },
       { name: 'valor', label: 'Valor', type: 'decimal' }
     ]
+  },
+  nuaps: {
+    table: 'tz_nuaps', label: 'NUAPs',
+    fields: [
+      { name: 'id_centro', label: 'Centro', type: 'select-entity', entity: 'centros', labelField: 'desc_centro', required: true },
+      { name: 'id_ciudad', label: 'Ciudad', type: 'select-catalogo', categoria: 'ciudades', required: true },
+      { name: 'cod_nuap', label: 'NUAP', type: 'text', required: true }
+    ]
   }
 };
 
@@ -416,19 +427,23 @@ function toTextValue(v) {
 
 // Lee un Excel/CSV y valida cada fila como lo hace el formulario. Devuelve las filas validas y los
 // errores (maximo 20). Lo usan la importacion inmediata y las cargas programadas (al subir y al aplicar).
-async function parsearArchivo(key, entity, buffer) {
+// opts.idsCentros: solo se buscan nombres de esas asociaciones (sistema de usuarios).
+// opts.fijos: valores que se imponen a cada fila (p. ej. id_centro del usuario de asociacion).
+async function parsearArchivo(key, entity, buffer, opts = {}) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const rawRows = XLSX.utils.sheet_to_json(sheet, { defval: null });
   if (rawRows.length === 0) return { error: 'El archivo no tiene filas.' };
   const rows = rawRows.map(normalizeRowKeys);
+  const fijos = opts.fijos || {};
 
   const lookupMaps = {};
   for (const f of entity.fields) {
     if (f.type === 'select-entity') {
       const refEntity = getEntity(f.entity);
       const labelCol = f.labelField === 'id' ? 'id::text' : f.labelField;
-      const result = await pool.query(`SELECT id, ${labelCol} AS label FROM ${refEntity.table}`);
+      const acotar = opts.idsCentros ? (f.entity === 'centros' ? 'id' : (refEntity.fields.some((x) => x.name === 'id_centro') ? 'id_centro' : null)) : null;
+      const result = await pool.query(`SELECT id, ${labelCol} AS label FROM ${refEntity.table}${acotar ? ` WHERE ${acotar} = ANY($1::int[])` : ''}`, acotar ? [opts.idsCentros] : []);
       const map = {};
       result.rows.forEach((r) => { map[normalizeHeader(r.label)] = r.id; });
       lookupMaps[f.name] = map;
@@ -469,12 +484,16 @@ async function parsearArchivo(key, entity, buffer) {
     const parsed = {};
     const rowErrors = [];
     entity.fields.forEach((f) => {
+      if (Object.prototype.hasOwnProperty.call(fijos, f.name)) { parsed[f.name] = fijos[f.name]; return; }
       const byLabel = normalizeHeader(f.label);
       const byName = normalizeHeader(f.name);
       const rawValue = (byLabel in row) ? row[byLabel] : row[byName];
       const r = resolveFieldValue(f, rawValue);
       if (r.error) rowErrors.push(r.error); else parsed[f.name] = r.value;
     });
+    if (!rowErrors.length && opts.idsCentros && parsed.id_centro != null && !opts.idsCentros.includes(Number(parsed.id_centro))) {
+      rowErrors.push('"Centro": no tienes acceso a esa asociación.');
+    }
     if (rowErrors.length === 0) {
       const v = await validateRecord(ENTITIES, key, parsed, { ctx });
       if (v.errors.length) rowErrors.push(...v.errors);
@@ -495,6 +514,7 @@ async function parsearArchivo(key, entity, buffer) {
 async function insertarFilas(client, key, entity, parsedRows, meta = {}) {
   const columns = entity.fields.map((f) => f.name);
   const extra = key === 'balance_masas' ? { creado_por: meta.userId || null, origen: meta.origen || 'importacion', id_carga: meta.idCarga || null } : {};
+  if (meta.idCargue) extra.id_cargue = meta.idCargue; // cargue del sistema de usuarios (Lista cargues)
   const extraCols = Object.keys(extra);
   const allCols = columns.concat(extraCols);
   const chunkSize = 500;
@@ -725,13 +745,22 @@ router.aplicarCargaProgramada = aplicarCargaProgramada;
 router.get('/:entity/template', guard(async (req, res) => {
   const entity = getEntity(req.params.entity);
   if (!entity) return res.status(404).json({ error: 'Entidad no encontrada.' });
+  const buffer = await plantillaEntidad(req.params.entity, entity);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_' + req.params.entity + '.xlsx"');
+  res.send(buffer);
+}));
 
-  const headers = entity.fields.map((f) => f.label);
+// Plantilla .xlsx de una entidad. opts.idsCentros: las listas solo traen datos de esas asociaciones;
+// opts.sinCentro: se quita la columna Centro (el usuario de asociacion no la llena).
+async function plantillaEntidad(key, entity, opts = {}) {
+  const campos = opts.sinCentro ? entity.fields.filter((f) => f.name !== 'id_centro') : entity.fields;
+  const headers = campos.map((f) => f.label);
   const exampleRow = {};
   const instructions = [['Columna', 'Obligatorio', 'Tipo de dato', 'Formato / valores permitidos']];
   const listas = []; // hojas extra con la lista completa de cada campo que se refiere a otro modulo
 
-  for (const f of entity.fields) {
+  for (const f of campos) {
     let formato = '';
     let ejemplo = '';
     if (f.type === 'text') {
@@ -756,9 +785,11 @@ router.get('/:entity/template', guard(async (req, res) => {
       const cols = (await pool.query(`SELECT * FROM ${refEntity.table} LIMIT 0`)).fields.map((x) => x.name);
       const codCol = cols.find((c) => c.startsWith('cod_') && c !== f.labelField);
       const conCentro = cols.includes('id_centro');
+      const acotar = opts.idsCentros ? (f.entity === 'centros' ? 't.id' : (conCentro ? 't.id_centro' : null)) : null;
       const lista = (await pool.query(
         `SELECT t.id, ${labelCol.replace(/^id::text$/, 't.id::text')} AS nombre${codCol ? ', t.' + codCol + '::text AS codigo' : ''}${conCentro ? ', c.desc_centro AS centro' : ''}
-         FROM ${refEntity.table} t ${conCentro ? 'LEFT JOIN tz_centros c ON c.id = t.id_centro' : ''} ORDER BY ${conCentro ? 'c.desc_centro, ' : ''}2 LIMIT 20000`)).rows;
+         FROM ${refEntity.table} t ${conCentro ? 'LEFT JOIN tz_centros c ON c.id = t.id_centro' : ''} ${acotar ? `WHERE ${acotar} = ANY($1::int[])` : ''}
+         ORDER BY ${conCentro ? 'c.desc_centro, ' : ''}2 LIMIT 20000`, acotar ? [opts.idsCentros] : [])).rows;
       const hoja = refEntity.label.replace(/[\/?*[]:]/g, ' ').slice(0, 28);
       listas.push({ hoja, filas: lista.map((r) => ({ ID: r.id, ...(codCol ? { 'Código': r.codigo } : {}), Nombre: r.nombre, ...(conCentro ? { 'Asociación': r.centro } : {}) })) });
       formato = 'Escribe el ID (número) o el nombre exacto. Lista completa en la hoja "' + hoja + '" (' + lista.length + ' registros).' +
@@ -777,7 +808,7 @@ router.get('/:entity/template', guard(async (req, res) => {
     instructions.push([f.label, f.required ? 'Sí' : 'No', f.type, formato]);
   }
 
-  if (req.params.entity === 'balance_masas') {
+  if (key === 'balance_masas' && !opts.sinHora) {
     // Columna extra para la simulacion por hora (asociaciones de prueba); en las demas cargas se ignora.
     headers.push('Hora');
     exampleRow['Hora'] = '09:00';
@@ -800,16 +831,13 @@ router.get('/:entity/template', guard(async (req, res) => {
     XLSX.utils.book_append_sheet(wb, ws, l.hoja);
   }
 
-  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', 'attachment; filename="plantilla_' + req.params.entity + '.xlsx"');
-  res.send(buffer);
-}));
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
 
 // GET /trazabilidad/balance-masas-dia?id_reciclador=X&fecha=YYYY-MM-DD -> lo que ya está
 // guardado ese día para ese reciclador (una fila por material), para precargar la grilla.
 // Registrada ANTES de /:entity para que Express no la confunda con esa ruta genérica.
-router.get('/balance-masas-dia', guard(async (req, res) => {
+router.get('/balance-masas-dia', HANDLERS.bmDiaGet = guard(async (req, res) => {
   const idReciclador = parseId(req.query.id_reciclador);
   if (!idReciclador || !isValidYmd(req.query.fecha)) return res.status(400).json({ error: 'Falta id_reciclador o la fecha no es válida.' });
   const result = await pool.query(
@@ -911,7 +939,7 @@ async function validateBalanceDia(body) {
 // El sitio de destino del rechazo NO se captura aquí: es un valor fijo de la asociación
 // (tz_centros.id_tipo_destino / numero_sitio_destino, lo configura el administrador) y el
 // export a la Super lo toma de ahí.
-router.post('/balance-masas-dia', guard(async (req, res) => {
+router.post('/balance-masas-dia', HANDLERS.bmDiaPost = guard(async (req, res) => {
   const v = await validateBalanceDia(req.body);
   if (v.errors.length) return sendValidationErrors(res, v.errors);
   const { idCentro, idReciclador, fecha, opcionales, filas } = v.data;
@@ -984,7 +1012,7 @@ router.post('/balance-masas-dia', guard(async (req, res) => {
 // POST /trazabilidad/balance-masas-dia/anexar -> el reciclador volvio el mismo dia con otra compra:
 // lo que llega se SUMA a lo ya registrado (cantidad, rechazo y no SUI). El valor/kg queda como
 // promedio ponderado para que el total en pesos sea exacto. Solo si ya tenia registro ese dia.
-router.post('/balance-masas-dia/anexar', guard(async (req, res) => {
+router.post('/balance-masas-dia/anexar', HANDLERS.bmDiaAnexar = guard(async (req, res) => {
   const v = await validateBalanceDia(req.body);
   if (v.errors.length) return sendValidationErrors(res, v.errors);
   const { idCentro, idReciclador, fecha, opcionales, filas } = v.data;
@@ -1403,3 +1431,7 @@ module.exports = router;
 module.exports.ENTITIES = ENTITIES;
 module.exports.getEntity = getEntity;
 module.exports.guard = guard;
+module.exports.HANDLERS = HANDLERS;
+module.exports.parsearArchivo = parsearArchivo;
+module.exports.insertarFilas = insertarFilas;
+module.exports.plantillaEntidad = plantillaEntidad;
