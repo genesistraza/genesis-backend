@@ -177,6 +177,10 @@
     document.querySelectorAll('.sis-mi').forEach(function(mi){ mi.classList.toggle('activo', !!mi.querySelector('button.activo')); });
   }
 
+  window.addEventListener('hashchange', function(){
+    var h = location.hash.slice(1);
+    if(SIS.me && h && h !== SIS.actual) ir(h);
+  });
   var PANTALLAS = {};
   function ir(clave){
     if(clave === 'salir'){ gtLogout(); return; }
