@@ -263,6 +263,20 @@
     document.querySelectorAll('.sis-mi').forEach(function(mi){ mi.classList.toggle('activo', !!mi.querySelector('button.activo')); });
   }
 
+  document.addEventListener('click', function(e){
+    var b = e.target.closest && e.target.closest('[data-bajar]');
+    if(!b) return;
+    var txt = b.innerHTML; b.disabled = true; b.textContent = 'Descargando…';
+    fetch(API_BASE + '/sistema/documentos/' + b.getAttribute('data-bajar') + '/descargar', { headers: { 'Authorization': 'Bearer ' + gtGetToken() } })
+      .then(function(r){
+        if(!r.ok) return r.json().then(function(d){ throw new Error(d.error || 'No se pudo descargar.'); });
+        var m = /filename\*=UTF-8''([^;]+)/.exec(r.headers.get('content-disposition') || '');
+        var nombre = m ? decodeURIComponent(m[1]) : (b.getAttribute('data-nombre') || 'documento');
+        return r.blob().then(function(blob){ descargar(blob, nombre); });
+      })
+      .catch(function(err){ alert(err.message); })
+      .then(function(){ b.disabled = false; b.innerHTML = txt; });
+  });
   window.addEventListener('hashchange', function(){
     var h = location.hash.slice(1);
     if(SIS.me && h && h !== SIS.actual) ir(h);
@@ -912,7 +926,7 @@
       $('daResumen').innerHTML = Object.keys(cuenta).map(function(k){ return tagEstado(k) + ' ' + cuenta[k]; }).join(' &nbsp; ');
       $('daTabla').innerHTML = '<table class="t"><thead><tr><th></th>' + (SIS.me.todasAsociaciones ? '<th>Asociación</th>' : '') + '<th>Tipo de documento</th><th>Documento</th><th>Actualizado</th><th>Vigencia</th><th>Estado</th><th class="num">Días</th></tr></thead><tbody>' +
         l.map(function(x, i){ return '<tr><td class="acc"><button class="b sm pri" data-sub="' + filas.indexOf(x) + '">' + (x.id ? 'Reemplazar' : 'Subir') + '</button>' + (x.id ? ' <button class="b sm rojo" data-del="' + x.id + '">Quitar</button>' : '') + '</td>' +
-          (SIS.me.todasAsociaciones ? '<td>' + esc(x.desc_centro) + '</td>' : '') + '<td>' + esc(x.tipo) + '</td><td>' + (x.id ? '<a href="' + esc(x.archivo_url) + '" target="_blank" rel="noopener">' + esc(x.nombre) + '</a>' : '<span class="muted">--Sin documento</span>') + '</td>' +
+          (SIS.me.todasAsociaciones ? '<td>' + esc(x.desc_centro) + '</td>' : '') + '<td>' + esc(x.tipo) + '</td><td>' + (x.id ? '<button class="b sm" data-bajar="' + x.id + '" data-nombre="' + esc(x.nombre) + '" title="Descargar">' + ic('excel') + ' Descargar</button> ' + esc(x.nombre) : '<span class="muted">--Sin documento</span>') + '</td>' +
           '<td>' + esc(x.actualizado || '') + '</td><td>' + fecha(x.vigencia) + '</td><td>' + tagEstado(x.estado) + '</td><td class="num">' + (x.dias_vigencia == null ? '' : x.dias_vigencia) + '</td></tr>'; }).join('') + '</tbody></table>';
       $('daTabla').querySelectorAll('[data-sub]').forEach(function(b){ b.onclick = function(){
         var x = filas[Number(b.getAttribute('data-sub'))];
@@ -940,7 +954,7 @@
       api('/documentos/referencia').then(function(r){
         if(!r.ok){ $('drTabla').innerHTML = '<p class="msg err" style="padding:10px;">' + esc(r.data.error) + '</p>'; return; }
         $('drTabla').innerHTML = r.data.length ? '<table class="t"><thead><tr>' + (SIS.me.todasAsociaciones ? '<th></th>' : '') + '<th>Nombre documento</th><th>Actualizado</th><th>Vigencia</th><th>Estado</th><th class="num">Días</th></tr></thead><tbody>' +
-          r.data.map(function(x){ return '<tr>' + (SIS.me.todasAsociaciones ? '<td class="acc"><button class="b sm rojo" data-del="' + x.id + '">Quitar</button></td>' : '') + '<td><a href="' + esc(x.archivo_url) + '" target="_blank" rel="noopener">' + esc(x.nombre) + '</a></td><td>' + esc(x.actualizado) + '</td><td>' + fecha(x.vigencia) + '</td><td>' + tagEstado(x.estado) + '</td><td class="num">' + (x.dias_vigencia == null ? '' : x.dias_vigencia) + '</td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted" style="padding:10px;">Aún no hay documentos de referencia.</p>';
+          r.data.map(function(x){ return '<tr>' + (SIS.me.todasAsociaciones ? '<td class="acc"><button class="b sm rojo" data-del="' + x.id + '">Quitar</button></td>' : '') + '<td><button class="b sm" data-bajar="' + x.id + '" data-nombre="' + esc(x.nombre) + '" title="Descargar">' + ic('excel') + ' Descargar</button> ' + esc(x.nombre) + '</td><td>' + esc(x.actualizado) + '</td><td>' + fecha(x.vigencia) + '</td><td>' + tagEstado(x.estado) + '</td><td class="num">' + (x.dias_vigencia == null ? '' : x.dias_vigencia) + '</td></tr>'; }).join('') + '</tbody></table>' : '<p class="muted" style="padding:10px;">Aún no hay documentos de referencia.</p>';
         $('drTabla').querySelectorAll('[data-del]').forEach(function(b){ b.onclick = function(){ if(!confirm('¿Quitar este documento?')) return; api('/documentos/referencia/' + b.getAttribute('data-del'), { method: 'DELETE' }).then(function(){ cargar(); }); }; });
       });
     };

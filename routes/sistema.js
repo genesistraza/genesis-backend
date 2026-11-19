@@ -713,6 +713,29 @@ router.delete('/documentos/asociaciones/:id', exigir('documentos_asociaciones'),
   res.json({ message: 'Eliminado.' });
 }));
 
+// GET /sistema/documentos/:id/descargar -> descarga el archivo (con su nombre original). Cloudinary no
+// deja abrir PDFs por enlace publico, asi que el servidor lo pide con una URL firmada y lo reenvia.
+router.get('/documentos/:id/descargar', guard(async (req, res) => {
+  const d = (await pool.query('SELECT id, grupo, id_centro, nombre, archivo_url FROM gt_documentos WHERE id = $1', [parseId(req.params.id)])).rows[0];
+  const visible = d && (d.grupo === 'referencia' ? tiene(req, 'documentos_referencia') : (tiene(req, 'documentos_asociaciones') && req.sis.idsCentros.includes(d.id_centro)));
+  if (!visible) return res.status(404).json({ error: 'Documento no encontrado.' });
+  const m = /\/(image|raw|video)\/upload\/(?:v\d+\/)?(.+)$/.exec(d.archivo_url);
+  if (!m) return res.status(500).json({ error: 'No se pudo ubicar el archivo.' });
+  const tipo = m[1];
+  let publicId = decodeURIComponent(m[2]), formato = '';
+  if (tipo !== 'raw') { const p = /^(.+)\.([a-z0-9]+)$/i.exec(publicId); if (p) { publicId = p[1]; formato = p[2]; } }
+  const url = cloudinary.utils.private_download_url(publicId, formato, { resource_type: tipo, type: 'upload' });
+  const r = await fetch(url);
+  if (!r.ok) return res.status(502).json({ error: 'No se pudo descargar el archivo del almacenamiento.' });
+  const ext = (/\.([a-z0-9]+)$/i.exec(d.archivo_url) || [])[1] || formato || '';
+  let nombre = String(d.nombre || 'documento').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim();
+  if (ext && !nombre.toLowerCase().endsWith('.' + ext.toLowerCase())) nombre += '.' + ext;
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition'); // la pagina (otro dominio) lee el nombre
+  res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nombre)}`);
+  res.send(Buffer.from(await r.arrayBuffer()));
+}));
+
 // Documentos de referencia: generales (normas, formatos). Los suben los perfiles de todas las asociaciones.
 router.get('/documentos/referencia', exigir('documentos_referencia'), guard(async (req, res) => {
   const r = await pool.query(
