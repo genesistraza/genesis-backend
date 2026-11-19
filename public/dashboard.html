@@ -39,6 +39,7 @@
     </div>
     <div class="assoc-card" id="sideAssocCard" style="display:none;"></div>
     <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen de mi cuenta</div>
+    <div class="side-link" data-tab="registro" id="sideRegistro" onclick="showTab('registro')" style="display:none;">Registro</div>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
     <div class="side-link side-group-toggle" id="dashboardGroupToggle" onclick="gtToggleDashboardGroup()">
       <span>Dashboard</span><span class="caret">▾</span>
@@ -68,6 +69,11 @@
         </div>
       </div>
     </div>
+
+    <!-- Registro: el sistema de usuarios (sistema.html) dentro del panel -->
+    <section class="tab-panel" id="tab-registro" style="display:none;">
+      <iframe id="registroFrame" title="Registro" style="width:100%;height:calc(100vh - 40px);border:1px solid var(--line);border-radius:10px;background:#fff;"></iframe>
+    </section>
 
     <section class="tab-panel" id="tab-resumen">
       <div class="stat-grid">
@@ -276,6 +282,15 @@
     document.getElementById('tab-' + name).style.display = 'block';
     var link = document.querySelector('.side-link[data-tab="' + name + '"]');
     if(link) link.classList.add('active');
+    // Registro usa todo el ancho y alto: se oculta el saludo de arriba y el limite de ancho.
+    var main = document.querySelector('.app-main'), top = document.querySelector('.app-topbar');
+    main.style.maxWidth = name === 'registro' ? 'none' : '';
+    main.style.padding = name === 'registro' ? '16px 18px' : '';
+    if(top) top.style.display = name === 'registro' ? 'none' : '';
+    if(name === 'registro'){
+      var fr = document.getElementById('registroFrame');
+      if(!fr.getAttribute('src')) fr.setAttribute('src', 'sistema.html?embebido=1');
+    }
     if(name === 'rutas' && gtRoutesKmlUrl && !gtRoutesLoadedOnce){
       gtRoutesLoadedOnce = true;
       loadRoutesMap(gtRoutesKmlUrl);
@@ -302,6 +317,11 @@
     document.getElementById('sideUserName').textContent = session.fullName;
     document.getElementById('sideUserRole').textContent = session.role;
     document.getElementById('topUserName').textContent = session.fullName;
+
+    // "Registro" solo aparece si la asociacion esta habilitada en el sistema de usuarios.
+    gtApiFetch('/sistema/me').then(function(res){
+      if(res.ok) document.getElementById('sideRegistro').style.display = '';
+    });
 
     gtApiFetch('/auth/me').then(function(res){
       var loader = document.getElementById('gtPageLoader');

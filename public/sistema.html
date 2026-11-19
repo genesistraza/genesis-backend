@@ -86,6 +86,9 @@
   .opc-grid .grp{ break-inside:avoid;margin-bottom:8px; }
   .opc-grid .grp b{ display:block;font-size:11.5px;color:var(--blue-deep);margin-bottom:2px; }
   .opc-grid label{ display:block;font-size:12px;padding:1px 0; }
+  .embebido .sis-title .marca, .embebido .solo-solo{ display:none; }
+  .embebido .sis-title{ padding:6px 12px; }
+  .embebido .sis-main{ max-width:none; }
   @media (max-width:640px){ .sis-title .info{ display:none; } .sis-main{ padding:10px; } }
 </style>
 </head>
@@ -103,6 +106,13 @@
 <script src="app.js"></script>
 <script>
   var SIS = { me: null, menu: [], entidades: {}, actual: null };
+  // Dentro del panel (opcion "Registro"): sin marca propia y "Salir" cierra la sesion de todo el panel.
+  var EMBEBIDO = /[?&]embebido=1/.test(location.search) && window.top !== window;
+  if(EMBEBIDO){
+    document.documentElement.classList.add('embebido');
+    var gtLogoutPropio = gtLogout;
+    gtLogout = function(r){ try { window.top.gtLogout(r); } catch(e){ gtLogoutPropio(r); } };
+  }
   var auth = gtRequireAuth();
 
   // ---------- utilidades ----------
@@ -206,7 +216,7 @@
   PANTALLAS.inicio = function(main){
     main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Inicio</h2></div>' +
       '<p style="margin:0 0 10px;">Bienvenido(a), <b>' + esc(SIS.me.nombre) + '</b>. Perfil: <b>' + esc(SIS.me.descPerfil) + '</b>.' +
-      (SIS.me.todasAsociaciones ? '' : ' &nbsp;<a class="b" href="dashboard.html">Mi cuenta y pagos</a>') + '</p>' +
+      (SIS.me.todasAsociaciones ? '' : ' &nbsp;<a class="b solo-solo" href="dashboard.html">Mi cuenta y pagos</a>') + '</p>' +
       '<div class="cards" id="inicioCards"></div></div>';
     var accesos = [];
     SIS.menu.forEach(function(m){ if(/Formularios/i.test(m.descripcion)) accesos = accesos.concat(m.submenu); });
