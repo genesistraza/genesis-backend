@@ -1010,3 +1010,136 @@ CREATE TABLE IF NOT EXISTS tz_cargas_filas (
   aplicada_en TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS tz_cargas_filas_pend_idx ON tz_cargas_filas (estado, aplicar_en);
+
+-- ============================================================================================
+-- Sistema de usuarios (replica del sistema anterior en ASP.NET): perfiles, menu, submenu y
+-- opciones por perfil. Los ids y codigos son los mismos del sistema viejo. El perfil ADM ve todo
+-- (no necesita opciones); ADM_CENTROS (equipo Genesis) ve todas las asociaciones pero solo las
+-- opciones marcadas; USUARIOS y EMPLEADOS solo su asociacion. "clave" = pantalla del sistema nuevo.
+-- ============================================================================================
+CREATE TABLE IF NOT EXISTS gt_perfiles (
+  id SERIAL PRIMARY KEY,
+  cod_perfil VARCHAR(30) UNIQUE NOT NULL,
+  desc_perfil VARCHAR(120) NOT NULL,
+  todas_asociaciones BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+INSERT INTO gt_perfiles (id, cod_perfil, desc_perfil, todas_asociaciones) VALUES
+  (1, 'ADM', 'Administrador', TRUE),
+  (8, 'ADM_CENTROS', 'Administrador todos los centros', TRUE),
+  (9, 'USUARIOS', 'Usuarios', FALSE),
+  (25, 'EMPLEADOS', 'Empleados', FALSE)
+ON CONFLICT (id) DO NOTHING;
+SELECT setval(pg_get_serial_sequence('gt_perfiles', 'id'), GREATEST((SELECT MAX(id) FROM gt_perfiles), 25));
+
+CREATE TABLE IF NOT EXISTS gt_menu (
+  id SERIAL PRIMARY KEY,
+  cod_item INT NOT NULL,
+  descripcion VARCHAR(120) NOT NULL,
+  clave VARCHAR(60)
+);
+INSERT INTO gt_menu (id, cod_item, descripcion, clave) VALUES
+  (1, 10, 'Inicio', 'inicio'),
+  (2, 20, 'Tablas de referencia', NULL),
+  (16, 21, 'Documentos', NULL),
+  (15, 30, 'Usuarios', NULL),
+  (12, 31, 'Formularios', NULL),
+  (13, 40, 'Importar datos', NULL),
+  (17, 50, 'Resúmenes', NULL),
+  (14, 90, 'Salir', 'salir')
+ON CONFLICT (id) DO NOTHING;
+SELECT setval(pg_get_serial_sequence('gt_menu', 'id'), GREATEST((SELECT MAX(id) FROM gt_menu), 17));
+
+CREATE TABLE IF NOT EXISTS gt_submenu (
+  id SERIAL PRIMARY KEY,
+  id_menu INT NOT NULL REFERENCES gt_menu(id) ON DELETE CASCADE,
+  cod_item INT NOT NULL,
+  descripcion VARCHAR(120) NOT NULL,
+  clave VARCHAR(60) NOT NULL
+);
+INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
+  (69, 2, 100, 'Perfiles acceso', 'perfiles'),
+  (68, 2, 200, 'Items menú', 'menu'),
+  (70, 2, 300, 'Estados', 'estados'),
+  (75, 2, 400, 'Colaboradores', 'colaboradores'),
+  (77, 2, 500, 'Calendario', 'calendario'),
+  (79, 2, 600, 'Asociaciones', 'centros'),
+  (81, 2, 701, 'Numacros asociaciones/localidades', 'numacros'),
+  (82, 2, 702, 'Localidades', 'localidades'),
+  (80, 2, 703, 'Tipos materiales', 'tipos_material'),
+  (97, 2, 703, 'Ciudades', 'ciudades'),
+  (98, 2, 704, 'Nuaps', 'nuaps'),
+  (83, 2, 800, 'Recicladores', 'recicladores'),
+  (86, 2, 850, 'Tipos microrrutas', 'tipos_microrrutas'),
+  (111, 2, 851, 'Conceptos pagos tarifas', 'conceptos_pago_tarifa'),
+  (116, 2, 852, 'Conceptos pagos seguridad', 'conceptos_pago_seguridad'),
+  (117, 2, 853, 'Operadores', 'operadores'),
+  (85, 2, 900, 'Lista cargues-Balance masas', 'cargues_balance_masas'),
+  (100, 2, 901, 'Lista cargues-Aprovechamiento', 'cargues_aprovechamiento'),
+  (101, 2, 902, 'Lista cargues-Usuarios', 'cargues_usuarios'),
+  (109, 2, 903, 'Lista cargues-Ventas', 'cargues_ventas'),
+  (113, 2, 904, 'Lista cargues-Pago tarifas', 'cargues_pago_tarifa'),
+  (115, 2, 905, 'Lista cargues-Pago seguridad', 'cargues_pago_seguridad'),
+  (84, 2, 999, 'Cambio password', 'cambio_password'),
+  (105, 16, 100, 'Lista documentos', 'lista_documentos'),
+  (106, 16, 200, 'Documentos asociaciones', 'documentos_asociaciones'),
+  (119, 16, 300, 'Documentos referencia', 'documentos_referencia'),
+  (89, 15, 200, 'Usuario uso', 'usuario_uso'),
+  (90, 15, 300, 'Usuario tipo', 'usuario_tipo'),
+  (91, 15, 400, 'Usuario multiusuario', 'usuario_multiusuario'),
+  (92, 15, 500, 'Usuario aforado', 'usuario_aforado'),
+  (93, 15, 600, 'Usuario ubicación', 'usuario_ubicacion'),
+  (94, 15, 700, 'Usuario clase de uso', 'usuario_clase_uso'),
+  (95, 15, 800, 'Usuario tipo de aforo', 'usuario_tipo_aforo'),
+  (96, 15, 900, 'Usuarios', 'usuarios'),
+  (74, 12, 1, 'Formulario balance de masas', 'balance_masas'),
+  (87, 12, 2, 'Formulario microrrutas', 'microrrutas'),
+  (99, 12, 3, 'Formulario aforados aprovechamiento', 'aprovechamiento'),
+  (112, 12, 4, 'Formulario pago tarifas', 'pago_tarifa'),
+  (114, 12, 5, 'Formulario pago seguridad', 'pago_seguridad'),
+  (118, 12, 6, 'Formulario recursos', 'recursos'),
+  (78, 13, 100, 'Importar datos de Excel', 'importar'),
+  (107, 17, 100, 'Resumen formulario masas', 'resumen_masas'),
+  (108, 17, 200, 'Dashboard', 'dashboard'),
+  (110, 17, 200, 'SQL archivos locales', 'sql_archivos')
+ON CONFLICT (id) DO NOTHING;
+SELECT setval(pg_get_serial_sequence('gt_submenu', 'id'), GREATEST((SELECT MAX(id) FROM gt_submenu), 119));
+
+CREATE TABLE IF NOT EXISTS gt_perfil_opciones (
+  id_perfil INT NOT NULL REFERENCES gt_perfiles(id) ON DELETE CASCADE,
+  id_submenu INT NOT NULL REFERENCES gt_submenu(id) ON DELETE CASCADE,
+  PRIMARY KEY (id_perfil, id_submenu)
+);
+-- Semilla solo la primera vez (si el perfil ya tiene opciones, se respeta lo que edito el administrador).
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT 8, s FROM unnest(ARRAY[75,77,79,80,81,82,74,84,83,78,85,86,87,105,106,108,109,107,100,113,115,111,116,112,114,97,98,89,90,91,92,93,94,95,96,118,117]) s
+WHERE NOT EXISTS (SELECT 1 FROM gt_perfil_opciones WHERE id_perfil = 8)
+ON CONFLICT DO NOTHING;
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT 9, s FROM unnest(ARRAY[74,84,83,87,96,78,99,85,101,100,106,108,107,113,115,112,114,118]) s
+WHERE NOT EXISTS (SELECT 1 FROM gt_perfil_opciones WHERE id_perfil = 9)
+ON CONFLICT DO NOTHING;
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT 25, s FROM unnest(ARRAY[74]) s
+WHERE NOT EXISTS (SELECT 1 FROM gt_perfil_opciones WHERE id_perfil = 25)
+ON CONFLICT DO NOTHING;
+
+-- Perfil y bloqueo de ingreso por usuario (como colaboradores.id_perfil / id_estado /
+-- msg_login_desactivado del sistema viejo).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS id_perfil INT REFERENCES gt_perfiles(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS msg_login_desactivado TEXT;
+ALTER TABLE users ALTER COLUMN id_perfil SET DEFAULT 9;
+UPDATE users SET id_perfil = CASE role WHEN 'pro' THEN 1 WHEN 'admin' THEN 8 ELSE 9 END WHERE id_perfil IS NULL;
+
+-- Centro de trazabilidad de cada asociacion del sistema de usuarios. modulo = 'pruebas' (con sello
+-- diario / cadena de integridad) o 'sistema' (sin sello: la cadena de integridad queda solo en Pruebas).
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS association_id INT REFERENCES associations(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS tz_centros_association_uidx ON tz_centros (association_id) WHERE association_id IS NOT NULL;
+ALTER TABLE tz_centros ADD COLUMN IF NOT EXISTS modulo VARCHAR(20) NOT NULL DEFAULT 'pruebas';
+
+-- ASORETRIP (Asociacion de Recicladores de Bogota El Triunfo, associations.id 7): asociacion de prueba
+-- del sistema de usuarios. Codigo 992 = el mismo del sistema viejo.
+INSERT INTO tz_centros (cod_centro, desc_centro, nit, association_id, modulo)
+SELECT '992', 'ASORETRIP', a.nit, a.id, 'sistema' FROM associations a
+WHERE a.id = 7 AND NOT EXISTS (SELECT 1 FROM tz_centros WHERE association_id = 7 OR cod_centro = '992');

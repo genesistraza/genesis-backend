@@ -206,6 +206,10 @@ router.post('/login', loginLimiter, asyncRoute(async (req, res) => {
   if (!user.is_verified) {
     return res.status(403).json({ error: 'Debes verificar tu correo antes de ingresar.' });
   }
+  // Usuario bloqueado por el administrador: se muestra su mensaje (p. ej. recordatorio de pago).
+  if (user.activo === false) {
+    return res.status(403).json({ error: user.msg_login_desactivado || 'Tu usuario está desactivado. Comunícate con Genesis Traza.' });
+  }
 
   // Cuentas pro/admin con verificación en dos pasos activada: no se entrega el token todavía.
   if (user.totp_enabled) {

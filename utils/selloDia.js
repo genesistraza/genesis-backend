@@ -72,7 +72,9 @@ const codigoSello = (idCentro, fecha, version, h) => `GT${idCentro}-${fecha.repl
 // Revisa todos los dias con datos (o ya sellados) y sella lo que falte o haya cambiado.
 async function sellarDias({ hasta = huella.fechaBogota() } = {}) {
   const dias = (await pool.query(
-    `SELECT id_centro, fecha FROM tz_formulario_balance_masas WHERE fecha <= $1 GROUP BY 1, 2
+    // Solo los centros del modulo Pruebas: el sistema de usuarios (modulo 'sistema') no se sella.
+    `SELECT id_centro, fecha FROM tz_formulario_balance_masas
+       WHERE fecha <= $1 AND id_centro IN (SELECT id FROM tz_centros WHERE modulo = 'pruebas') GROUP BY 1, 2
      UNION SELECT id_centro, fecha FROM tz_sellos_asociacion WHERE fecha <= $1 GROUP BY 1, 2
      ORDER BY 2, 1`, [hasta])).rows;
   let nuevos = 0, versiones = 0;

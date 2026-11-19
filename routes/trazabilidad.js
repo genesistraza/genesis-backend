@@ -1399,3 +1399,7 @@ router.delete('/:entity/:id', guard(async (req, res) => {
 }));
 
 module.exports = router;
+// Reutilizados por el sistema de usuarios (routes/sistema.js), que aplica sus propios permisos.
+module.exports.ENTITIES = ENTITIES;
+module.exports.getEntity = getEntity;
+module.exports.guard = guard;
