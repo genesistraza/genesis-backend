@@ -158,6 +158,7 @@ router.post('/', requireAuth, requireRole('pro'), asyncRoute(async (req, res) =>
 
 // Bloque de integridad de la pagina publica: resultado de cada comprobacion de la cadena.
 function renderIntegridad(v, token) {
+  if (v === null) return ''; // factura del sistema de usuarios: sin cadena de integridad
   if (!v || !v.sellado) return '<div class="card integ"><h3>Integridad</h3><p class="muted">Este comprobante es anterior a la cadena de integridad y aún no tiene huella.</p></div>';
   const fila = (ok, titulo, detalle) => `<div class="chk ${ok === true ? 'ok' : ok === false ? 'bad' : 'wait'}"><span class="dot">${ok === true ? '✓' : ok === false ? '✕' : '…'}</span><div><b>${titulo}</b><small>${detalle}</small></div></div>`;
   const s = v.selloDia;
@@ -267,7 +268,7 @@ tfoot td{ font-weight:700; border-top:2px solid var(--blue); background:#EEF3FA;
 </div>
 ${renderIntegridad(v, token)}
 <div class="codebox">Código de verificación (compáralo con el del papel impreso)<br><b>${esc(codigo)}</b></div>
-<div class="foot">Generado el ${esc(generado)} · Genesis Traza — Módulo Pruebas (sandbox de trazabilidad nativa).<br>Comprobante de prueba, sin validez como factura real.</div>
+<div class="foot">Generado el ${esc(generado)} · ${v === null ? 'Genesis Traza — Factura diaria de material recibido.' : 'Genesis Traza — Módulo Pruebas (sandbox de trazabilidad nativa).<br>Comprobante de prueba, sin validez como factura real.'}</div>
 </div></body></html>`;
 }
 
@@ -286,14 +287,15 @@ router.get('/:token', asyncRoute(async (req, res, next) => {
   if (!/^[0-9a-f]{64}$/.test(req.params.token)) return res.status(404).send(renderNotFoundPage());
   const c = await buscarPorToken(req.params.token);
   if (!c) return res.status(404).send(renderNotFoundPage());
-  const v = await huella.verificar('comprobante', c.id, c);
-  v.rec = codReciclador(c.id_reciclador);
+  // Las facturas del sistema de usuarios (sin_cadena) solo muestran la factura, sin integridad.
+  const v = c.sin_cadena ? null : await huella.verificar('comprobante', c.id, c);
+  if (v) v.rec = codReciclador(c.id_reciclador);
   res.send(renderPublicPage(c.snapshot, c.codigo_verificacion, c.created_at, v, req.params.token));
 }));
 
 async function buscarPorToken(token) {
   if (!/^[0-9a-f]{64}$/.test(token)) return null;
-  const r = await pool.query('SELECT id, numero, fecha, id_centro, id_reciclador, snapshot, codigo_verificacion, created_at FROM tz_comprobantes WHERE token = $1', [token]);
+  const r = await pool.query('SELECT id, numero, fecha, id_centro, id_reciclador, snapshot, codigo_verificacion, created_at, sin_cadena FROM tz_comprobantes WHERE token = $1', [token]);
   return r.rows[0] || null;
 }
 
@@ -447,3 +449,6 @@ router.get('/sello-dia/:codigo/prueba.json', asyncRoute(async (req, res) => {
 }));
 
 module.exports = router;
+// Reutilizados por la factura del sistema de usuarios (routes/sistema.js).
+module.exports.codigoVerificacion = codigoVerificacion;
+module.exports.PUBLIC_BASE = PUBLIC_BASE;

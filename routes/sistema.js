@@ -8,6 +8,10 @@
 const express = require('express');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const QRCode = require('qrcode');
+const comprobantes = require('./comprobantes');
+const huella = require('../utils/huella'); // solo su forma canonica de comparar datos (no sella nada)
 const pool = require('../db/pool');
 const cloudinary = require('../db/cloudinary');
 const { requireAuth } = require('../middleware/auth');
@@ -445,6 +449,69 @@ router.get('/bm/reciclador/:id', exigir('balance_masas'), guard(async (req, res)
                 WHERE f.id_centro = $1 AND (f.id_reciclador = $2 OR f.id_reciclador IS NULL) ORDER BY d.id`, [rec.id_centro, rec.id])
   ]);
   res.json({ bodegas: b.rows, macrorrutas: m.rows, microrrutas: d.rows });
+}));
+
+// POST /sistema/bm/factura {id_reciclador, fecha} -> factura diaria del reciclador (mismo diseño de
+// Pruebas) con QR: al escanearlo se abre la factura en /comprobantes/<token>. Sin huella ni sello: la
+// cadena de integridad queda solo en Pruebas. Se arma siempre con lo que YA esta guardado en la base;
+// reimprimir sin cambios devuelve la misma factura (mismo numero y QR).
+router.post('/bm/factura', exigir('balance_masas'), guard(async (req, res) => {
+  const fecha = String((req.body && req.body.fecha) || '');
+  if (!isValidYmd(fecha)) return res.status(400).json({ error: 'Fecha inválida.' });
+  const vis = await recicladorVisible(req, req.body && req.body.id_reciclador);
+  if (!vis) return res.status(404).json({ error: 'Reciclador no encontrado.' });
+  const rec = (await pool.query(
+    `SELECT r.id, r.nombre_completo, r.nro_documento, r.tipo_de_vehiculo, r.placa, c.desc_centro, c.nit, c.direccion, c.telefono, c.correo,
+            a.logo_url
+     FROM tz_recicladores r JOIN tz_centros c ON c.id = r.id_centro LEFT JOIN associations a ON a.id = c.association_id WHERE r.id = $1`, [vis.id])).rows[0];
+  const filas = (await pool.query(
+    `SELECT bm.cantidad, bm.valor, bm.cantidad_rechazo, bm.cantidad_nosui, tm.desc_tipo_material,
+            b.cod_bodega, b.desc_bodega, m.cod_macrorruta, m.desc_macrorruta, d1.desc_microrruta AS micro1, d2.desc_microrruta AS micro2
+     FROM tz_formulario_balance_masas bm
+     LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+     LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega LEFT JOIN tz_macrorrutas m ON m.id = bm.id_macrorruta
+     LEFT JOIN tz_formulario_microrrutas_detalle d1 ON d1.id = bm.id_microrruta_1 LEFT JOIN tz_formulario_microrrutas_detalle d2 ON d2.id = bm.id_microrruta_2
+     WHERE bm.id_reciclador = $1 AND bm.fecha = $2 ORDER BY tm.secuencia_orden, bm.id`, [vis.id, fecha])).rows;
+  if (!filas.length) return res.status(404).json({ error: 'Este reciclador no tiene material registrado ese día. Escribe primero los kilos.' });
+  const combo = (a, b) => [a, b].filter(Boolean).join(' - ') || null;
+  const rows = filas.map((r) => {
+    const cantidad = Number(r.cantidad), valor = Number(r.valor);
+    return { material: r.desc_tipo_material || 'Material', cantidad, valor, valorTotal: cantidad * valor, rechazo: Number(r.cantidad_rechazo), nosui: Number(r.cantidad_nosui) };
+  });
+  const totales = rows.reduce((t, r) => ({ cantidad: t.cantidad + r.cantidad, valorTotal: t.valorTotal + r.valorTotal, rechazo: t.rechazo + r.rechazo, nosui: t.nosui + r.nosui }),
+    { cantidad: 0, valorTotal: 0, rechazo: 0, nosui: 0 });
+  const [y, m, d] = fecha.split('-').map(Number);
+  const f0 = filas[0];
+  const datos = {
+    fecha,
+    diaSemana: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date(Date.UTC(y, m - 1, d)).getUTCDay()],
+    centro: { nombre: rec.desc_centro, nit: rec.nit, direccion: rec.direccion, telefono: rec.telefono, correo: rec.correo, logoUrl: rec.logo_url || null },
+    reciclador: { nombre: rec.nombre_completo, documento: rec.nro_documento, vehiculo: rec.tipo_de_vehiculo, placa: rec.placa },
+    operacion: { eca: combo(f0.cod_bodega, f0.desc_bodega), macrorruta: combo(f0.cod_macrorruta, f0.desc_macrorruta), micro1: f0.micro1, micro2: f0.micro2 },
+    rows, totales
+  };
+  // Misma factura si los datos no cambiaron (el logo no cuenta como cambio).
+  // canonico: claves ordenadas (la base devuelve el JSON con otro orden de claves).
+  const firma = (s) => huella.canonico({ c: { ...s.centro, logoUrl: null }, r: s.reciclador, o: s.operacion, rows: s.rows, t: s.totales });
+  const previo = (await pool.query(
+    'SELECT token, numero, snapshot, codigo_verificacion FROM tz_comprobantes WHERE id_reciclador = $1 AND fecha = $2 AND sin_cadena ORDER BY id DESC LIMIT 1',
+    [vis.id, fecha])).rows[0];
+  let token, numero, snapshot, codigo;
+  if (previo && firma(previo.snapshot) === firma(JSON.parse(JSON.stringify(datos)))) {
+    ({ token, numero, snapshot } = previo); codigo = previo.codigo_verificacion;
+  } else {
+    token = crypto.randomBytes(32).toString('hex');
+    numero = 'BM-' + fecha.replace(/-/g, '') + '-' + String(vis.id).padStart(4, '0') + '-' + token.slice(0, 6).toUpperCase();
+    snapshot = { numero, formato: 'carta', ...datos };
+    codigo = comprobantes.codigoVerificacion(token, snapshot);
+    await pool.query(
+      `INSERT INTO tz_comprobantes (token, numero, id_centro, id_reciclador, fecha, formato, snapshot, codigo_verificacion, created_by, sin_cadena)
+       VALUES ($1,$2,$3,$4,$5,'carta',$6,$7,$8,TRUE)`, [token, numero, vis.id_centro, vis.id, fecha, snapshot, codigo, req.user.id]);
+    await logActivity(req.user.id, 'sistema_factura_generada', { id_reciclador: vis.id, fecha, numero }, req.ip);
+  }
+  const url = `${comprobantes.PUBLIC_BASE}/comprobantes/${token}`;
+  const qrDataUrl = await QRCode.toDataURL(url, { errorCorrectionLevel: 'H', margin: 1, width: 320 });
+  res.json({ ...snapshot, numero, codigo, url, qrDataUrl });
 }));
 
 router.get('/bm/dia', exigir('balance_masas'), guard(async (req, res, next) => {

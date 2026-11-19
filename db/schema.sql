@@ -1226,3 +1226,7 @@ CREATE TABLE IF NOT EXISTS tz_nuaps (
   cod_nuap VARCHAR(30) NOT NULL,
   UNIQUE (cod_nuap)
 );
+
+-- Facturas del sistema de usuarios: se guardan en tz_comprobantes (para que el QR abra la factura)
+-- pero sin huella ni sello: la cadena de integridad queda solo en Pruebas.
+ALTER TABLE tz_comprobantes ADD COLUMN IF NOT EXISTS sin_cadena BOOLEAN NOT NULL DEFAULT FALSE;
