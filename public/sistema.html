@@ -102,6 +102,13 @@
   .pasos li.actual b{ background:var(--orange);color:#fff; }
   .pasos li.hecho{ color:#3C7A12;border-color:#CFE6B8;background:#F3FAEC; }
   .pasos li.hecho b{ background:#7AB72E;color:#fff; }
+  .btn-guardado{ font-size:13px;padding:7px 16px;border-width:2px;min-width:150px; }
+  .btn-guardado.vacio{ color:var(--ink-soft); }
+  .btn-guardado.pendiente{ background:var(--orange);border-color:var(--orange);color:#fff; }
+  .btn-guardado.guardando{ background:#FFF6EA;border-color:var(--orange);color:#A35F00; }
+  .btn-guardado.guardado{ background:#E6F4D7;border-color:#7AB72E;color:#2F6A0C; }
+  .btn-guardado.error{ background:#FBE3E0;border-color:#C0392B;color:#C0392B; }
+  .btn-guardado:disabled{ opacity:1;cursor:default; }
   .estado-guardado{ font-size:12px;font-weight:600;color:var(--ink-soft); }
   .estado-guardado.ok{ color:#3C7A12; } .estado-guardado.err{ color:#C0392B; }
   .bm-grid tr.con-datos td:first-child{ font-weight:700;color:var(--blue-deep); }
@@ -187,6 +194,7 @@
     resumen_masas: 'Elige el rango de fechas y "Ver" para sumar el material recibido por mes, material o familia.',
     colaboradores: 'Personas que entran al sistema. Crea el usuario, asígnale perfil y asociación; para bloquearlo, ponlo en "Bloqueado" con un mensaje.',
     perfiles: 'Cada perfil define qué opciones del menú ve el usuario. Usa "Opciones" para marcarlas.',
+    precios_material: 'Escribe el precio por kilo que paga la asociación por cada material. En el balance de masas se pone solo al escribir los kilos, y en cada compra lo puedes cambiar. Se guarda solo.',
     calendario: 'Días del año con su semana del mes y del año, como se usan en los reportes.'
   };
   function ayuda(clave, txt){ var t = txt || AYUDAS[clave]; return t ? '<div class="ayuda">' + ic('info') + '<span>' + esc(t) + '</span></div>' : ''; }
@@ -495,6 +503,7 @@
       '<div><label>Microrruta 1</label><select id="bmMicro1" disabled></select></div><div><label>Microrruta 2</label><select id="bmMicro2" disabled></select></div>' +
       '<div><label>Familia de materiales</label><select id="bmFamilia"></select></div></div>' +
       '<div class="sis-bar">' +
+      '<button type="button" class="b btn-guardado vacio" id="bmGuardarBtn" disabled>' + ic('form') + ' <span>Sin datos</span></button>' +
       '<span class="estado-guardado" id="bmEstado">Elige un reciclador para empezar.</span><span class="spacer"></span>' +
       '<div class="print-wrap" id="bmPrintWrap"><button class="b nar" id="bmImprimir" disabled>' + ic('imprimir') + ' Imprimir factura ▾</button><div class="print-menu">' +
       '<button data-f="carta"><b>Carta</b><span>Hoja completa, vertical</span></button><button data-f="media_carta"><b>Media carta</b><span>Media hoja, compacta</span></button>' +
@@ -503,7 +512,7 @@
       '<button class="b rojo" id="bmBorrar" disabled>' + ic('borrar') + ' Borrar día</button></div>' +
       '<div class="aviso" id="bmAviso" style="display:none;">Anexando otra compra de <b id="bmAvNom"></b>: lo que escribas se <b>suma</b> a lo ya registrado hoy (<span id="bmAvPrev"></span> kg). ' +
       '<button class="b sm pri" id="bmAvSumar">Sumar esta compra</button> <button class="b sm" id="bmAvCancel">Cancelar</button></div>' +
-      '<div class="tw bm-grid"><table class="t"><thead><tr><th>Material</th><th class="num">Cantidad (kg)</th><th class="num">Valor por kg</th><th class="num">Total</th>' +
+      '<div class="tw bm-grid"><table class="t"><thead><tr><th>Material</th><th class="num">Cantidad (kg)</th><th class="num" title="Si la asociación tiene precio fijo, se pone solo al escribir los kilos. Puedes cambiarlo en cada compra.">Valor por kg ⓘ</th><th class="num">Total</th>' +
       '<th class="num" title="Lo que el reciclador trajo y no sirve. Nunca puede ser mayor que los kilos recibidos.">Rechazo (kg) ⓘ</th><th class="num" title="Kilos que no se reportan al SUI. Nunca mayor que los kilos recibidos.">No SUI (kg) ⓘ</th></tr></thead>' +
       '<tbody id="bmBody"></tbody><tfoot><tr><td>Totales del día</td><td class="num" id="bmTq"></td><td></td><td class="num" id="bmTv"></td><td class="num" id="bmTr"></td><td class="num" id="bmTn"></td></tr></tfoot></table></div>' +
       '<p class="muted" style="margin:6px 0 0;font-size:11.5px;">Si no escribes el rechazo, el sistema pone el ' + String(1.8).replace('.', ',') + ' % de los kilos (se ve en gris, "est."). Si lo pesaste, escribe el valor real. El rechazo y el no SUI nunca pueden ser mayores que los kilos recibidos.</p></div>';
@@ -511,6 +520,7 @@
     $('bmBuscar').onclick = function(){ guardarYa(); abrirPickerBm(); };
     $('bmFamilia').onchange = pintarGridBm;
     $('bmBorrar').onclick = borrarDiaBm;
+    $('bmGuardarBtn').onclick = function(){ if(BM.anexo) return sumarAnexo(); clearTimeout(BM.timer); BM.dirty = true; guardarAuto(); };
     $('bmAnexar').onclick = iniciarAnexo;
     $('bmAvSumar').onclick = sumarAnexo;
     $('bmAvCancel').onclick = function(){ if(BM.dirty && !confirm('¿Descartar la compra que estabas anexando?')) return; desdeExistentes(); BM.dirty = false; salirAnexo(); pintarGridBm(); estadoBm(''); };
@@ -520,8 +530,14 @@
     document.addEventListener('click', function(){ var w = $('bmPrintWrap'); if(w) w.classList.remove('open'); });
     $('bmBody').addEventListener('input', function(e){
       var i = e.target; if(!i.getAttribute('data-m')) return;
-      var id = i.getAttribute('data-m'); BM.valores[id] = BM.valores[id] || {}; BM.valores[id][i.getAttribute('data-c')] = i.value; BM.dirty = true; totalesBm();
-      if(!BM.anexo){ estadoBm('Escribiendo…'); programarGuardado(1500); }
+      var id = i.getAttribute('data-m'); BM.valores[id] = BM.valores[id] || {}; BM.valores[id][i.getAttribute('data-c')] = i.value; BM.dirty = true;
+      var pf = precioFijo(id);
+      if(i.getAttribute('data-c') === 'cantidad' && pf !== null && (BM.valores[id].valor === undefined || BM.valores[id].valor === '')){
+        BM.valores[id].valor = String(pf);
+        var iv = document.querySelector('#bmBody input[data-m="' + id + '"][data-c="valor"]'); if(iv) iv.value = String(pf);
+      }
+      totalesBm();
+      if(!BM.anexo){ estadoBm('Escribiendo…'); botonBm('pendiente'); programarGuardado(1500); } else botonBm('pendiente');
     });
     // Al salir de la casilla (Tab, Enter o clic afuera) se guarda de una vez.
     $('bmBody').addEventListener('change', function(e){ if(e.target.getAttribute('data-m') && !BM.anexo) programarGuardado(10); });
@@ -529,13 +545,21 @@
     tituloBm(); pasoBm();
     api('/bm/contexto').then(function(r){
       if(!r.ok){ estadoBm(r.data.error, 'err'); return; }
-      BM.rec = r.data.recicladores; BM.mat = r.data.materiales;
+      BM.rec = r.data.recicladores; BM.mat = r.data.materiales; BM.precios = r.data.precios || {};
       var fams = ['--Todos los materiales'].concat(Array.from(new Set(BM.mat.map(function(m){ return m.desc_familia; }))).filter(Boolean));
       $('bmFamilia').innerHTML = fams.map(function(f){ return '<option>' + esc(f) + '</option>'; }).join('');
       pintarGridBm();
       if(!BM.rec.length) estadoBm('Aún no hay recicladores registrados. Créalos en Tablas De Referencia > Recicladores.', 'err');
     });
   };
+  // Boton de guardado: vacio | pendiente | guardando | guardado | error
+  function botonBm(estado, hora){
+    var b = $('bmGuardarBtn'); if(!b) return;
+    var t = { vacio: 'Sin datos', pendiente: 'Guardar', guardando: 'Guardando…', guardado: '✓ Guardado' + (hora ? ' ' + hora : ''), error: '⚠ Reintentar guardar' }[estado];
+    b.className = 'b btn-guardado ' + estado; b.querySelector('span').textContent = t;
+    b.disabled = estado === 'vacio' || estado === 'guardando';
+    b.title = estado === 'guardado' ? 'Todo lo que ves en pantalla ya está guardado en el sistema.' : estado === 'pendiente' ? 'Hay cambios sin guardar: se guardan solos en un momento, o pulsa para guardar ya.' : '';
+  }
   function estadoBm(txt, tipo){ var el = $('bmEstado'); if(!el) return; el.className = 'estado-guardado ' + (tipo || ''); el.textContent = txt || ''; }
   // Paso actual de la guia (1 fecha, 2 reciclador, 3 kilos, 4 imprimir).
   function pasoBm(){
@@ -600,6 +624,7 @@
       var f = filas[0] || {};
       $('bmBodega').value = f.id_bodega || ''; $('bmMacro').value = f.id_macrorruta || ''; $('bmMicro1').value = f.id_microrruta_1 || ''; $('bmMicro2').value = f.id_microrruta_2 || '';
       pintarGridBm(); pasoBm();
+      botonBm(filas.length ? 'guardado' : 'vacio');
       estadoBm(filas.length ? '✓ Este día ya tiene ' + filas.length + ' material(es) guardado(s). Puedes corregir o imprimir.' : 'Escribe los kilos de cada material. Se guarda solo.', filas.length ? 'ok' : '');
       var primero = document.querySelector('#bmBody input[data-c="cantidad"]:not([disabled])'); if(primero && !filas.length) primero.focus();
     });
@@ -623,6 +648,8 @@
     if($('bmMicro1').value && $('bmMicro1').value === $('bmMicro2').value) out.unshift('Microrruta 1 y Microrruta 2 no pueden ser la misma.');
     return out;
   }
+  // Precio fijo del material para la asociacion del reciclador elegido (o null).
+  function precioFijo(id){ var c = BM.sel && BM.precios && BM.precios[BM.sel.id_centro]; return c && c[id] !== undefined ? c[id] : null; }
   function pintarGridBm(){
     var fam = $('bmFamilia').value || '--Todos los materiales';
     var lista = fam === '--Todos los materiales' ? BM.mat : BM.mat.filter(function(m){ return m.desc_familia === fam; });
@@ -630,7 +657,9 @@
     $('bmBody').innerHTML = lista.map(function(m){
       var v = BM.valores[m.id] || {};
       var c = function(campo, step){ return '<td class="num"><input type="number" min="0" step="' + step + '" data-m="' + m.id + '" data-c="' + campo + '" value="' + esc(v[campo] || '') + '"' + dis + '></td>'; };
-      return '<tr data-m="' + m.id + '"><td>' + esc(m.desc_tipo_material) + '</td>' + c('cantidad', '0.0001') + c('valor', '0.01') + '<td class="num bm-t"></td>' + c('cantidad_rechazo', '0.0001') + c('cantidad_nosui', '0.0001') + '</tr>';
+      var pf = precioFijo(m.id);
+      var cv = c('valor', '0.01'); if(pf !== null) cv = cv.replace('data-c="valor"', 'data-c="valor" placeholder="' + esc(num(pf, 0)) + ' fijo" title="Precio fijo de la asociación. Puedes cambiarlo para esta compra."');
+      return '<tr data-m="' + m.id + '"><td>' + esc(m.desc_tipo_material) + '</td>' + c('cantidad', '0.0001') + cv + '<td class="num bm-t"></td>' + c('cantidad_rechazo', '0.0001') + c('cantidad_nosui', '0.0001') + '</tr>';
     }).join('');
     totalesBm();
   }
@@ -678,21 +707,22 @@
   function guardarAuto(){
     if(!BM.sel || BM.anexo || !BM.dirty) return Promise.resolve(true);
     var prob = problemasBm();
-    if(prob.length){ estadoBm('⚠ ' + prob[0] + ' (no se guarda hasta corregirlo)', 'err'); return Promise.resolve(false); }
+    if(prob.length){ estadoBm('⚠ ' + prob[0] + ' (no se guarda hasta corregirlo)', 'err'); botonBm('error'); return Promise.resolve(false); }
     if(BM.guardando){ BM.otraVez = true; return Promise.resolve(true); }
     BM.guardando = true; BM.dirty = false;
     var rec = BM.sel, fechaG = $('bmFecha').value;
-    estadoBm('Guardando…');
+    estadoBm('Guardando…'); botonBm('guardando');
     return api('/bm/dia', { method: 'POST', body: cuerpoBm(materialesBm()) }).then(function(r){
       BM.guardando = false;
-      if(!r.ok){ BM.dirty = true; estadoBm('⚠ ' + (r.data.error || 'No se pudo guardar.'), 'err'); return false; }
+      if(!r.ok){ BM.dirty = true; estadoBm('⚠ ' + (r.data.error || 'No se pudo guardar.'), 'err'); botonBm('error'); return false; }
       if(rec === BM.sel && fechaG === $('bmFecha').value){
         // Lo guardado pasa a ser lo existente (para la factura y para "Anexar otra compra").
         BM.existentes = {}; materialesBm().forEach(function(m){ if(m.cantidad || m.valor || m.cantidad_rechazo || m.cantidad_nosui) BM.existentes[m.id_tipo_material] = m; });
         salirAnexo(); pasoBm(); totalesBm();
       }
       var hora = new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' });
-      estadoBm('✓ Guardado automáticamente a las ' + hora, 'ok');
+      estadoBm('Guardado en el sistema a las ' + hora + '.', 'ok');
+      botonBm(BM.dirty ? 'pendiente' : 'guardado', hora);
       if(BM.otraVez){ BM.otraVez = false; BM.dirty = true; return guardarAuto(); }
       return true;
     });
@@ -850,6 +880,49 @@
       '<div class="row grand"><span>TOTAL</span><span>' + cbMoney(s.totales.valorTotal) + '</span></div></div><div style="margin-top:10px;display:flex;justify-content:center;">' + cbQr(s, 120) + '</div><div class="firma">Firma del reciclador</div>' +
       '<div class="foot">' + CB_PIE + '<br>Generado ' + cbEsc(cbGenerado()) + '</div></body></html>';
   }
+
+  // ---------- Precios materiales (precio fijo por kg de cada material) ----------
+  PANTALLAS.precios_material = function(main){
+    main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>' + ic('tablas') + ' ' + esc(titulo('precios_material')) + '</h2>' +
+      (SIS.me.todasAsociaciones ? '<select id="prCentro">' + SIS.me.centros.map(function(c){ return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('') + '</select>' : '') +
+      '<select id="prFamilia"><option value="">Todas las familias</option></select><input id="prBuscar" placeholder="Buscar material…"><span class="spacer"></span><span class="estado-guardado" id="prEstado"></span></div>' +
+      ayuda('precios_material') + '<div class="tw" id="prTabla"></div></div>';
+    var filas = [];
+    var centro = function(){ return $('prCentro') ? $('prCentro').value : (SIS.me.centros[0] && SIS.me.centros[0].id); };
+    var pintar = function(){
+      var fam = $('prFamilia').value, q = $('prBuscar').value.trim().toLowerCase();
+      var l = filas.filter(function(x){ return (!fam || x.desc_familia === fam) && (!q || String(x.desc_tipo_material).toLowerCase().indexOf(q) !== -1); });
+      $('prTabla').innerHTML = '<table class="t"><thead><tr><th>Familia</th><th>Material</th><th class="num">Precio por kg</th><th>Actualizado</th></tr></thead><tbody>' +
+        l.map(function(x){ return '<tr><td>' + esc(x.desc_familia || '') + '</td><td>' + esc(x.desc_tipo_material) + '</td>' +
+          '<td class="num"><input type="number" min="0" step="1" class="pr-in" data-m="' + x.id_tipo_material + '" value="' + (x.precio == null ? '' : esc(Number(x.precio))) + '" placeholder="Sin precio" style="width:120px;text-align:right;font-size:12px;padding:3px 6px;border:1px solid var(--line);border-radius:4px;"></td>' +
+          '<td class="muted">' + esc(x.actualizado || '') + '</td></tr>'; }).join('') + '</tbody></table>';
+    };
+    var cargar = function(){
+      api('/precios?id_centro=' + centro()).then(function(r){
+        if(!r.ok){ $('prTabla').innerHTML = '<p class="msg err" style="padding:10px;">' + esc(r.data.error) + '</p>'; return; }
+        filas = r.data;
+        var fams = Array.from(new Set(filas.map(function(x){ return x.desc_familia; }).filter(Boolean)));
+        $('prFamilia').innerHTML = '<option value="">Todas las familias</option>' + fams.map(function(x){ return '<option>' + esc(x) + '</option>'; }).join('');
+        pintar();
+      });
+    };
+    // Se guarda solo al salir de la casilla.
+    $('prTabla').addEventListener('change', function(e){
+      var i = e.target; if(!i.classList.contains('pr-in')) return;
+      var id = Number(i.getAttribute('data-m'));
+      $('prEstado').className = 'estado-guardado'; $('prEstado').textContent = 'Guardando…';
+      api('/precios', { method: 'PUT', body: JSON.stringify({ id_centro: Number(centro()), id_tipo_material: id, precio: i.value }) }).then(function(r){
+        if(!r.ok){ $('prEstado').className = 'estado-guardado err'; $('prEstado').textContent = '⚠ ' + (r.data.error || 'No se pudo guardar.'); i.classList.add('bad'); return; }
+        i.classList.remove('bad');
+        var x = filas.find(function(y){ return y.id_tipo_material === id; }); if(x) x.precio = i.value === '' ? null : Number(i.value);
+        $('prEstado').className = 'estado-guardado ok'; $('prEstado').textContent = '✓ Guardado automáticamente';
+      });
+    });
+    $('prTabla').addEventListener('keydown', function(e){ if(e.key === 'Enter' && e.target.classList.contains('pr-in')){ e.preventDefault(); var ins = Array.from(document.querySelectorAll('#prTabla .pr-in')); var k = ins.indexOf(e.target); if(ins[k + 1]) ins[k + 1].focus(); else e.target.blur(); } });
+    $('prFamilia').onchange = pintar; $('prBuscar').oninput = pintar;
+    if($('prCentro')) $('prCentro').onchange = cargar;
+    cargar();
+  };
 
   // ---------- Importar datos de Excel ----------
   PANTALLAS.importar = function(main){

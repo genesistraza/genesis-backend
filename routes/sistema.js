@@ -36,6 +36,39 @@ const CLAVE_ENTIDAD = {
   areas_prestacion: 'areas_prestacion',
   microrrutas_detalle: 'microrrutas_detalle' // sub-pantalla de Formulario microrrutas
 };
+// Campos que tenia cada pantalla en el sistema original (App_Data/*.xml, gridColsIns): en Registro solo
+// se muestran y se escriben estos. Los demas campos de la tabla (los agrego Pruebas para el SUI) quedan
+// fuera de esta pantalla. Una pantalla que no esta aqui muestra todos sus campos.
+const CAMPOS_ORIGINAL = {
+  recicladores: ['id_centro', 'nro_documento', 'nombre_completo', 'estado', 'fecha_exp_documento', 'fecha_nacimiento', 'direccion', 'telefono', 'tipo_de_vehiculo', 'placa'],
+  numacros: ['id_centro', 'id_localidad', 'cod_numacro'],
+  localidades: ['desc_localidad', 'ciudad'],
+  tipos_material: ['cod_tipo_material', 'desc_familia', 'desc_tipo_material'],
+  centros: ['cod_centro', 'desc_centro', 'link_dashboard'],
+  usuarios: ['id_centro', 'id_numacro', 'nuis_nuid', 'direccion_usuario', 'id_usuario_uso', 'id_usuario_tipo', 'id_usuario_multiusuario'],
+  microrrutas_detalle: ['id_formulario_microrruta', 'desc_microrruta', 'id_tipo_microrruta', 'direccion_inicio', 'hora_inicio', 'direccion_finalizacion', 'hora_finalizacion',
+    'distancia_via_no_pavimentada', 'distancia_via_pavimentada', 'frecuencia_semanal', 'dias_frecuencia', 'id_estacion_transferencia'],
+  aprovechamiento: ['id_centro', 'periodo', 'id_usuario', 'id_numacro', 'toneladas'],
+  recursos: ['id_centro', 'fecha', 'nuap', 'operador', 'valor']
+};
+// Campos obligatorios de la tabla que el original no pedia: valor fijo al crear.
+async function valoresPorDefecto(key) {
+  if (key === 'recicladores') {
+    // El sistema original solo manejaba cedula (la factura dice "C.C."): tipo de identificacion = CC.
+    const cc = (await pool.query("SELECT id FROM tz_catalogos WHERE categoria = 'tipos_identificacion' AND codigo = '1'")).rows[0];
+    return cc ? { id_tipo_identificacion: cc.id } : {};
+  }
+  return {};
+}
+const campoOriginal = (key, nombre) => !own(CAMPOS_ORIGINAL, key) || CAMPOS_ORIGINAL[key].includes(nombre);
+// Deja en el cuerpo solo los campos del original (el resto no se puede escribir desde Registro).
+function soloOriginales(key, body) {
+  if (!own(CAMPOS_ORIGINAL, key)) return body;
+  const out = {};
+  for (const k of Object.keys(body)) if (CAMPOS_ORIGINAL[key].includes(k)) out[k] = body[k];
+  return out;
+}
+
 // Sub-pantallas: se permiten si el perfil tiene la pantalla principal.
 const PERMISO_DE = { microrrutas_detalle: 'microrrutas' };
 
@@ -176,7 +209,7 @@ function centroDestino(req, valor) {
 // fijos del destino del rechazo y el enlace del dashboard (tareas del administrador).
 const SOLO_ADMIN = new Set(['id_tipo_destino', 'numero_sitio_destino', 'link_dashboard']);
 function camposVisibles(req, key, entity) {
-  return entity.fields.filter((f) => (req.sis.todas || f.name !== 'id_centro') && (req.sis.todas || key !== 'centros' || !SOLO_ADMIN.has(f.name)));
+  return entity.fields.filter((f) => campoOriginal(key, f.name) && (req.sis.todas || f.name !== 'id_centro') && (req.sis.todas || key !== 'centros' || !SOLO_ADMIN.has(f.name)));
 }
 
 // GET /sistema/entidades -> metadata de campos de las pantallas permitidas (para armar tablas y formularios)
@@ -285,7 +318,7 @@ router.post('/datos/:clave', guard(async (req, res) => {
   const p = pantalla(req, res); if (!p) return;
   const { key, entity } = p;
   if (!puedeEscribir(req, key, entity)) return res.status(403).json({ error: 'Esta tabla es de solo lectura para tu perfil.' });
-  const body = { ...(req.body || {}) };
+  const body = { ...(await valoresPorDefecto(key)), ...soloOriginales(key, { ...(req.body || {}) }) };
   if (entity.fields.some((f) => f.name === 'id_centro')) {
     const c = centroDestino(req, body.id_centro);
     if (!c) return res.status(400).json({ error: 'Elige una asociación válida.' });
@@ -316,7 +349,7 @@ router.put('/datos/:clave/:id', guard(async (req, res) => {
   if (!id) return res.status(400).json({ error: 'Id inválido.' });
   const actual = await filaVisible(req, key, entity, id);
   if (!actual) return res.status(404).json({ error: 'Registro no encontrado.' });
-  const body = quitarReservados(req, key, { ...(req.body || {}) });
+  const body = quitarReservados(req, key, soloOriginales(key, { ...(req.body || {}) }));
   if (entity.fields.some((f) => f.name === 'id_centro')) {
     if (body.id_centro === undefined) delete body.id_centro;
     else {
@@ -421,6 +454,49 @@ router.delete('/catalogos/:clave/:id', guard(async (req, res) => {
   res.json({ message: 'Eliminado.' });
 }));
 
+// ============================== Precios materiales ==============================
+// Precio fijo por kg de cada material para la asociacion. El formulario de balance de masas lo pone
+// solo al escribir los kilos; en cada compra se puede cambiar.
+
+function centroDePrecios(req, valor) {
+  if (!req.sis.todas) return req.sis.idsCentros[0];
+  const n = Number(valor);
+  return req.sis.idsCentros.includes(n) ? n : null;
+}
+
+// GET /sistema/precios?id_centro=X -> todos los materiales con su precio fijo (o vacio)
+router.get('/precios', exigir('precios_material'), guard(async (req, res) => {
+  const idCentro = centroDePrecios(req, req.query.id_centro);
+  if (!idCentro) return res.status(400).json({ error: 'Elige una asociación.' });
+  const r = await pool.query(
+    `SELECT tm.id AS id_tipo_material, tm.cod_tipo_material, tm.desc_tipo_material, tm.desc_familia, p.precio,
+            to_char(p.updated_at AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS actualizado
+     FROM tz_tipos_material tm LEFT JOIN gt_precios_material p ON p.id_tipo_material = tm.id AND p.id_centro = $1
+     ORDER BY tm.secuencia_orden, tm.desc_tipo_material`, [idCentro]);
+  res.json(r.rows);
+}));
+
+// PUT /sistema/precios {id_centro, id_tipo_material, precio} -> guarda (precio vacio = quitar el precio fijo)
+router.put('/precios', exigir('precios_material'), guard(async (req, res) => {
+  const b = req.body || {};
+  const idCentro = centroDePrecios(req, b.id_centro);
+  if (!idCentro) return res.status(400).json({ error: 'Elige una asociación.' });
+  const mat = (await pool.query('SELECT id FROM tz_tipos_material WHERE id = $1', [parseId(b.id_tipo_material)])).rows[0];
+  if (!mat) return res.status(400).json({ error: 'Material inválido.' });
+  if (b.precio === null || b.precio === undefined || b.precio === '') {
+    await pool.query('DELETE FROM gt_precios_material WHERE id_centro = $1 AND id_tipo_material = $2', [idCentro, mat.id]);
+    return res.json({ message: 'Precio quitado.' });
+  }
+  const precio = Number(String(b.precio).replace(',', '.'));
+  if (!Number.isFinite(precio) || precio < 0 || precio > 99999999) return res.status(400).json({ error: 'El precio debe ser un número entre 0 y 99.999.999.' });
+  await pool.query(
+    `INSERT INTO gt_precios_material (id_centro, id_tipo_material, precio, user_id, updated_at) VALUES ($1,$2,$3,$4,NOW())
+     ON CONFLICT (id_centro, id_tipo_material) DO UPDATE SET precio = EXCLUDED.precio, user_id = EXCLUDED.user_id, updated_at = NOW()`,
+    [idCentro, mat.id, Math.round(precio * 100) / 100, req.user.id]);
+  await logActivity(req.user.id, 'sistema_precio_material', { id_centro: idCentro, id_tipo_material: mat.id, precio }, req.ip);
+  res.json({ message: 'Guardado.' });
+}));
+
 // ============================== Formulario balance de masas ==============================
 // Mismo formulario de Pruebas (un reciclador, un dia, una fila por material), acotado a la asociacion.
 
@@ -431,7 +507,11 @@ router.get('/bm/contexto', exigir('balance_masas'), guard(async (req, res) => {
             COALESCE(c.pct_rechazo_estimado, 0)::float AS pct_rechazo
      FROM tz_recicladores r JOIN tz_centros c ON c.id = r.id_centro WHERE r.id_centro = ANY($1::int[]) ORDER BY r.nombre_completo`, [req.sis.idsCentros]);
   const mat = await pool.query('SELECT id, cod_tipo_material, desc_tipo_material, desc_familia, secuencia_orden FROM tz_tipos_material ORDER BY secuencia_orden, desc_tipo_material');
-  res.json({ recicladores: rec.rows, materiales: mat.rows });
+  // Precios fijos por asociacion: { id_centro: { id_tipo_material: precio } }
+  const pr = await pool.query('SELECT id_centro, id_tipo_material, precio::float AS precio FROM gt_precios_material WHERE id_centro = ANY($1::int[])', [req.sis.idsCentros]);
+  const precios = {};
+  pr.rows.forEach((p) => { (precios[p.id_centro] = precios[p.id_centro] || {})[p.id_tipo_material] = p.precio; });
+  res.json({ recicladores: rec.rows, materiales: mat.rows, precios });
 }));
 
 async function recicladorVisible(req, id) {
@@ -566,7 +646,7 @@ function tipoCargue(req, res) {
 // GET /sistema/importar/plantilla/:tipo -> plantilla .xlsx con las listas de la(s) asociacion(es) visibles
 router.get('/importar/plantilla/:tipo', exigir('importar'), guard(async (req, res) => {
   const c = tipoCargue(req, res); if (!c) return;
-  const buffer = await plantillaEntidad(c.entidad, getEntity(c.entidad), { idsCentros: req.sis.idsCentros, sinCentro: !req.sis.todas, sinHora: true });
+  const buffer = await plantillaEntidad(c.entidad, getEntity(c.entidad), { idsCentros: req.sis.idsCentros, sinCentro: !req.sis.todas, sinHora: true, soloCampos: CAMPOS_ORIGINAL[c.entidad] });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', 'attachment; filename="plantilla_' + req.params.tipo + '.xlsx"');
   res.send(buffer);
@@ -577,7 +657,10 @@ router.post('/importar/:tipo', exigir('importar'), uploadExcel.single('file'), g
   const c = tipoCargue(req, res); if (!c) return;
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
   const entity = getEntity(c.entidad);
+  // Campos que no estaban en el original: no se leen del archivo (vacios, o su valor fijo si son obligatorios).
   const fijos = req.sis.todas ? {} : { id_centro: req.sis.idsCentros[0] };
+  for (const f of entity.fields) if (!campoOriginal(c.entidad, f.name) && !f.required) fijos[f.name] = null;
+  Object.assign(fijos, await valoresPorDefecto(c.entidad));
   const p = await parsearArchivo(c.entidad, entity, req.file.buffer, { idsCentros: req.sis.idsCentros, fijos });
   if (p.error) return res.status(400).json({ error: p.error });
   const { parsedRows, errores, omitidas } = p;

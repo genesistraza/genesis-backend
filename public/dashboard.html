@@ -21,6 +21,20 @@
   .routes-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
   .routes-list-item .name{flex:1;}
   .routes-list-empty{padding:14px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
+  /* Recordatorio del robot (carpeta legal) */
+  .robot-panel{display:flex;align-items:center;gap:22px;}
+  .robot-img{height:240px;width:auto;max-width:190px;flex:none;object-fit:contain;}
+  /* Globo celeste para que se diferencie del resto del panel */
+  .robot-globo{--globo-bg:#DCEFFC;--globo-borde:#7CC0EE;position:relative;flex:1;background:var(--globo-bg);border:2px solid var(--globo-borde);border-radius:16px;padding:16px 20px;box-shadow:0 4px 14px rgba(30,111,214,.14);}
+  .robot-globo:before{content:"";position:absolute;left:-13px;top:38px;border:12px solid transparent;border-left:0;border-right-color:var(--globo-borde);}
+  .robot-globo:after{content:"";position:absolute;left:-9px;top:40px;border:10px solid transparent;border-left:0;border-right-color:var(--globo-bg);}
+  .robot-globo h3{margin:0 0 8px;font-size:16px;color:var(--blue-deep);}
+  .robot-globo .grupo{margin:8px 0 0;font-size:13.5px;}
+  .robot-globo .grupo b{display:block;margin-bottom:3px;}
+  .robot-globo .grupo.vencido b{color:#C0392B;} .robot-globo .grupo.por b{color:#B45F06;} .robot-globo .grupo.sin b{color:var(--blue-deep);}
+  .robot-globo ul{margin:0;padding-left:18px;color:var(--ink-soft);}
+  .robot-globo .ok{color:#3C7A12;font-weight:600;font-size:14px;}
+  @media (max-width:640px){ .robot-panel{flex-direction:column;} .robot-img{height:170px;} .robot-globo:before,.robot-globo:after{display:none;} }
 </style>
 </head>
 <body>
@@ -111,9 +125,15 @@
           <div class="label">Próximo vencimiento</div>
           <div class="value" id="statDueDate" style="font-size:20px;">—</div>
         </div>
-        <div class="stat-card">
-          <div class="label">Total pagado</div>
-          <div class="value" id="statTotalPaid" style="font-size:20px;">—</div>
+      </div>
+
+      <!-- Recordatorio del robot: estado de la carpeta legal (Documentos asociaciones del sistema). -->
+      <div id="robotPanel" class="panel robot-panel" style="display:none;">
+        <img class="robot-img" src="robot-recordatorio.png" alt="Robot de Genesis Traza" onerror="this.onerror=null;this.src='robot-email.png';">
+        <div class="robot-globo">
+          <h3 id="robotTitulo">—</h3>
+          <div id="robotCuerpo"></div>
+          <button type="button" class="btn btn-primary" id="robotBtn" style="margin-top:12px;" onclick="irADocumentos()">Ir a mis documentos</button>
         </div>
       </div>
 
@@ -316,6 +336,46 @@
     }
   }
 
+  // ---- Recordatorio del robot: que documentos de la carpeta legal faltan, vencieron o estan por vencer ----
+  function cargarRecordatorioRobot(){
+    gtApiFetch('/sistema/documentos/asociaciones').then(function(res){
+      if(!res.ok || !Array.isArray(res.data) || !res.data.length) return; // perfil sin Documentos: no se muestra
+      var docs = res.data;
+      var por = function(estado){ return docs.filter(function(d){ return d.estado === estado; }); };
+      var vencidos = por('Vencido'), porVencer = por('Por vencer'), sinDoc = por('Sin documento'), sinVig = por('Sin vigencia');
+      var lista = function(arr, extra){
+        var max = 6;
+        return '<ul>' + arr.slice(0, max).map(function(d){ return '<li>' + gtEscapeHtml(d.tipo) + (extra ? extra(d) : '') + '</li>'; }).join('') +
+          (arr.length > max ? '<li>y ' + (arr.length - max) + ' más…</li>' : '') + '</ul>';
+      };
+      var dias = function(d){ var n = Number(d.dias_vigencia); return isNaN(n) ? '' : ' — ' + (n < 0 ? 'venció hace ' + Math.abs(n) + ' día(s)' : n === 1 ? 'vence mañana' : 'vence en ' + n + ' días'); };
+      var html = '';
+      if(vencidos.length) html += '<div class="grupo vencido"><b>⚠ Vencidos (' + vencidos.length + '): renuévalos cuanto antes</b>' + lista(vencidos, dias) + '</div>';
+      if(porVencer.length) html += '<div class="grupo por"><b>⏳ Próximos a vencer (' + porVencer.length + ')</b>' + lista(porVencer, dias) + '</div>';
+      if(sinDoc.length) html += '<div class="grupo sin"><b>📄 Aún no has subido (' + sinDoc.length + ')</b>' + lista(sinDoc) + '</div>';
+      if(sinVig.length) html += '<div class="grupo sin"><b>📅 Sin fecha de vencimiento (' + sinVig.length + ')</b>' + lista(sinVig) + '</div>';
+      var alDia = !html;
+      document.querySelector('#robotPanel .robot-globo').classList.toggle('al-dia', alDia);
+      document.getElementById('robotTitulo').textContent = alDia ? '¡Tu documentación está al día!' : 'Revisemos tu carpeta legal';
+      document.getElementById('robotCuerpo').innerHTML = alDia
+        ? '<p class="ok">✓ Todos los documentos de tu asociación están subidos y vigentes. Te avisaré aquí cuando alguno esté por vencer.</p>'
+        : '<p style="margin:0;font-size:13.5px;color:var(--ink-soft);">Tener la carpeta legal completa y vigente evita problemas con la Superintendencia y los contratos. Esto es lo que falta:</p>' + html;
+      document.getElementById('robotBtn').textContent = alDia ? 'Ver mis documentos' : 'Subir o actualizar documentos';
+      document.getElementById('robotPanel').style.display = 'flex';
+    });
+  }
+  // Abre Registro directamente en Documentos asociaciones.
+  function irADocumentos(){
+    var fr = document.getElementById('registroFrame');
+    var dest = 'sistema.html?embebido=1#documentos_asociaciones';
+    showTab('registro');
+    if(fr.contentWindow && fr.getAttribute('src') && fr.contentWindow.location.hash !== undefined && fr.contentWindow.SIS){
+      fr.contentWindow.location.hash = 'documentos_asociaciones';
+    } else {
+      fr.setAttribute('src', dest);
+    }
+  }
+
   function gtToggleSalirGroup(){
     var submenu = document.getElementById('salirSubmenu');
     var willOpen = submenu.style.display === 'none';
@@ -338,7 +398,10 @@
 
     // "Registro" solo aparece si la asociacion esta habilitada en el sistema de usuarios.
     gtApiFetch('/sistema/me').then(function(res){
-      if(res.ok) document.getElementById('sideRegistro').style.display = '';
+      if(res.ok){
+        document.getElementById('sideRegistro').style.display = '';
+        cargarRecordatorioRobot();
+      }
     });
 
     gtApiFetch('/auth/me').then(function(res){
@@ -378,18 +441,17 @@
       }
 
       var sub = meData.subscriptions && meData.subscriptions[0];
-      var totalPaid = (meData.payments || []).filter(function(p){ return p.status === 'aprobado'; })
-        .reduce(function(sum, p){ return sum + Number(p.amount); }, 0);
-      document.getElementById('statTotalPaid').textContent = gtFormatCOP(totalPaid);
 
       if(sub){
         document.getElementById('statPlan').textContent = sub.plan_name;
         document.getElementById('statStatus').innerHTML = statusBadge(sub.status);
         document.getElementById('statDueDate').textContent = gtFormatDate(sub.next_due_date);
 
-        document.getElementById('renewalPanel').style.display = 'block';
         var isActive = sub.status === 'activa' && sub.next_due_date;
         var renewBtn = document.getElementById('renewBtn');
+        // Con el plan activo, el recuadro "Tu plan" repetia lo de las tarjetas de arriba: solo se
+        // muestra cuando hay que renovar o pagar (para cambiar de plan esta "Ver planes").
+        document.getElementById('renewalPanel').style.display = isActive ? 'none' : 'block';
 
         if(!isActive){
           var amount = sub.billing_cycle === 'anual' ? sub.price_annual * 12 : sub.price_monthly;

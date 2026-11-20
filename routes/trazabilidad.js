@@ -754,7 +754,7 @@ router.get('/:entity/template', guard(async (req, res) => {
 // Plantilla .xlsx de una entidad. opts.idsCentros: las listas solo traen datos de esas asociaciones;
 // opts.sinCentro: se quita la columna Centro (el usuario de asociacion no la llena).
 async function plantillaEntidad(key, entity, opts = {}) {
-  const campos = opts.sinCentro ? entity.fields.filter((f) => f.name !== 'id_centro') : entity.fields;
+  const campos = entity.fields.filter((f) => !(opts.sinCentro && f.name === 'id_centro') && (!opts.soloCampos || opts.soloCampos.includes(f.name)));
   const headers = campos.map((f) => f.label);
   const exampleRow = {};
   const instructions = [['Columna', 'Obligatorio', 'Tipo de dato', 'Formato / valores permitidos']];
