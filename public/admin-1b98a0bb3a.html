@@ -72,7 +72,7 @@
         <div class="stat-card"><div class="label">Pagos aprobados</div><div class="value">—</div></div>
         <div class="stat-card"><div class="label">Suscripciones activas</div><div class="value">—</div></div>
       </div>
-      <p id="resumenAdminNote" class="panel" style="display:none;color:var(--ink-soft);">Los ingresos totales solo los ve el rol <strong>pro</strong>.</p>
+      <p id="resumenAdminNote" class="panel" style="display:none;color:var(--ink-soft);">Los ingresos los ve solo quien tenga ese permiso.</p>
 
       <div class="panel" style="margin-top:20px;">
         <div class="panel-head"><h2>Próximas fechas de pago</h2></div>
@@ -315,6 +315,8 @@
         <div class="form-field" style="margin-bottom:14px;"><label>Nombre completo</label><input id="subFullName"></div>
         <div class="form-field" style="margin-bottom:14px;"><label>Correo (con este entra)</label><input id="subEmail" type="email"></div>
         <div class="form-field" style="margin-bottom:14px;"><label>Contraseña inicial (mín. 8; que la cambie al entrar)</label><div class="pwd-wrap"><input id="subPassword" type="password" autocomplete="new-password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+        <div style="font-size:13px;font-weight:600;margin:4px 0 4px;">Qué puede hacer</div>
+        <div id="subPermisos" style="border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:14px;"></div>
         <button class="btn btn-primary" onclick="createSubAdmin()">Crear asesor</button>
         <p id="subAdminMsg" style="margin-top:12px;font-size:13px;"></p>
       </div>
@@ -433,8 +435,8 @@
         <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
         <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
         <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
-        <div class="form-field"><label>Tipo de cliente</label><select id="newAssocTipo"><option value="completo">Sistema completo (trazabilidad + facturación)</option><option value="facturacion">Solo facturación electrónica</option></select></div>
-        <div class="form-field" style="grid-column:1/-1;"><label>Link de facturación (a donde se le lleva para facturar)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
+        <div class="form-field gt-perm-link"><label>Tipo de cliente</label><select id="newAssocTipo"><option value="completo">Sistema completo (trazabilidad + facturación)</option><option value="facturacion">Solo facturación electrónica</option></select></div>
+        <div class="form-field gt-perm-link" style="grid-column:1/-1;"><label>Link de facturación (a donde se le lleva para facturar)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
       </div>
       <p style="color:var(--ink-soft);font-size:12.5px;margin-top:6px;">Solo facturación: al iniciar sesión va directo a su facturación. Sistema completo: entra a su panel, con Registro y el botón "Ir a facturar".</p>
       <h4 style="margin-top:20px;font-size:14px;">Usuario de contacto (opcional, para que puedan iniciar sesión)</h4>
@@ -476,12 +478,50 @@
     return '<span class="badge ' + (map[status] || 'badge-gray') + '">' + (status || '—') + '</span>';
   }
 
+  // Permisos del asesor (el fundador los tiene todos). Lo que no tenga se oculta del panel;
+  // el servidor igual lo bloquea.
+  var gtPerm = {}, gtPermCatalogo = [];
+  var GT_PERM_OCULTAR = {
+    crear_asociaciones: ['[onclick^="openNewAssociationModal"]'],
+    editar_asociaciones: ['[onclick^="saveAssociationEdits"]', '[onclick^="uploadAssociationLogo"]', '[onclick^="removeAssociationLogo"]'],
+    link_facturacion: ['.gt-perm-link'],
+    usuarios_asociacion: ['[onclick^="addAssociationUser"]', '[onclick^="saveUserContact"]', '.gt-perm-usuarios'],
+    documentos: ['[onclick^="uploadAssociationDocuments"]'],
+    mapas_rutas: ['.gt-perm-rutas', '[onclick^="addRoute"]'],
+    planes: ['[onclick^="fixAssociationPlan"]', '[onclick^="removeAssociationPlan"]'],
+    pagos: ['[onclick^="registerCashPayment"]', '.side-link[data-tab="pagos"]'],
+    recordatorios: ['#sendReminderBtn'],
+    balance_masas: ['[onclick^="uploadBalanceFile"]', '[onclick^="uploadRecicladoresFile"]']
+  };
+  function gtCargarPermisos(){
+    return gtApiFetch('/admin/mis-permisos').then(function(res){
+      if(!res.ok) return;
+      gtPerm = res.data.permisos || {}; gtPermCatalogo = res.data.catalogo || [];
+      var css = '';
+      Object.keys(GT_PERM_OCULTAR).forEach(function(k){ if(!gtPerm[k]) css += GT_PERM_OCULTAR[k].join(',') + '{display:none !important;}'; });
+      var st = document.getElementById('gtPermCss') || document.head.appendChild(Object.assign(document.createElement('style'), { id: 'gtPermCss' }));
+      st.textContent = css;
+      if(document.getElementById('subPermisos')) document.getElementById('subPermisos').innerHTML = gtPermChecks('subPerm', null);
+    });
+  }
+  // Casillas de permisos: prefijo de id + valores (null = los de por defecto)
+  function gtPermChecks(pref, valores){
+    return gtPermCatalogo.map(function(p){
+      var on = valores ? !!valores[p.clave] : !!p.defecto;
+      return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer;"><input type="checkbox" id="' + pref + '_' + p.clave + '"' + (on ? ' checked' : '') + '> ' + gtEscapeHtml(p.nombre) + '</label>';
+    }).join('');
+  }
+  function gtLeerPermChecks(pref){
+    var out = {};
+    gtPermCatalogo.forEach(function(p){ var el = document.getElementById(pref + '_' + p.clave); out[p.clave] = !!(el && el.checked); });
+    return out;
+  }
+
   function initShell(){
     document.getElementById('sideUserName').textContent = session.fullName;
     document.getElementById('sideUserRole').textContent = session.role;
     if(!isPro){
       document.querySelectorAll('.pro-only').forEach(function(el){ el.style.display = 'none'; });
-      document.getElementById('resumenAdminNote').style.display = 'block';
     }
     var loader = document.getElementById('gtPageLoader');
     if(loader) loader.classList.add('hidden');
@@ -538,8 +578,29 @@
       box.innerHTML = gtAsesores.length ? '<table class="data-table"><thead><tr><th>Asesor</th><th>Creado</th><th>Último ingreso</th><th>Movimientos</th><th></th></tr></thead><tbody>' +
         gtAsesores.map(function(a){ return '<tr><td><span style="display:inline-flex;align-items:center;gap:9px;">' + asesorAvatar(a) + '<span><b>' + gtEscapeHtml(a.full_name) + '</b><br><span style="font-size:12px;color:var(--ink-soft);">' + gtEscapeHtml(a.email) + '</span></span></span></td>' +
           '<td>' + gtFormatDate(a.creado) + '</td><td>' + (a.ultimo_ingreso ? gtEscapeHtml(a.ultimo_ingreso) : '<span style="color:var(--ink-soft);">Nunca ha entrado</span>') + '</td><td>' + a.movimientos + '</td>' +
-          '<td><button type="button" class="cell-action" onclick="verMovimientosDe(' + a.id + ')">Ver movimientos</button></td></tr>'; }).join('') + '</tbody></table>'
+          '<td style="white-space:nowrap;"><button type="button" class="cell-action" style="margin-right:10px;" onclick="editarPermisosAsesor(' + a.id + ')">Permisos</button><button type="button" class="cell-action" onclick="verMovimientosDe(' + a.id + ')">Ver movimientos</button></td></tr>' +
+          '<tr id="permFila_' + a.id + '" style="display:none;"><td colspan="5"></td></tr>'; }).join('') + '</tbody></table>'
         : '<p style="color:var(--ink-soft);font-size:13px;">Aún no has creado asesores. Créalos con el formulario de la izquierda.</p>';
+    });
+  }
+  // Abre / cierra debajo del asesor las casillas de lo que puede y no puede hacer.
+  function editarPermisosAsesor(id){
+    var fila = document.getElementById('permFila_' + id);
+    if(fila.style.display !== 'none'){ fila.style.display = 'none'; return; }
+    var a = gtAsesores.filter(function(x){ return x.id === id; })[0];
+    fila.children[0].innerHTML = '<div style="background:#F3F9FF;border:1px solid #9DCBF2;border-radius:8px;padding:10px 12px;">' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 16px;">' + gtPermChecks('perm' + id, a.permisos_admin) + '</div>' +
+      '<button type="button" class="btn btn-primary" style="padding:6px 14px;margin-top:8px;" onclick="guardarPermisosAsesor(' + id + ')">Guardar permisos</button> ' +
+      '<span id="permMsg_' + id + '" style="font-size:12.5px;margin-left:8px;"></span></div>';
+    fila.style.display = '';
+  }
+  function guardarPermisosAsesor(id){
+    var msg = document.getElementById('permMsg_' + id);
+    msg.style.color = 'var(--ink-soft)'; msg.textContent = 'Guardando…';
+    gtApiFetch('/admin/asesores/' + id + '/permisos', { method: 'PUT', body: JSON.stringify({ permisos: gtLeerPermChecks('perm' + id) }) }).then(function(res){
+      if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = (res.data && res.data.error) || 'No se pudo guardar.'; return; }
+      gtAsesores.forEach(function(x){ if(x.id === id) x.permisos_admin = res.data.permisos; });
+      msg.style.color = 'var(--green)'; msg.textContent = '✓ Guardado. Aplica de una vez.';
     });
   }
   function verMovimientosDe(id){ document.getElementById('movAsesor').value = id; verAsesoresTab('mov'); }
@@ -556,7 +617,8 @@
   }
 
   function loadResumen(){
-    if(isPro){
+    document.getElementById('resumenAdminNote').style.display = gtPerm.ver_ingresos ? 'none' : 'block';
+    if(gtPerm.ver_ingresos){
       gtApiFetch('/admin/revenue-summary').then(function(res){
         if(!res.ok) return;
         var cards = document.querySelectorAll('#resumenStats .stat-card .value');
@@ -599,7 +661,7 @@
           '<td>' + statusBadge(a.subscription_status) + '</td>' +
           '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
           '<td><button type="button" class="cell-action" style="margin-right:12px;">Ver detalle</button>' +
-          (isPro ? '<button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button>' : '') + '</td>';
+          (gtPerm.eliminar_asociaciones ? '<button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button>' : '') + '</td>';
         var tipoTag = a.tipo_servicio === 'facturacion'
           ? '<span style="font-size:10.5px;font-weight:700;background:#FFF1DA;color:#A35F00;border-radius:10px;padding:2px 8px;">Solo facturación</span>'
           : '<span style="font-size:10.5px;font-weight:700;background:#E6F4D7;color:#3C7A12;border-radius:10px;padding:2px 8px;">Sistema completo</span>';
@@ -609,7 +671,7 @@
         tr.children[3].textContent = a.plan_name || '—';
         var actionBtns = tr.children[6].querySelectorAll('.cell-action');
         actionBtns[0].addEventListener('click', function(){ openClientModal(a.id, a.name); });
-        if(isPro){
+        if(gtPerm.eliminar_asociaciones){
           actionBtns[1].addEventListener('click', function(){ deleteAssociation(a.id, a.name); });
         }
         tbody.appendChild(tr);
@@ -813,8 +875,8 @@
       html += '<div class="form-field"><label>Nombre</label><input id="editAssocName" value="' + esc(d.association.name) + '"></div>';
       html += '<div class="form-field"><label>NIT</label><input id="editAssocNit" value="' + esc(d.association.nit) + '"></div>';
       html += '<div class="form-field"><label># de recicladores</label><input id="editAssocRecyclerCount" type="number" min="0" value="' + esc(d.association.recycler_count) + '"></div>';
-      // Tipo de cliente y link de facturacion: solo el fundador los cambia.
-      if(isPro){
+      // Tipo de cliente y link de facturacion: el fundador o el asesor con ese permiso.
+      if(gtPerm.link_facturacion){
         html += '<div class="form-field"><label>Tipo de cliente</label><select id="editAssocTipo"><option value="completo"' + (d.association.tipo_servicio === 'completo' ? ' selected' : '') + '>Sistema completo (trazabilidad + facturación)</option><option value="facturacion"' + (d.association.tipo_servicio === 'facturacion' ? ' selected' : '') + '>Solo facturación electrónica</option></select></div>';
         html += '<div class="form-field"><label>Link de facturación (a donde se le lleva)</label><input id="editAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' + esc(d.association.facturacion_url) + '"></div>';
       } else {
@@ -844,15 +906,15 @@
         html += '<p id="userContactMsg_' + u.id + '" style="margin:0 0 12px;font-size:13px;"></p>';
       });
       if(d.users.length === 0) html += '<p style="font-size:13px;color:#B45F06;margin:0 0 10px;">Esta asociación todavía no tiene ningún usuario: nadie puede ingresar.</p>';
-      html += '<h4 style="margin-top:14px;font-size:14px;">Agregar usuario de ingreso</h4>';
-      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Con este correo y contraseña la persona entra a Mi cuenta y a la facturación electrónica. Contraseña de mínimo 8 caracteres. Solo el administrador principal puede crear usuarios.</p>';
+      html += '<div class="gt-perm-usuarios"><h4 style="margin-top:14px;font-size:14px;">Agregar usuario de ingreso</h4>';
+      html += '<p style="font-size:12.5px;color:var(--ink-soft);margin:2px 0 10px;">Con este correo y contraseña la persona entra a Mi cuenta y a la facturación electrónica. Contraseña de mínimo 8 caracteres.</p>';
       html += '<div class="form-grid">';
       html += '<div class="form-field"><label>Nombre completo</label><input id="newUserName"></div>';
       html += '<div class="form-field"><label>Correo de ingreso</label><input id="newUserEmail" type="email" autocomplete="off"></div>';
       html += '<div class="form-field"><label>Contraseña</label><div class="pwd-wrap"><input id="newUserPassword" type="password" autocomplete="new-password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>';
       html += '</div>';
       html += '<button class="btn btn-primary" style="margin-top:10px;" onclick="addAssociationUser(' + d.association.id + ')">Crear usuario</button>';
-      html += '<p id="newUserMsg" style="margin-top:8px;font-size:13px;"></p>';
+      html += '<p id="newUserMsg" style="margin-top:8px;font-size:13px;"></p></div>';
       html += '<h4 style="margin-top:16px;font-size:14px;">Suscripciones</h4><ul style="padding-left:18px;font-size:13.5px;">';
       d.subscriptions.forEach(function(s){ html += '<li>' + esc(s.plan_name) + ' — ' + esc(s.status) + ' (vence ' + gtFormatDate(s.next_due_date) + ')</li>'; });
       html += '</ul><h4 style="margin-top:16px;font-size:14px;">Pagos recientes</h4><ul style="padding-left:18px;font-size:13.5px;">';
@@ -999,7 +1061,7 @@
     msg.textContent = 'Creando…';
     gtApiFetch('/admin/users', { method: 'POST', body: JSON.stringify({ fullName: fullName, email: email, password: password, role: 'operativo', associationId: associationId }) })
       .then(function(res){
-        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = res.status === 403 ? 'Solo el administrador principal puede crear usuarios.' : (res.data.error || 'No se pudo crear el usuario.'); return; }
+        if(!res.ok){ msg.style.color = '#C0392B'; msg.textContent = (res.data && res.data.error) || 'No se pudo crear el usuario.'; return; }
         openClientModal(associationId, document.getElementById('clientModalTitle').textContent);
       });
   }
@@ -1157,6 +1219,7 @@
           '<td>' + (hasMap ? '<a href="' + a.routes_kml_url + '" target="_blank" style="color:var(--blue);">ver KML</a>' : '<span style="color:var(--ink-soft);">Sin mapa</span>') + '</td>' +
           '<td><button type="button" class="cell-action" style="margin-right:12px;">' + (hasMap ? 'Reemplazar' : 'Subir mapa') + '</button>' +
           (hasMap ? '<button type="button" class="cell-action" style="color:#C0392B;">Quitar</button>' : '') + '</td>';
+        tr.children[2].className = 'gt-perm-rutas';
         tr.children[0].textContent = a.name;
         var actionBtns = tr.children[2].querySelectorAll('.cell-action');
         actionBtns[0].addEventListener('click', function(){ openNewRouteModal(a.id, a.name); });
@@ -1694,7 +1757,8 @@
       fullName: document.getElementById('subFullName').value.trim(),
       email: document.getElementById('subEmail').value.trim().toLowerCase(),
       password: document.getElementById('subPassword').value,
-      role: 'admin' // siempre asesor del equipo Genesis
+      role: 'admin', // siempre asesor del equipo Genesis
+      permisos: gtLeerPermChecks('subPerm')
     };
     var msgEl = document.getElementById('subAdminMsg');
     if(!body.fullName || !body.email || !body.password){
@@ -1711,6 +1775,7 @@
         document.getElementById('subFullName').value = '';
         document.getElementById('subEmail').value = '';
         document.getElementById('subPassword').value = '';
+        document.getElementById('subPermisos').innerHTML = gtPermChecks('subPerm', null);
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
@@ -1732,7 +1797,7 @@
 
   if(session){
     initShell();
-    loadResumen();
+    gtCargarPermisos().then(loadResumen);
     var clearBtn = document.getElementById('clearPendingPaymentsBtn');
     if(clearBtn) clearBtn.addEventListener('click', clearPendingPayments);
     var twoFABtn = document.getElementById('startTwoFASetupBtn');

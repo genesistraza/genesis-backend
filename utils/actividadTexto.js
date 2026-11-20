@@ -16,6 +16,7 @@ const ACCIONES = {
   asociacion_eliminada: () => 'Eliminó una asociación',
   admin_vio_cliente: (d) => 'Abrió el detalle de una asociación' + (d.associationId ? ' (#' + d.associationId + ')' : ''),
   usuario_admin_creado: (d) => 'Creó el usuario ' + ((d.nuevo && d.nuevo.email) || ''),
+  asesor_permisos_cambiados: () => 'Cambió los permisos de un asesor',
   usuario_contacto_actualizado: () => 'Corrigió los datos de contacto de un usuario',
   documentos_asociacion_subidos: () => 'Subió documentos de una asociación',
   logo_asociacion_subido: () => 'Subió el logo de una asociación',

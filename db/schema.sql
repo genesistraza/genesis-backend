@@ -1300,3 +1300,6 @@ ALTER TABLE associations ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20);
 UPDATE associations a SET tipo_servicio = CASE WHEN EXISTS (SELECT 1 FROM tz_centros c WHERE c.association_id = a.id AND c.modulo = 'sistema') THEN 'completo' ELSE 'facturacion' END
 WHERE tipo_servicio IS NULL;
 ALTER TABLE associations ALTER COLUMN tipo_servicio SET DEFAULT 'completo';
+
+-- Permisos de cada asesor (role admin), los decide el fundador desde el panel. NULL = valores por defecto.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permisos_admin JSONB;

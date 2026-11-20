@@ -91,11 +91,60 @@ function uploadToCloudinary(fileBuffer, folder) {
 // 'pro' ve y controla todo. 'admin' (sub-jefes) es operativo: ve datos pero no configuración global.
 router.use(requireAuth, requireRole('pro', 'admin'));
 
+// ---- Permisos de cada asesor: el fundador decide que puede y que no (users.permisos_admin) ----
+// 'defecto' es lo que tiene un asesor nuevo si el fundador no cambia nada.
+const PERMISOS_ASESOR = [
+  { clave: 'crear_asociaciones', nombre: 'Crear asociaciones', defecto: true },
+  { clave: 'editar_asociaciones', nombre: 'Editar datos y logo de asociaciones', defecto: true },
+  { clave: 'link_facturacion', nombre: 'Cambiar tipo de cliente y link de facturación', defecto: false },
+  { clave: 'eliminar_asociaciones', nombre: 'Eliminar asociaciones', defecto: false },
+  { clave: 'usuarios_asociacion', nombre: 'Crear y corregir usuarios de asociaciones', defecto: true },
+  { clave: 'documentos', nombre: 'Subir documentos legales', defecto: true },
+  { clave: 'mapas_rutas', nombre: 'Subir y quitar mapas de rutas', defecto: true },
+  { clave: 'planes', nombre: 'Activar o quitar planes', defecto: true },
+  { clave: 'pagos', nombre: 'Ver pagos y registrar pagos en efectivo', defecto: true },
+  { clave: 'limpiar_pagos', nombre: 'Limpiar pagos pendientes', defecto: false },
+  { clave: 'recordatorios', nombre: 'Enviar recordatorios de pago', defecto: true },
+  { clave: 'balance_masas', nombre: 'Subir balance de masas y recicladores', defecto: true },
+  { clave: 'ver_ingresos', nombre: 'Ver resumen de ingresos', defecto: false }
+];
+function armarPermisos(guardados) {
+  const g = guardados && typeof guardados === 'object' ? guardados : {};
+  const out = {};
+  PERMISOS_ASESOR.forEach((p) => { out[p.clave] = typeof g[p.clave] === 'boolean' ? g[p.clave] : p.defecto; });
+  return out;
+}
+function limpiarPermisos(entrada) {
+  const out = {};
+  PERMISOS_ASESOR.forEach((p) => { if (entrada && typeof entrada[p.clave] === 'boolean') out[p.clave] = entrada[p.clave]; });
+  return armarPermisos(out);
+}
+// Se leen de la base en cada peticion: si el fundador quita algo, aplica de una vez.
+router.use(asyncRoute(async (req, res, next) => {
+  if (req.user.role === 'pro') {
+    req.permisos = {};
+    PERMISOS_ASESOR.forEach((p) => { req.permisos[p.clave] = true; });
+  } else {
+    const r = await pool.query('SELECT permisos_admin FROM users WHERE id = $1', [req.user.id]);
+    req.permisos = armarPermisos(r.rows[0] && r.rows[0].permisos_admin);
+  }
+  next();
+}));
+const puede = (clave) => (req, res, next) =>
+  (req.permisos && req.permisos[clave]) ? next() : res.status(403).json({ error: 'El fundador no te dio permiso para esta acción.' });
+
+// GET /admin/mis-permisos -> para que el panel muestre solo lo que el usuario puede hacer
+router.get('/mis-permisos', (req, res) => {
+  res.json({ esPro: req.user.role === 'pro', permisos: req.permisos, catalogo: PERMISOS_ASESOR });
+});
+
 // POST /admin/associations -> crear una asociación nueva (y opcionalmente su primer usuario).
 // Disponible para 'pro' y 'admin' (a diferencia de otras acciones de configuración).
-router.post('/associations', asyncRoute(async (req, res) => {
-  const { name, nit, recyclerCount, facturacionUrl, contactFullName, contactEmail, contactPhone, contactPassword } = req.body;
-  const tipoServicio = TIPOS_SERVICIO.includes(req.body.tipoServicio) ? req.body.tipoServicio : 'completo';
+router.post('/associations', puede('crear_asociaciones'), asyncRoute(async (req, res) => {
+  const { name, nit, recyclerCount, contactFullName, contactEmail, contactPhone, contactPassword } = req.body;
+  // Sin el permiso 'link_facturacion' el asesor crea la asociacion sin link y como sistema completo.
+  const facturacionUrl = req.permisos.link_facturacion ? req.body.facturacionUrl : null;
+  const tipoServicio = req.permisos.link_facturacion && TIPOS_SERVICIO.includes(req.body.tipoServicio) ? req.body.tipoServicio : 'completo';
   if (facturacionUrl && !urlFacturacionValida(facturacionUrl)) return res.status(400).json({ error: 'El link de facturación debe empezar por https://' });
   if (tipoServicio === 'facturacion' && !facturacionUrl) return res.status(400).json({ error: 'Un cliente de solo facturación necesita su link de facturación.' });
   if (!name || !nit || !recyclerCount) {
@@ -183,7 +232,7 @@ router.get('/associations', asyncRoute(async (req, res) => {
 // POST /admin/associations/:id/logo -> sube el logo de la asociacion (png/jpg/webp, hasta 3 MB).
 // Cloudinary lo reduce a maximo 600x600 y lo guarda como PNG (conserva transparencia y es un
 // formato que tambien pueden incrustar los PDF de facturas y planillas).
-router.post('/associations/:id/logo', uploadLogo.single('logo'), asyncRoute(async (req, res) => {
+router.post('/associations/:id/logo', puede('editar_asociaciones'), uploadLogo.single('logo'), asyncRoute(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Sube una imagen PNG, JPG o WEBP de hasta 3 MB.' });
   }
@@ -211,7 +260,7 @@ router.post('/associations/:id/logo', uploadLogo.single('logo'), asyncRoute(asyn
 }));
 
 // DELETE /admin/associations/:id/logo -> quita el logo (vuelve a mostrarse el avatar con iniciales)
-router.delete('/associations/:id/logo', asyncRoute(async (req, res) => {
+router.delete('/associations/:id/logo', puede('editar_asociaciones'), asyncRoute(async (req, res) => {
   const previous = await pool.query('SELECT logo_url FROM associations WHERE id = $1', [req.params.id]);
   const result = await pool.query('UPDATE associations SET logo_url = NULL WHERE id = $1 RETURNING id', [req.params.id]);
   if (result.rows.length === 0) return res.status(404).json({ error: 'Asociación no encontrada.' });
@@ -221,7 +270,7 @@ router.delete('/associations/:id/logo', asyncRoute(async (req, res) => {
 }));
 
 // POST /admin/associations/:id/routes-map -> sube el KML/KMZ con todas las rutas de la asociación (un solo archivo)
-router.post('/associations/:id/routes-map', upload.single('kml'), asyncRoute(async (req, res) => {
+router.post('/associations/:id/routes-map', puede('mapas_rutas'), upload.single('kml'), asyncRoute(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Falta el archivo KML/KMZ.' });
   }
@@ -236,7 +285,7 @@ router.post('/associations/:id/routes-map', upload.single('kml'), asyncRoute(asy
 }));
 
 // DELETE /admin/associations/:id/routes-map -> quita el mapa de rutas de la asociación
-router.delete('/associations/:id/routes-map', asyncRoute(async (req, res) => {
+router.delete('/associations/:id/routes-map', puede('mapas_rutas'), asyncRoute(async (req, res) => {
   const result = await pool.query(
     'UPDATE associations SET routes_kml_url = NULL WHERE id = $1 RETURNING *',
     [req.params.id]
@@ -247,7 +296,7 @@ router.delete('/associations/:id/routes-map', asyncRoute(async (req, res) => {
 }));
 
 // GET /admin/payments -> quién pagó y quién no
-router.get('/payments', asyncRoute(async (req, res) => {
+router.get('/payments', puede('pagos'), asyncRoute(async (req, res) => {
   const result = await pool.query(`
     SELECT pay.id, pay.amount, pay.status, pay.payment_method, pay.paid_at,
            a.name AS association_name, p.name AS plan_name
@@ -296,10 +345,10 @@ router.get('/associations/:id', asyncRoute(async (req, res) => {
 }));
 
 // PUT /admin/associations/:id -> editar datos de una asociación, incluyendo su link único de facturación (solo 'pro')
-router.put('/associations/:id', asyncRoute(async (req, res) => {
+router.put('/associations/:id', puede('editar_asociaciones'), asyncRoute(async (req, res) => {
   const { name, nit, recyclerCount } = req.body;
-  // El link de facturacion y el tipo de cliente solo los cambia el fundador ('pro').
-  const esPro = req.user.role === 'pro';
+  // El link de facturacion y el tipo de cliente: el fundador o el asesor con permiso 'link_facturacion'.
+  const esPro = !!req.permisos.link_facturacion;
   const facturacionUrl = esPro ? req.body.facturacionUrl : undefined;
   const tipoServicio = esPro && TIPOS_SERVICIO.includes(req.body.tipoServicio) ? req.body.tipoServicio : null;
   if (facturacionUrl && !urlFacturacionValida(facturacionUrl)) return res.status(400).json({ error: 'El link de facturación debe empezar por https://' });
@@ -329,7 +378,7 @@ router.put('/associations/:id', asyncRoute(async (req, res) => {
 
 // POST /admin/associations/:id/documents -> sube RUT, Cámara de Comercio y/o cédula del
 // representante legal a Cloudinary y guarda los links en la asociación.
-router.post('/associations/:id/documents',
+router.post('/associations/:id/documents', puede('documentos'),
   upload.fields([{ name: 'rut', maxCount: 1 }, { name: 'camaraComercio', maxCount: 1 }, { name: 'representanteCedula', maxCount: 1 }]),
   asyncRoute(async (req, res) => {
     const folder = `genesis-traza/associations/${req.params.id}`;
@@ -360,7 +409,7 @@ router.post('/associations/:id/documents',
 // DELETE /admin/associations/:id -> elimina una asociación por completo (solo 'pro')
 // Cascada: borra sus suscripciones y pagos; a los usuarios ligados les deja association_id en null.
 // Nunca se permite borrar una asociación que tenga un usuario 'pro' (protección explícita).
-router.delete('/associations/:id', requireRole('pro'), asyncRoute(async (req, res) => {
+router.delete('/associations/:id', puede('eliminar_asociaciones'), asyncRoute(async (req, res) => {
   const proUser = await pool.query(
     "SELECT id FROM users WHERE association_id = $1 AND role = 'pro'",
     [req.params.id]
@@ -379,7 +428,7 @@ router.delete('/associations/:id', requireRole('pro'), asyncRoute(async (req, re
 // PUT /admin/associations/:id/plan -> corrige manualmente el plan activo de una asociación
 // (para arreglar errores: pago con el plan equivocado, ciclo equivocado, etc.). Cancela
 // cualquier suscripción activa anterior y activa la nueva de inmediato, sin pasar por Wompi.
-router.put('/associations/:id/plan', asyncRoute(async (req, res) => {
+router.put('/associations/:id/plan', puede('planes'), asyncRoute(async (req, res) => {
   const { planId, billingCycle } = req.body;
   const cycle = billingCycle === 'anual' ? 'anual' : 'mensual';
   if (!planId) {
@@ -415,7 +464,7 @@ router.put('/associations/:id/plan', asyncRoute(async (req, res) => {
 }));
 
 // DELETE /admin/associations/:id/plan -> quita el plan activo de una asociación (la deja sin plan)
-router.delete('/associations/:id/plan', asyncRoute(async (req, res) => {
+router.delete('/associations/:id/plan', puede('planes'), asyncRoute(async (req, res) => {
   await pool.query(
     `UPDATE subscriptions SET status='cancelada' WHERE association_id = $1 AND status='activa'`,
     [req.params.id]
@@ -428,7 +477,7 @@ router.delete('/associations/:id/plan', asyncRoute(async (req, res) => {
 // pasarela (efectivo, transferencia manual, etc). Activa el plan con la fecha de pago indicada
 // (no la de hoy) para que el ciclo de cobro arranque desde el dia real en que pagaron, y deja
 // el pago guardado como aprobado para que aparezca en el historial y en el resumen de ingresos.
-router.post('/associations/:id/register-payment', asyncRoute(async (req, res) => {
+router.post('/associations/:id/register-payment', puede('pagos'), asyncRoute(async (req, res) => {
   const { planId, billingCycle, paidAt } = req.body;
   const cycle = billingCycle === 'anual' ? 'anual' : 'mensual';
   if (!planId || !paidAt) {
@@ -477,7 +526,7 @@ router.post('/associations/:id/register-payment', asyncRoute(async (req, res) =>
 
 // DELETE /admin/payments/pending -> limpia solicitudes de pago y suscripciones que quedaron
 // pendientes y nunca se completaron (basura de intentos de compra abandonados). Solo 'pro'.
-router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, res) => {
+router.delete('/payments/pending', puede('limpiar_pagos'), asyncRoute(async (req, res) => {
   // Solo lo abandonado hace mas de 1 dia: un pago pendiente de hace minutos puede estar en pleno
   // checkout de Wompi, y borrarlo dejaria un pago aprobado que el webhook ya no encuentra.
   const payments = await pool.query(`DELETE FROM payments WHERE status = 'pendiente' AND created_at < NOW() - INTERVAL '1 day' RETURNING id`);
@@ -495,7 +544,7 @@ router.delete('/payments/pending', requireRole('pro'), asyncRoute(async (req, re
 // POST /admin/associations/:id/mass-balance -> sube el Excel de balance de masas (formulario_de_masas)
 // del sistema de trazabilidad. Reemplaza las filas de esa asociacion dentro del rango de fechas
 // que trae el archivo, para poder volver a subirlo sin duplicar filas.
-router.post('/associations/:id/mass-balance', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+router.post('/associations/:id/mass-balance', puede('balance_masas'), uploadExcel.single('file'), asyncRoute(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo Excel.' });
 
   const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
@@ -564,7 +613,7 @@ router.get('/associations/:id/mass-balance/periods', asyncRoute(async (req, res)
 
 // POST /admin/associations/:id/recicladores -> sube el Excel del listado de recicladores.
 // Reemplaza por completo el listado de esa asociacion (es una foto del estado actual, no historico).
-router.post('/associations/:id/recicladores', uploadExcel.single('file'), asyncRoute(async (req, res) => {
+router.post('/associations/:id/recicladores', puede('balance_masas'), uploadExcel.single('file'), asyncRoute(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo Excel.' });
 
   const workbook = XLSX.read(req.file.buffer, { type: 'buffer', cellDates: true });
@@ -616,7 +665,7 @@ router.get('/associations/:id/recicladores', asyncRoute(async (req, res) => {
 }));
 
 // POST /admin/associations/:id/send-reminder -> envía manualmente un correo de recordatorio de pago
-router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
+router.post('/associations/:id/send-reminder', puede('recordatorios'), asyncRoute(async (req, res) => {
   const { Resend } = require('resend');
   const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -657,7 +706,7 @@ router.post('/associations/:id/send-reminder', asyncRoute(async (req, res) => {
 }));
 
 // GET /admin/revenue-summary -> ingresos totales, del mes, y suscripciones activas (solo 'pro')
-router.get('/revenue-summary', requireRole('pro'), asyncRoute(async (req, res) => {
+router.get('/revenue-summary', puede('ver_ingresos'), asyncRoute(async (req, res) => {
   const totals = await pool.query(`
     SELECT
       COALESCE(SUM(amount) FILTER (WHERE status = 'aprobado'), 0) AS total_aprobado,
@@ -675,7 +724,7 @@ router.get('/revenue-summary', requireRole('pro'), asyncRoute(async (req, res) =
 }));
 
 // GET /admin/pending-payments -> asociaciones con pago vencido (para recordatorios)
-router.get('/pending-payments', asyncRoute(async (req, res) => {
+router.get('/pending-payments', puede('pagos'), asyncRoute(async (req, res) => {
   const result = await pool.query(`
     SELECT a.name, a.id AS association_id, s.next_due_date, u.email, u.phone
     FROM subscriptions s
@@ -702,7 +751,6 @@ router.get('/logs/errors', requireRole('pro'), asyncRoute(async (req, res) => {
   res.json(result.rows);
 }));
 
-// POST /admin/users -> crear un sub-jefe/administrador operativo (solo 'pro')
 // ---- Asesores Genesis (solo el fundador): lista y movimientos de cada uno ----
 const { textoAccion } = require('../utils/actividadTexto');
 const ymdValido = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
@@ -715,9 +763,20 @@ router.get('/asesores', requireRole('pro'), asyncRoute(async (req, res) => {
             to_char(u.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS creado,
             (SELECT to_char(max(l.created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI')
                FROM activity_logs l WHERE l.user_id = u.id AND l.action LIKE 'inicio_sesion%') AS ultimo_ingreso,
-            (SELECT count(*)::int FROM activity_logs l WHERE l.user_id = u.id) AS movimientos
+            (SELECT count(*)::int FROM activity_logs l WHERE l.user_id = u.id) AS movimientos,
+            u.permisos_admin
      FROM users u WHERE u.role = 'admin' ORDER BY u.full_name`);
-  res.json(r.rows);
+  res.json(r.rows.map((x) => Object.assign(x, { permisos_admin: armarPermisos(x.permisos_admin) })));
+}));
+
+// PUT /admin/asesores/:id/permisos -> el fundador decide que puede y que no puede hacer ese asesor
+router.put('/asesores/:id/permisos', requireRole('pro'), asyncRoute(async (req, res) => {
+  const permisos = limpiarPermisos(req.body.permisos);
+  const r = await pool.query("UPDATE users SET permisos_admin = $1 WHERE id = $2 AND role = 'admin' RETURNING id",
+    [JSON.stringify(permisos), Number(req.params.id)]);
+  if (!r.rows.length) return res.status(404).json({ error: 'Asesor no encontrado.' });
+  await logActivity(req.user.id, 'asesor_permisos_cambiados', { asesorId: Number(req.params.id) }, req.ip);
+  res.json({ permisos });
 }));
 
 // GET /admin/asesores/:id/actividad?desde&hasta -> que hizo ese asesor (hora de Colombia)
@@ -735,11 +794,21 @@ router.get('/asesores/:id/actividad', requireRole('pro'), asyncRoute(async (req,
   res.json(r.rows.map((x) => ({ fecha_hora: x.fecha_hora, accion: textoAccion(x.action, x.details), ip: x.ip_address })));
 }));
 
-router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
+// El fundador crea asesores y usuarios de asociacion; el asesor ('admin') solo el usuario de
+// ingreso de una asociacion de cliente (nunca asesores ni usuarios del equipo Genesis).
+router.post('/users', asyncRoute(async (req, res) => {
   const bcrypt = require('bcryptjs');
   const { fullName, email, password, role, associationId } = req.body;
   if (!['admin', 'operativo'].includes(role)) {
     return res.status(400).json({ error: "El rol debe ser 'admin' (operativo) u 'operativo'." });
+  }
+  if (req.user.role !== 'pro') {
+    if (role !== 'operativo') return res.status(403).json({ error: 'Solo el fundador puede crear asesores.' });
+    if (!req.permisos.usuarios_asociacion) return res.status(403).json({ error: 'El fundador no te dio permiso para crear usuarios.' });
+    if (!associationId) return res.status(400).json({ error: 'Falta la asociación del usuario.' });
+    const equipo = await pool.query(
+      "SELECT 1 FROM users WHERE association_id = $1 AND role IN ('pro','admin') LIMIT 1", [associationId]);
+    if (equipo.rows.length) return res.status(403).json({ error: 'Esa asociación es del equipo Genesis.' });
   }
   if (typeof fullName !== 'string' || !fullName.trim()) return res.status(400).json({ error: 'El nombre es obligatorio.' });
   if (typeof email !== 'string' || !EMAIL_RE.test(email.trim())) return res.status(400).json({ error: 'El correo no es válido.' });
@@ -757,9 +826,10 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   const passwordHash = await bcrypt.hash(password, 10);
   const result = await pool.query(
     // Asesor / administrador ('admin') = perfil ADM_CENTROS del sistema de usuarios (equipo Genesis).
-    `INSERT INTO users (full_name, email, password_hash, role, association_id, is_verified, id_perfil)
-     VALUES ($1,$2,$3,$4,$5,true,$6) RETURNING id, full_name, email, role`,
-    [fullName.trim(), emailLower, passwordHash, role, role === 'admin' ? (associationId || 1) : (associationId || null), role === 'admin' ? 8 : 9]
+    `INSERT INTO users (full_name, email, password_hash, role, association_id, is_verified, id_perfil, permisos_admin)
+     VALUES ($1,$2,$3,$4,$5,true,$6,$7) RETURNING id, full_name, email, role`,
+    [fullName.trim(), emailLower, passwordHash, role, role === 'admin' ? (associationId || 1) : (associationId || null), role === 'admin' ? 8 : 9,
+     role === 'admin' ? JSON.stringify(limpiarPermisos(req.body.permisos)) : null]
   );
   await logActivity(req.user.id, 'usuario_admin_creado', { nuevo: result.rows[0] });
   res.json(result.rows[0]);
@@ -767,15 +837,17 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
 
 // PUT /admin/users/:id -> corrige el correo y/o celular de contacto de un usuario del cliente
 // (para cuando el cliente se equivocó al registrarse y no puede entrar a corregirlo él mismo).
-router.put('/users/:id', asyncRoute(async (req, res) => {
+router.put('/users/:id', puede('usuarios_asociacion'), asyncRoute(async (req, res) => {
   const { email, phone } = req.body;
   if (!email) {
     return res.status(400).json({ error: 'El correo es obligatorio.' });
   }
   try {
+    // El asesor solo corrige usuarios de asociaciones, nunca al fundador ni a otros asesores.
     const result = await pool.query(
-      'UPDATE users SET email = $1, phone = $2 WHERE id = $3 RETURNING id, full_name, email, phone',
-      [email.toLowerCase().trim(), phone ? phone.trim() : null, req.params.id]
+      `UPDATE users SET email = $1, phone = $2 WHERE id = $3 AND ($4::boolean OR role = 'operativo')
+       RETURNING id, full_name, email, phone`,
+      [email.toLowerCase().trim(), phone ? phone.trim() : null, req.params.id, req.user.role === 'pro']
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Usuario no encontrado.' });
