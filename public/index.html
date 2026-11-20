@@ -44,18 +44,11 @@
       <a href="/noticias/">Genesis News</a>
     </div>
     <div class="nav-right">
-      <div class="dropdown" id="loginDropdown">
-        <button class="dropdown-btn" onclick="document.getElementById('loginDropdown').classList.toggle('open')">
-          Iniciar sesión <span class="caret">▾</span>
-        </button>
-        <div class="dropdown-menu">
-          <a href="https://genesis-traza.com" target="_blank" rel="noopener">Genesis Traza (Trazabilidad)<span class="sub">Reporte SUI, Superservicios y Contraloría</span></a>
-          <a href="#" onclick="openLoginModal('cuenta');return false;">Mi cuenta<span class="sub">Ver tu plan, pagos y datos de tu asociación</span></a>
-          <a href="#" onclick="openLoginModal('facturacion');return false;">Facturación electrónica<span class="sub">Te lleva directo a tu sistema</span></a>
-          <div class="divider"></div>
-          <a href="#" onclick="openLoginModal('panel');return false;">Panel de administración<span class="sub">Para roles pro y admin</span></a>
-          <a href="#" onclick="openRegisterModal();return false;">Crear cuenta<span class="sub">Registra tu asociación</span></a>
-        </div>
+      <!-- Un solo inicio de sesion: segun el correo, el sistema abre el panel que corresponde
+           (fundador y asesores -> administracion; asociacion -> su panel; trabajador -> Registro). -->
+      <div class="dropdown" id="loginDropdown" style="display:flex;align-items:center;gap:10px;">
+        <button class="dropdown-btn" onclick="openLoginModal();">Iniciar sesión</button>
+        <a href="#" onclick="openRegisterModal();return false;" style="font-weight:600;font-size:14px;color:var(--blue-deep);">Crear cuenta</a>
       </div>
       <div id="userBadge" style="display:none;align-items:center;gap:12px;">
         <span style="font-size:14px;font-weight:600;color:var(--ink);" id="userBadgeName"></span>
@@ -307,7 +300,7 @@
       </div>
       <div class="faq-item">
         <button class="faq-q" onclick="toggleFaq(this)">¿Cómo funciona el ingreso al sistema? <span class="faq-icon">+</span></button>
-        <div class="faq-a"><p>Cada asociación tiene su propio usuario, con registro completo de datos y verificación por código enviado al correo. Desde "Iniciar sesión" se elige entre el módulo de trazabilidad y el de facturación electrónica.</p></div>
+        <div class="faq-a"><p>Cada asociación tiene su propio usuario, con registro completo de datos y verificación por código enviado al correo. Con un solo inicio de sesión, el sistema reconoce tu correo y te lleva a tu panel, desde donde entras a trazabilidad y facturación electrónica.</p></div>
       </div>
       <div class="faq-item">
         <button class="faq-q" onclick="toggleFaq(this)">¿Ofrecen acompañamiento además del software? <span class="faq-icon">+</span></button>
@@ -474,10 +467,19 @@
   }
 
   function redirectToPanel(role){
-    // El sistema de usuarios se abre dentro del panel, en la opcion "Registro" del menu lateral.
-    setTimeout(function(){
-      window.location.href = (role === 'pro' || role === 'admin') ? 'admin-1b98a0bb3a.html' : 'dashboard.html';
-    }, 300);
+    // Fundador y asesores -> panel de administracion. Clientes de solo facturacion -> directo a su
+    // facturacion. Sistema completo -> su panel (alli tienen "Ir a facturar" y Registro).
+    if(role === 'pro' || role === 'admin'){
+      setTimeout(function(){ window.location.href = 'admin-1b98a0bb3a.html'; }, 300);
+      return;
+    }
+    fetch(API_BASE + '/auth/me', { headers: { 'Authorization': 'Bearer ' + localStorage.getItem('gt_token') } })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        var a = d && d.association;
+        window.location.href = (a && a.tipo_servicio === 'facturacion' && a.facturacion_url) ? a.facturacion_url : 'dashboard.html';
+      })
+      .catch(function(){ window.location.href = 'dashboard.html'; });
   }
 
   function redirectToFacturacion(){
@@ -497,7 +499,7 @@
 
   function updateAuthUI(){
     var loggedIn = !!authToken;
-    document.getElementById('loginDropdown').style.display = loggedIn ? 'none' : 'block';
+    document.getElementById('loginDropdown').style.display = loggedIn ? 'none' : 'flex';
     document.getElementById('userBadge').style.display = loggedIn ? 'flex' : 'none';
     if(loggedIn){
       var firstName = (authUser.fullName || '').split(' ').slice(0, 2).join(' ');
@@ -507,18 +509,12 @@
     if(typeof updatePagoAuthState === 'function') updatePagoAuthState();
   }
 
-  function openLoginModal(intent){
-    loginIntent = intent || 'cuenta';
-    document.getElementById('loginDropdown').classList.remove('open');
-    var titles = { facturacion: 'Facturación electrónica', panel: 'Panel de administración', cuenta: 'Mi cuenta' };
-    var subtitles = {
-      facturacion: 'Ingresa con el correo y la contraseña de tu asociación.',
-      panel: 'Ingresa con tu correo y contraseña de administrador.',
-      cuenta: 'Ingresa con el correo y la contraseña de tu cuenta.'
-    };
-    document.getElementById('loginModalTitle').textContent = titles[loginIntent] || 'Iniciar sesión';
-    document.getElementById('loginModalSubtitle').textContent = subtitles[loginIntent] || subtitles.cuenta;
-    document.getElementById('loginRegisterHint').style.display = (loginIntent === 'panel') ? 'none' : 'block';
+  // Un solo inicio de sesion para todos: el correo decide a que panel entra la persona.
+  function openLoginModal(){
+    loginIntent = 'cuenta';
+    document.getElementById('loginModalTitle').textContent = 'Iniciar sesión';
+    document.getElementById('loginModalSubtitle').textContent = 'Ingresa con tu correo y contraseña. Te llevamos directo a tu panel.';
+    document.getElementById('loginRegisterHint').style.display = 'block';
     document.getElementById('loginModalOverlay').style.display = 'flex';
     document.getElementById('loginError').style.display = 'none';
   }
@@ -571,11 +567,7 @@
     updateAuthUI();
     closeLoginModal();
     closeTwoFAModal();
-    if(loginIntent === 'facturacion'){
-      redirectToFacturacion();
-    } else {
-      redirectToPanel(authUser.role);
-    }
+    redirectToPanel(authUser.role);
   }
 
   var pendingTwoFAToken = null;

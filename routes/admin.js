@@ -21,6 +21,9 @@ const uploadLogo = multer({
 
 const MIN_PASSWORD = 8;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// El link de facturacion debe ser https (es a donde se manda al cliente al iniciar sesion).
+const urlFacturacionValida = (u) => { try { return new URL(String(u)).protocol === 'https:'; } catch (e) { return false; } };
+const TIPOS_SERVICIO = ['facturacion', 'completo'];
 
 function normalizeRowKeys(row) {
   const out = {};
@@ -92,6 +95,9 @@ router.use(requireAuth, requireRole('pro', 'admin'));
 // Disponible para 'pro' y 'admin' (a diferencia de otras acciones de configuración).
 router.post('/associations', asyncRoute(async (req, res) => {
   const { name, nit, recyclerCount, facturacionUrl, contactFullName, contactEmail, contactPhone, contactPassword } = req.body;
+  const tipoServicio = TIPOS_SERVICIO.includes(req.body.tipoServicio) ? req.body.tipoServicio : 'completo';
+  if (facturacionUrl && !urlFacturacionValida(facturacionUrl)) return res.status(400).json({ error: 'El link de facturación debe empezar por https://' });
+  if (tipoServicio === 'facturacion' && !facturacionUrl) return res.status(400).json({ error: 'Un cliente de solo facturación necesita su link de facturación.' });
   if (!name || !nit || !recyclerCount) {
     return res.status(400).json({ error: 'Nombre, NIT y número de recicladores son obligatorios.' });
   }
@@ -121,12 +127,12 @@ router.post('/associations', asyncRoute(async (req, res) => {
   try {
     await client.query('BEGIN');
     const assocResult = await client.query(
-      `INSERT INTO associations (name, nit, recycler_count, facturacion_url) VALUES ($1,$2,$3,$4) RETURNING *`,
-      [name.trim(), nit.trim(), recyclers, facturacionUrl || null]
+      `INSERT INTO associations (name, nit, recycler_count, facturacion_url, tipo_servicio) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [name.trim(), nit.trim(), recyclers, facturacionUrl || null, tipoServicio]
     );
     association = assocResult.rows[0];
-    // Queda habilitada de una vez en el sistema de usuarios (Registro), con su centro propio.
-    await client.query(
+    // Sistema completo: queda habilitada de una vez en Registro, con su centro propio.
+    if (tipoServicio === 'completo') await client.query(
       `INSERT INTO tz_centros (desc_centro, nit, association_id, modulo, pct_rechazo_estimado) VALUES ($1,$2,$3,'sistema',1.8)`,
       [association.name, association.nit, association.id]);
     if (wantsUser) {
@@ -159,7 +165,7 @@ router.post('/associations', asyncRoute(async (req, res) => {
 // devolvia una fila por cada suscripcion y la asociacion se veia "duplicada" en la tabla.
 router.get('/associations', asyncRoute(async (req, res) => {
   const result = await pool.query(`
-    SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url, a.logo_url,
+    SELECT a.id, a.name, a.nit, a.recycler_count, a.routes_kml_url, a.logo_url, a.tipo_servicio,
            s.status AS subscription_status, s.next_due_date, p.name AS plan_name
     FROM associations a
     LEFT JOIN LATERAL (
@@ -291,18 +297,31 @@ router.get('/associations/:id', asyncRoute(async (req, res) => {
 
 // PUT /admin/associations/:id -> editar datos de una asociación, incluyendo su link único de facturación (solo 'pro')
 router.put('/associations/:id', asyncRoute(async (req, res) => {
-  const { name, nit, recyclerCount, facturacionUrl } = req.body;
+  const { name, nit, recyclerCount } = req.body;
+  // El link de facturacion y el tipo de cliente solo los cambia el fundador ('pro').
+  const esPro = req.user.role === 'pro';
+  const facturacionUrl = esPro ? req.body.facturacionUrl : undefined;
+  const tipoServicio = esPro && TIPOS_SERVICIO.includes(req.body.tipoServicio) ? req.body.tipoServicio : null;
+  if (facturacionUrl && !urlFacturacionValida(facturacionUrl)) return res.status(400).json({ error: 'El link de facturación debe empezar por https://' });
   const result = await pool.query(
     `UPDATE associations SET
        name = COALESCE($1, name),
        nit = COALESCE($2, nit),
        recycler_count = COALESCE($3, recycler_count),
-       facturacion_url = CASE WHEN $6::boolean THEN $4 ELSE facturacion_url END
+       facturacion_url = CASE WHEN $6::boolean THEN $4 ELSE facturacion_url END,
+       tipo_servicio = COALESCE($7, tipo_servicio)
      WHERE id = $5 RETURNING *`,
-    [name, nit, recyclerCount, facturacionUrl || null, req.params.id, facturacionUrl !== undefined]
+    [name, nit, recyclerCount, facturacionUrl || null, req.params.id, facturacionUrl !== undefined, tipoServicio]
   );
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Asociación no encontrada.' });
+  }
+  // Si pasa a sistema completo y no tenia Registro, se le crea su centro.
+  if (result.rows[0].tipo_servicio === 'completo') {
+    await pool.query(
+      `INSERT INTO tz_centros (desc_centro, nit, association_id, modulo, pct_rechazo_estimado)
+       SELECT $1, $2, $3, 'sistema', 1.8 WHERE NOT EXISTS (SELECT 1 FROM tz_centros WHERE association_id = $3)`,
+      [result.rows[0].name, result.rows[0].nit, result.rows[0].id]);
   }
   await logActivity(req.user.id, 'asociacion_editada', { associationId: Number(req.params.id) }, req.ip);
   res.json(result.rows[0]);

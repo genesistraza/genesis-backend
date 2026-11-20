@@ -59,6 +59,7 @@
     <div class="assoc-card" id="sideAssocCard" style="display:none;"></div>
     <div class="side-link active" data-tab="resumen" onclick="showTab('resumen')">Resumen de mi cuenta</div>
     <div class="side-link" data-tab="registro" id="sideRegistro" onclick="showTab('registro')" style="display:none;">Registro</div>
+    <a class="side-link" id="sideFacturar" href="#" target="_blank" rel="noopener" style="display:none;background:var(--orange);color:#fff;font-weight:700;margin:4px 0;">Ir a facturar &#8599;</a>
     <div class="side-link" data-tab="rutas" onclick="showTab('rutas')">Mis Rutas</div>
     <div class="side-link side-group-toggle" id="dashboardGroupToggle" onclick="gtToggleDashboardGroup()">
       <span>Panel de control</span><span class="caret">▾</span>
@@ -427,7 +428,7 @@
         if(res.data.esTrabajador){
           // El trabajador solo usa Registro (con lo que su asociacion le permitio): sin plan, pagos ni rutas.
           ['resumen', 'rutas', 'planes'].forEach(function(t){ var l = document.querySelector('.side-link[data-tab="' + t + '"]'); if(l) l.style.display = 'none'; });
-          ['dashboardGroupToggle', 'dashboardSubmenu'].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = 'none'; });
+          ['dashboardGroupToggle', 'dashboardSubmenu', 'sideFacturar'].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = 'none'; });
           showTab('registro');
         } else {
           cargarRecordatorioRobot();
@@ -469,6 +470,10 @@
         var facturacionLink = document.getElementById('facturacionLink');
         facturacionLink.style.display = 'inline-block';
         facturacionLink.href = meData.association.facturacion_url;
+        // Boton "Ir a facturar" en el menu lateral (no para los trabajadores: lo oculta /sistema/me).
+        var fact = document.getElementById('sideFacturar');
+        fact.href = meData.association.facturacion_url;
+        if(!(window.gtYo && window.gtYo.esTrabajador)) fact.style.display = '';
       }
 
       var sub = meData.subscriptions && meData.subscriptions[0];

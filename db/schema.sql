@@ -1293,3 +1293,10 @@ INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
 SELECT p.id, n.id FROM nuevos n CROSS JOIN (VALUES (8), (9)) AS p(id)
 WHERE NOT (n.id = 124 AND p.id = 8)
 ON CONFLICT DO NOTHING;
+
+-- Tipo de cliente: 'facturacion' (solo facturacion electronica: al iniciar sesion va directo a su link)
+-- o 'completo' (trazabilidad + facturacion: entra a su panel y ahi tiene el boton "Ir a facturar").
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS tipo_servicio VARCHAR(20);
+UPDATE associations a SET tipo_servicio = CASE WHEN EXISTS (SELECT 1 FROM tz_centros c WHERE c.association_id = a.id AND c.modulo = 'sistema') THEN 'completo' ELSE 'facturacion' END
+WHERE tipo_servicio IS NULL;
+ALTER TABLE associations ALTER COLUMN tipo_servicio SET DEFAULT 'completo';

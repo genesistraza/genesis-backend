@@ -398,13 +398,15 @@
     <button class="modal-close" onclick="closeNewAssociationModal()">&times;</button>
     <div class="modal-scroll">
       <h3>Nueva asociación</h3>
-      <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí solo registras el link para que el cliente entre.</p>
+      <p style="color:var(--ink-soft);font-size:13px;margin-top:4px;">El sistema de facturación (subdominio y credenciales) lo creas tú aparte; aquí registras el link al que se lleva al cliente.</p>
       <div class="form-grid" style="margin-top:18px;">
         <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
         <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
         <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
-        <div class="form-field"><label>Link de facturación (opcional)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
+        <div class="form-field"><label>Tipo de cliente</label><select id="newAssocTipo"><option value="completo">Sistema completo (trazabilidad + facturación)</option><option value="facturacion">Solo facturación electrónica</option></select></div>
+        <div class="form-field" style="grid-column:1/-1;"><label>Link de facturación (a donde se le lleva para facturar)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
       </div>
+      <p style="color:var(--ink-soft);font-size:12.5px;margin-top:6px;">Solo facturación: al iniciar sesión va directo a su facturación. Sistema completo: entra a su panel, con Registro y el botón "Ir a facturar".</p>
       <h4 style="margin-top:20px;font-size:14px;">Usuario de contacto (opcional, para que puedan iniciar sesión)</h4>
       <div class="form-grid" style="margin-top:10px;">
         <div class="form-field"><label>Nombre completo</label><input id="newAssocContactName"></div>
@@ -519,7 +521,10 @@
           '<td>' + gtFormatDate(a.next_due_date) + '</td>' +
           '<td><button type="button" class="cell-action" style="margin-right:12px;">Ver detalle</button>' +
           (isPro ? '<button type="button" class="cell-action" style="color:#C0392B;">Eliminar</button>' : '') + '</td>';
-        tr.children[0].innerHTML = '<span style="display:inline-flex;align-items:center;gap:10px;">' + gtAssocLogoHtml(a, 'sm') + '<span>' + gtEscapeHtml(a.name) + '</span></span>';
+        var tipoTag = a.tipo_servicio === 'facturacion'
+          ? '<span style="font-size:10.5px;font-weight:700;background:#FFF1DA;color:#A35F00;border-radius:10px;padding:2px 8px;">Solo facturación</span>'
+          : '<span style="font-size:10.5px;font-weight:700;background:#E6F4D7;color:#3C7A12;border-radius:10px;padding:2px 8px;">Sistema completo</span>';
+        tr.children[0].innerHTML = '<span style="display:inline-flex;align-items:center;gap:10px;">' + gtAssocLogoHtml(a, 'sm') + '<span>' + gtEscapeHtml(a.name) + '<br>' + tipoTag + '</span></span>';
         tr.children[1].textContent = a.nit || '—';
         tr.children[2].textContent = a.recycler_count || 0;
         tr.children[3].textContent = a.plan_name || '—';
@@ -729,7 +734,13 @@
       html += '<div class="form-field"><label>Nombre</label><input id="editAssocName" value="' + esc(d.association.name) + '"></div>';
       html += '<div class="form-field"><label>NIT</label><input id="editAssocNit" value="' + esc(d.association.nit) + '"></div>';
       html += '<div class="form-field"><label># de recicladores</label><input id="editAssocRecyclerCount" type="number" min="0" value="' + esc(d.association.recycler_count) + '"></div>';
-      html += '<div class="form-field"><label>Link de facturación</label><input id="editAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' + esc(d.association.facturacion_url) + '"></div>';
+      // Tipo de cliente y link de facturacion: solo el fundador los cambia.
+      if(isPro){
+        html += '<div class="form-field"><label>Tipo de cliente</label><select id="editAssocTipo"><option value="completo"' + (d.association.tipo_servicio === 'completo' ? ' selected' : '') + '>Sistema completo (trazabilidad + facturación)</option><option value="facturacion"' + (d.association.tipo_servicio === 'facturacion' ? ' selected' : '') + '>Solo facturación electrónica</option></select></div>';
+        html += '<div class="form-field"><label>Link de facturación (a donde se le lleva)</label><input id="editAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com" value="' + esc(d.association.facturacion_url) + '"></div>';
+      } else {
+        html += '<div class="form-field"><label>Link de facturación</label><div style="padding:8px 0;color:var(--ink-soft);">' + (d.association.facturacion_url ? esc(d.association.facturacion_url) : '—') + '</div></div>';
+      }
       html += '</div>';
       html += '<button class="btn btn-primary" style="margin-top:12px;" onclick="saveAssociationEdits(' + d.association.id + ')">Guardar cambios</button>';
       html += '<p id="clientEditMsg" style="margin-top:8px;font-size:13px;"></p>';
@@ -865,7 +876,8 @@
       name: document.getElementById('editAssocName').value.trim(),
       nit: document.getElementById('editAssocNit').value.trim(),
       recyclerCount: Number(document.getElementById('editAssocRecyclerCount').value) || undefined,
-      facturacionUrl: document.getElementById('editAssocFacturacionUrl').value.trim()
+      facturacionUrl: document.getElementById('editAssocFacturacionUrl') ? document.getElementById('editAssocFacturacionUrl').value.trim() : undefined,
+      tipoServicio: document.getElementById('editAssocTipo') ? document.getElementById('editAssocTipo').value : undefined
     };
     gtApiFetch('/admin/associations/' + associationId, { method: 'PUT', body: JSON.stringify(body) })
       .then(function(res){
@@ -1575,6 +1587,7 @@
       nit: document.getElementById('newAssocNit').value.trim(),
       recyclerCount: Number(document.getElementById('newAssocRecyclerCount').value) || undefined,
       facturacionUrl: document.getElementById('newAssocFacturacionUrl').value.trim() || undefined,
+      tipoServicio: document.getElementById('newAssocTipo').value,
       contactFullName: document.getElementById('newAssocContactName').value.trim() || undefined,
       contactEmail: document.getElementById('newAssocContactEmail').value.trim().toLowerCase() || undefined,
       contactPhone: document.getElementById('newAssocContactPhone').value.trim() || undefined,
