@@ -45,8 +45,14 @@
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
     <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
     <a class="side-link pro-only" href="pruebas-437ce78188.html" target="_blank" rel="noopener" style="color:var(--orange);">Pruebas &#8599;</a>
-    <a class="side-link" href="sistema.html" target="_blank" rel="noopener" style="color:var(--blue);">Registro (sistema de usuarios) &#8599;</a>
-    <a class="side-link" href="index.html">Ir a la web</a>
+    <a class="side-link" href="sistema.html" target="_blank" rel="noopener">Registro &#8599;</a>
+    <div class="side-link side-group-toggle" id="salirGroupToggle" onclick="gtToggleSalirGroup()" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>Salir</span><span class="caret">▾</span>
+    </div>
+    <div id="salirSubmenu" style="display:none;">
+      <a class="side-link sub" href="index.html" style="padding-left:30px;">Ir a la web inicial</a>
+      <div class="side-link sub" onclick="gtLogout()" style="padding-left:30px;">Cerrar sesión</div>
+    </div>
     <div class="side-spacer"></div>
     <div class="side-user">
       <div class="name" id="sideUserName">—</div>
@@ -499,6 +505,13 @@
     if(name === 'actividad') loadActividad();
     if(name === 'errores') loadErrores();
     if(name === 'subadmins') cargarAsesores();
+  }
+
+  function gtToggleSalirGroup(){
+    var submenu = document.getElementById('salirSubmenu');
+    var willOpen = submenu.style.display === 'none';
+    submenu.style.display = willOpen ? 'block' : 'none';
+    document.getElementById('salirGroupToggle').classList.toggle('open', willOpen);
   }
 
   // ---- Asesores Genesis: lista (derecha) y sus movimientos ----
