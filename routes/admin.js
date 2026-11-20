@@ -703,6 +703,38 @@ router.get('/logs/errors', requireRole('pro'), asyncRoute(async (req, res) => {
 }));
 
 // POST /admin/users -> crear un sub-jefe/administrador operativo (solo 'pro')
+// ---- Asesores Genesis (solo el fundador): lista y movimientos de cada uno ----
+const { textoAccion } = require('../utils/actividadTexto');
+const ymdValido = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+const hoyCO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+
+// GET /admin/asesores -> asesores creados, con su ultimo ingreso y cuantos movimientos llevan
+router.get('/asesores', requireRole('pro'), asyncRoute(async (req, res) => {
+  const r = await pool.query(
+    `SELECT u.id, u.full_name, u.email, u.foto_url, u.activo,
+            to_char(u.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS creado,
+            (SELECT to_char(max(l.created_at) AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI')
+               FROM activity_logs l WHERE l.user_id = u.id AND l.action LIKE 'inicio_sesion%') AS ultimo_ingreso,
+            (SELECT count(*)::int FROM activity_logs l WHERE l.user_id = u.id) AS movimientos
+     FROM users u WHERE u.role = 'admin' ORDER BY u.full_name`);
+  res.json(r.rows);
+}));
+
+// GET /admin/asesores/:id/actividad?desde&hasta -> que hizo ese asesor (hora de Colombia)
+router.get('/asesores/:id/actividad', requireRole('pro'), asyncRoute(async (req, res) => {
+  const id = Number(req.params.id);
+  const u = (await pool.query("SELECT id FROM users WHERE id = $1 AND role = 'admin'", [id])).rows[0];
+  if (!u) return res.status(404).json({ error: 'Asesor no encontrado.' });
+  const desde = ymdValido(req.query.desde) ? req.query.desde : hoyCO();
+  const hasta = ymdValido(req.query.hasta) ? req.query.hasta : hoyCO();
+  const r = await pool.query(
+    `SELECT to_char(l.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora, l.action, l.details, l.ip_address
+     FROM activity_logs l WHERE l.user_id = $1
+       AND (l.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota')::date BETWEEN $2 AND $3
+     ORDER BY l.created_at DESC LIMIT 2000`, [id, desde, hasta]);
+  res.json(r.rows.map((x) => ({ fecha_hora: x.fecha_hora, accion: textoAccion(x.action, x.details), ip: x.ip_address })));
+}));
+
 router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   const bcrypt = require('bcryptjs');
   const { fullName, email, password, role, associationId } = req.body;

@@ -1282,33 +1282,7 @@ router.delete('/usuarios/:id/foto', guard(async (req, res) => {
 // ============================== Actividad de usuarios ==============================
 // Quien entro, a que hora y que hizo. La asociacion ve a su gente; el asesor, a las asociaciones que
 // atiende y al equipo; el fundador, a todos.
-const PANTALLA = (d) => (d && d.pantalla ? ' (' + String(d.pantalla).replace(/_/g, ' ') + ')' : '');
-const ACCIONES = {
-  inicio_sesion: () => 'Inició sesión',
-  sistema_creado: (d) => 'Creó un registro' + PANTALLA(d),
-  sistema_editado: (d) => 'Modificó un registro' + PANTALLA(d),
-  sistema_eliminado: (d) => 'Borró un registro' + PANTALLA(d),
-  pruebas_balance_masas_dia_guardado: (d) => 'Guardó balance de masas del ' + (d.fecha || '') + ' (' + (d.filas || 0) + ' materiales)',
-  pruebas_balance_compra_anexada: (d) => 'Anexó una compra del ' + (d.fecha || '') + ' (' + (d.kg || 0) + ' kg)',
-  sistema_factura_generada: (d) => 'Generó la factura ' + (d.numero || ''),
-  sistema_importado: (d) => 'Importó un archivo de ' + String(d.tipo || '').replace(/_/g, ' ') + ' (' + (d.filas || 0) + ' filas)',
-  sistema_cargue_borrado: (d) => 'Borró un cargue de ' + String(d.tipo || '').replace(/_/g, ' ') + ' (' + (d.filas || 0) + ' filas)',
-  sistema_documento_guardado: () => 'Subió o actualizó un documento',
-  sistema_documento_eliminado: () => 'Quitó un documento',
-  sistema_documento_referencia: (d) => 'Subió el documento de referencia ' + (d.nombre || ''),
-  sistema_precio_material: (d) => 'Cambió un precio de material a $' + (d.precio != null ? d.precio : ''),
-  sistema_password_cambiada: () => 'Cambió su contraseña',
-  sistema_trabajador_creado: (d) => 'Creó al trabajador ' + (d.nombre || ''),
-  sistema_trabajador_editado: () => 'Modificó un trabajador',
-  sistema_trabajador_permisos: (d) => 'Cambió los permisos de un trabajador (' + (d.opciones || 0) + ' opciones)',
-  sistema_colaborador_creado: () => 'Creó un usuario',
-  sistema_colaborador_editado: () => 'Modificó un usuario',
-  sistema_foto_cambiada: () => 'Cambió una foto',
-  sistema_catalogo_creado: () => 'Agregó un código a una lista',
-  sistema_catalogo_editado: () => 'Modificó un código de una lista',
-  sistema_catalogo_eliminado: () => 'Borró un código de una lista',
-  sistema_perfil_opciones: () => 'Cambió las opciones de un perfil'
-};
+const { textoAccion } = require('../utils/actividadTexto');
 router.get('/actividad', exigir('actividad'), guard(async (req, res) => {
   const hoy = todayCO();
   const desde = isValidYmd(req.query.desde) ? req.query.desde : hoy;
@@ -1334,7 +1308,7 @@ router.get('/actividad', exigir('actividad'), guard(async (req, res) => {
      ORDER BY l.created_at DESC LIMIT 2000`, params);
   res.json(r.rows.map((x) => ({
     id: x.id, fecha_hora: x.fecha_hora, user_id: x.user_id, usuario: x.full_name, foto: x.foto_url, perfil: x.desc_perfil,
-    accion: (ACCIONES[x.action] || (() => x.action.replace(/_/g, ' ')))(x.details || {})
+    accion: textoAccion(x.action, x.details)
   })));
 }));
 

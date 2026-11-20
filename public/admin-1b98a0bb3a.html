@@ -8,6 +8,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<style>
+  /* Asesores Genesis: formulario a la izquierda, lista y movimientos a la derecha */
+  .asesores-grid{display:grid;grid-template-columns:minmax(280px,380px) 1fr;gap:20px;align-items:start;}
+  @media (max-width:900px){ .asesores-grid{grid-template-columns:1fr;} }
+  .ases-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--line);}
+  .ases-tab{background:none;border:none;border-bottom:3px solid transparent;padding:8px 12px;font-family:inherit;font-weight:600;font-size:13.5px;color:var(--ink-soft);cursor:pointer;margin-bottom:-1px;}
+  .ases-tab.activo{color:var(--blue-deep);border-bottom-color:var(--orange);}
+  .ases-av{width:34px;height:34px;border-radius:50%;object-fit:cover;display:inline-flex;align-items:center;justify-content:center;background:#DCEFFC;color:var(--blue-deep);font-weight:700;font-size:12px;flex:none;}
+</style>
 <script src="https://unpkg.com/chart.js@4.4.4/dist/chart.umd.js"></script>
 </head>
 <body>
@@ -32,7 +41,7 @@
     <div class="side-link" data-tab="balance" onclick="showTab('balance')">Balance de Masas</div>
     <div class="side-link" data-tab="seguridad" onclick="showTab('seguridad')">Seguridad</div>
     <div class="side-link pro-only" data-tab="planes" onclick="showTab('planes')">Planes</div>
-    <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Sub-administradores</div>
+    <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Asesores Genesis</div>
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
     <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
     <a class="side-link pro-only" href="pruebas-437ce78188.html" target="_blank" rel="noopener" style="color:var(--orange);">Pruebas &#8599;</a>
@@ -294,18 +303,33 @@
 
     <!-- SUB-ADMINS -->
     <section class="tab-panel pro-only" id="tab-subadmins" style="display:none;">
-      <div class="app-topbar"><div><h1>Sub-administradores</h1><p>Crea usuarios con rol operativo o admin para una asociación.</p></div></div>
-      <div class="panel" style="max-width:520px;">
+      <div class="app-topbar"><div><h1>Asesores Genesis</h1></div></div>
+      <div class="asesores-grid">
+      <div class="panel">
         <div class="form-field" style="margin-bottom:14px;"><label>Nombre completo</label><input id="subFullName"></div>
-        <div class="form-field" style="margin-bottom:14px;"><label>Correo</label><input id="subEmail" type="email"></div>
-        <div class="form-field" style="margin-bottom:14px;"><label>Contraseña</label><div class="pwd-wrap"><input id="subPassword" type="password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
-        <div class="form-field" style="margin-bottom:14px;"><label>ID de asociación</label><input id="subAssociationId" type="number" placeholder="Ver en la pestaña Asociaciones"></div>
-        <div class="form-field" style="margin-bottom:14px;">
-          <label>Rol</label>
-          <select id="subRole"><option value="admin">admin (operativo, ve datos)</option><option value="operativo">operativo (usuario normal)</option></select>
-        </div>
-        <button class="btn btn-primary" onclick="createSubAdmin()">Crear usuario</button>
+        <div class="form-field" style="margin-bottom:14px;"><label>Correo (con este entra)</label><input id="subEmail" type="email"></div>
+        <div class="form-field" style="margin-bottom:14px;"><label>Contraseña inicial (mín. 8; que la cambie al entrar)</label><div class="pwd-wrap"><input id="subPassword" type="password" autocomplete="new-password"><button type="button" class="pwd-toggle" onclick="gtTogglePwd(this)">👁</button></div></div>
+        <button class="btn btn-primary" onclick="createSubAdmin()">Crear asesor</button>
         <p id="subAdminMsg" style="margin-top:12px;font-size:13px;"></p>
+      </div>
+
+      <!-- Derecha: asesores creados y sus movimientos -->
+      <div class="panel">
+        <div class="ases-tabs">
+          <button type="button" class="ases-tab activo" data-v="lista" onclick="verAsesoresTab('lista')">Asesores creados</button>
+          <button type="button" class="ases-tab" data-v="mov" onclick="verAsesoresTab('mov')">Movimientos</button>
+        </div>
+        <div id="asesoresLista"></div>
+        <div id="asesoresMov" style="display:none;">
+          <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;">
+            <select id="movAsesor" style="padding:7px 9px;border:1px solid var(--line);border-radius:8px;"></select>
+            <label style="font-size:12.5px;color:var(--ink-soft);">Desde</label><input type="date" id="movDesde" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;">
+            <label style="font-size:12.5px;color:var(--ink-soft);">Hasta</label><input type="date" id="movHasta" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;">
+            <button type="button" class="btn btn-primary" style="padding:7px 14px;" onclick="cargarMovimientosAsesor()">Ver</button>
+          </div>
+          <div id="movTabla"></div>
+        </div>
+      </div>
       </div>
     </section>
 
@@ -474,6 +498,48 @@
     if(name === 'planes') loadPlanes();
     if(name === 'actividad') loadActividad();
     if(name === 'errores') loadErrores();
+    if(name === 'subadmins') cargarAsesores();
+  }
+
+  // ---- Asesores Genesis: lista (derecha) y sus movimientos ----
+  var gtAsesores = [];
+  function verAsesoresTab(v){
+    document.querySelectorAll('.ases-tab').forEach(function(b){ b.classList.toggle('activo', b.getAttribute('data-v') === v); });
+    document.getElementById('asesoresLista').style.display = v === 'lista' ? '' : 'none';
+    document.getElementById('asesoresMov').style.display = v === 'mov' ? '' : 'none';
+    if(v === 'mov') cargarMovimientosAsesor();
+  }
+  function asesorAvatar(a){
+    var ini = String(a.full_name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(function(w){ return w.charAt(0); }).join('').toUpperCase();
+    return a.foto_url ? '<img class="ases-av" src="' + gtEscapeHtml(a.foto_url) + '" alt="">' : '<span class="ases-av">' + gtEscapeHtml(ini) + '</span>';
+  }
+  function cargarAsesores(){
+    var box = document.getElementById('asesoresLista');
+    box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">Cargando…</p>';
+    gtApiFetch('/admin/asesores').then(function(res){
+      if(!res.ok){ box.innerHTML = '<p style="color:#C0392B;font-size:13px;">' + gtEscapeHtml(res.data.error || 'No se pudo cargar.') + '</p>'; return; }
+      gtAsesores = res.data;
+      var hoy = gtTodayCO();
+      if(!document.getElementById('movDesde').value){ document.getElementById('movDesde').value = hoy.slice(0, 8) + '01'; document.getElementById('movHasta').value = hoy; }
+      document.getElementById('movAsesor').innerHTML = gtAsesores.map(function(a){ return '<option value="' + a.id + '">' + gtEscapeHtml(a.full_name) + '</option>'; }).join('');
+      box.innerHTML = gtAsesores.length ? '<table class="data-table"><thead><tr><th>Asesor</th><th>Creado</th><th>Último ingreso</th><th>Movimientos</th><th></th></tr></thead><tbody>' +
+        gtAsesores.map(function(a){ return '<tr><td><span style="display:inline-flex;align-items:center;gap:9px;">' + asesorAvatar(a) + '<span><b>' + gtEscapeHtml(a.full_name) + '</b><br><span style="font-size:12px;color:var(--ink-soft);">' + gtEscapeHtml(a.email) + '</span></span></span></td>' +
+          '<td>' + gtFormatDate(a.creado) + '</td><td>' + (a.ultimo_ingreso ? gtEscapeHtml(a.ultimo_ingreso) : '<span style="color:var(--ink-soft);">Nunca ha entrado</span>') + '</td><td>' + a.movimientos + '</td>' +
+          '<td><button type="button" class="cell-action" onclick="verMovimientosDe(' + a.id + ')">Ver movimientos</button></td></tr>'; }).join('') + '</tbody></table>'
+        : '<p style="color:var(--ink-soft);font-size:13px;">Aún no has creado asesores. Créalos con el formulario de la izquierda.</p>';
+    });
+  }
+  function verMovimientosDe(id){ document.getElementById('movAsesor').value = id; verAsesoresTab('mov'); }
+  function cargarMovimientosAsesor(){
+    var id = document.getElementById('movAsesor').value, box = document.getElementById('movTabla');
+    if(!id){ box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">No hay asesores.</p>'; return; }
+    box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">Cargando…</p>';
+    gtApiFetch('/admin/asesores/' + id + '/actividad?desde=' + document.getElementById('movDesde').value + '&hasta=' + document.getElementById('movHasta').value).then(function(res){
+      if(!res.ok){ box.innerHTML = '<p style="color:#C0392B;font-size:13px;">' + gtEscapeHtml(res.data.error || 'No se pudo cargar.') + '</p>'; return; }
+      box.innerHTML = res.data.length ? '<div style="max-height:60vh;overflow:auto;"><table class="data-table"><thead><tr><th>Fecha y hora</th><th>Qué hizo</th></tr></thead><tbody>' +
+        res.data.map(function(x){ return '<tr><td style="white-space:nowrap;">' + gtEscapeHtml(x.fecha_hora) + '</td><td>' + gtEscapeHtml(x.accion) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<p style="color:var(--ink-soft);font-size:13px;">Sin movimientos en esas fechas.</p>';
+    });
   }
 
   function loadResumen(){
@@ -1615,8 +1681,7 @@
       fullName: document.getElementById('subFullName').value.trim(),
       email: document.getElementById('subEmail').value.trim().toLowerCase(),
       password: document.getElementById('subPassword').value,
-      associationId: Number(document.getElementById('subAssociationId').value) || null,
-      role: document.getElementById('subRole').value
+      role: 'admin' // siempre asesor del equipo Genesis
     };
     var msgEl = document.getElementById('subAdminMsg');
     if(!body.fullName || !body.email || !body.password){
@@ -1628,11 +1693,11 @@
       .then(function(res){
         if(!res.ok){ throw new Error(res.data.error || 'No se pudo crear el usuario.'); }
         msgEl.style.color = 'var(--green)';
-        msgEl.textContent = 'Usuario creado: ' + res.data.email;
+        msgEl.textContent = 'Asesor creado: ' + res.data.email + '. Ya puede iniciar sesión.';
+        cargarAsesores();
         document.getElementById('subFullName').value = '';
         document.getElementById('subEmail').value = '';
         document.getElementById('subPassword').value = '';
-        document.getElementById('subAssociationId').value = '';
       })
       .catch(function(err){ msgEl.style.color = '#C0392B'; msgEl.textContent = err.message; });
   }
