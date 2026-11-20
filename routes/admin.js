@@ -125,6 +125,10 @@ router.post('/associations', asyncRoute(async (req, res) => {
       [name.trim(), nit.trim(), recyclers, facturacionUrl || null]
     );
     association = assocResult.rows[0];
+    // Queda habilitada de una vez en el sistema de usuarios (Registro), con su centro propio.
+    await client.query(
+      `INSERT INTO tz_centros (desc_centro, nit, association_id, modulo, pct_rechazo_estimado) VALUES ($1,$2,$3,'sistema',1.8)`,
+      [association.name, association.nit, association.id]);
     if (wantsUser) {
       const bcrypt = require('bcryptjs');
       const passwordHash = await bcrypt.hash(String(contactPassword), 10);
@@ -701,9 +705,10 @@ router.post('/users', requireRole('pro'), asyncRoute(async (req, res) => {
   }
   const passwordHash = await bcrypt.hash(password, 10);
   const result = await pool.query(
-    `INSERT INTO users (full_name, email, password_hash, role, association_id, is_verified)
-     VALUES ($1,$2,$3,$4,$5,true) RETURNING id, full_name, email, role`,
-    [fullName.trim(), emailLower, passwordHash, role, associationId || null]
+    // Asesor / administrador ('admin') = perfil ADM_CENTROS del sistema de usuarios (equipo Genesis).
+    `INSERT INTO users (full_name, email, password_hash, role, association_id, is_verified, id_perfil)
+     VALUES ($1,$2,$3,$4,$5,true,$6) RETURNING id, full_name, email, role`,
+    [fullName.trim(), emailLower, passwordHash, role, role === 'admin' ? (associationId || 1) : (associationId || null), role === 'admin' ? 8 : 9]
   );
   await logActivity(req.user.id, 'usuario_admin_creado', { nuevo: result.rows[0] });
   res.json(result.rows[0]);

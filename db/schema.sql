@@ -1255,3 +1255,41 @@ WITH nuevo AS (
 INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
 SELECT p.id, n.id FROM nuevo n CROSS JOIN (VALUES (8), (9)) AS p(id)
 ON CONFLICT DO NOTHING;
+
+-- ============================================================================================
+-- Niveles: Fundador (ADM) > Asesor / Administrador (ADM_CENTROS) > Asociacion (USUARIOS) >
+-- Trabajador de la asociacion (EMPLEADOS). Al trabajador lo crea su asociacion y ella decide, opcion
+-- por opcion, si puede ver, crear, editar o borrar (gt_usuario_permisos).
+-- ============================================================================================
+UPDATE gt_perfiles p SET desc_perfil = v.nuevo FROM (VALUES
+  (1, 'Administrador', 'Fundador'), (8, 'Administrador todos los centros', 'Asesor / Administrador'),
+  (9, 'Usuarios', 'Asociación'), (25, 'Empleados', 'Trabajador de la asociación')
+) AS v(id, antes, nuevo) WHERE p.id = v.id AND p.desc_perfil = v.antes;
+ALTER TABLE gt_perfiles ADD COLUMN IF NOT EXISTS permisos_por_usuario BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE gt_perfiles SET permisos_por_usuario = TRUE WHERE id = 25 AND NOT permisos_por_usuario;
+-- Los asesores (rol admin) son del equipo Genesis.
+UPDATE users SET id_perfil = 8 WHERE role = 'admin' AND id_perfil = 9;
+
+CREATE TABLE IF NOT EXISTS gt_usuario_permisos (
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_submenu INT NOT NULL REFERENCES gt_submenu(id) ON DELETE CASCADE,
+  crear BOOLEAN NOT NULL DEFAULT FALSE,
+  editar BOOLEAN NOT NULL DEFAULT FALSE,
+  borrar BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (user_id, id_submenu)
+);
+
+-- Foto de la persona (se ve junto al logo de la asociacion).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS foto_url TEXT;
+
+-- Opciones nuevas: Trabajadores (la asociacion crea los suyos) y Actividad (quien entro y que hizo).
+WITH nuevos AS (
+  INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave) VALUES
+    (124, 2, 401, 'Trabajadores', 'trabajadores'),
+    (125, 2, 402, 'Actividad de usuarios', 'actividad')
+  ON CONFLICT (id) DO NOTHING RETURNING id
+)
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT p.id, n.id FROM nuevos n CROSS JOIN (VALUES (8), (9)) AS p(id)
+WHERE NOT (n.id = 124 AND p.id = 8)
+ON CONFLICT DO NOTHING;

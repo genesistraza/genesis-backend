@@ -102,8 +102,8 @@ const sendErrores = (res, errors) => res.status(400).json({ error: errors.slice(
 // perfil aplica de inmediato, sin esperar a que venza el token).
 router.use(guard(async (req, res, next) => {
   const u = (await pool.query(
-    `SELECT u.id, u.full_name, u.email, u.role, u.association_id, u.activo, u.msg_login_desactivado,
-            p.id AS id_perfil, p.cod_perfil, p.desc_perfil, p.todas_asociaciones
+    `SELECT u.id, u.full_name, u.email, u.role, u.association_id, u.activo, u.msg_login_desactivado, u.foto_url,
+            p.id AS id_perfil, p.cod_perfil, p.desc_perfil, p.todas_asociaciones, p.permisos_por_usuario
      FROM users u LEFT JOIN gt_perfiles p ON p.id = u.id_perfil WHERE u.id = $1`, [req.user.id])).rows[0];
   if (!u) return res.status(401).json({ error: 'Sesión inválida.' });
   if (u.activo === false) return res.status(403).json({ error: u.msg_login_desactivado || 'Tu usuario está desactivado.', bloqueado: true });
@@ -124,15 +124,35 @@ router.use(guard(async (req, res, next) => {
     if (!s.rows.length) return res.status(402).json({ error: 'La suscripción de tu asociación no está activa.', requiereSuscripcion: true });
   }
 
-  const claves = esAdm
-    ? (await pool.query('SELECT clave FROM gt_submenu')).rows.map((r) => r.clave)
-    : (await pool.query('SELECT s.clave FROM gt_perfil_opciones o JOIN gt_submenu s ON s.id = o.id_submenu WHERE o.id_perfil = $1', [u.id_perfil])).rows.map((r) => r.clave);
+  // Trabajadores de la asociacion: sus opciones y lo que pueden hacer en cada una las decide la
+  // asociacion, persona por persona. Los demas perfiles pueden todo en las opciones de su perfil.
+  let claves, acciones = null;
+  if (esAdm) claves = (await pool.query('SELECT clave FROM gt_submenu')).rows.map((r) => r.clave);
+  else if (u.permisos_por_usuario) {
+    const r = (await pool.query(
+      `SELECT s.clave, p.crear, p.editar, p.borrar FROM gt_usuario_permisos p JOIN gt_submenu s ON s.id = p.id_submenu WHERE p.user_id = $1`, [u.id])).rows;
+    claves = r.map((x) => x.clave);
+    acciones = Object.fromEntries(r.map((x) => [x.clave, { crear: x.crear, editar: x.editar, borrar: x.borrar }]));
+  } else {
+    claves = (await pool.query('SELECT s.clave FROM gt_perfil_opciones o JOIN gt_submenu s ON s.id = o.id_submenu WHERE o.id_perfil = $1', [u.id_perfil])).rows.map((r) => r.clave);
+  }
 
-  req.sis = { usuario: u, esAdm, todas, centros, idsCentros: centros.map((c) => c.id), claves: new Set(claves) };
+  req.sis = { usuario: u, esAdm, todas, centros, idsCentros: centros.map((c) => c.id), claves: new Set(claves), acciones };
   next();
 }));
 
 const tiene = (req, clave) => req.sis.claves.has(own(PERMISO_DE, clave) ? PERMISO_DE[clave] : clave);
+// ¿Puede crear / editar / borrar en esa opcion? (siempre si no es trabajador con permisos propios)
+function puede(req, clave, accion) {
+  if (!tiene(req, clave)) return false;
+  if (!req.sis.acciones) return true;
+  const a = req.sis.acciones[own(PERMISO_DE, clave) ? PERMISO_DE[clave] : clave];
+  return !!(a && a[accion]);
+}
+const NO_PUEDE = { crear: 'Tu usuario no tiene permiso para registrar en esta opción.', editar: 'Tu usuario no tiene permiso para modificar en esta opción.', borrar: 'Tu usuario no tiene permiso para borrar en esta opción.' };
+function exigirAccion(clave, accion) {
+  return (req, res, next) => (puede(req, clave, accion) ? next() : res.status(403).json({ error: NO_PUEDE[accion] }));
+}
 function exigir(clave) {
   return (req, res, next) => (tiene(req, clave) ? next() : res.status(403).json({ error: 'Tu perfil no tiene acceso a esta opción.' }));
 }
@@ -141,16 +161,17 @@ function exigirAlguna(claves) {
 }
 
 function etiquetaSesion(s) {
-  if (s.esAdm) return 'Usuario: Administrador';
-  if (s.todas) return 'Usuario: Administrador asociaciones';
+  if (s.esAdm) return 'Fundador';
+  if (s.todas) return 'Asesor / Administrador';
   return 'Asociación: ' + (s.centros[0] ? s.centros[0].desc_centro : '');
 }
 
-// GET /sistema/me -> perfil, asociacion(es) visibles y etiqueta de la barra de titulo
+// GET /sistema/me -> perfil, asociacion(es) visibles, foto, permisos y etiqueta de la barra de titulo
 router.get('/me', (req, res) => {
   const s = req.sis;
   res.json({
-    nombre: s.usuario.full_name, perfil: s.usuario.cod_perfil, descPerfil: s.usuario.desc_perfil, esAdm: s.esAdm,
+    id: s.usuario.id, nombre: s.usuario.full_name, perfil: s.usuario.cod_perfil, descPerfil: s.usuario.desc_perfil, esAdm: s.esAdm,
+    esTrabajador: !!s.acciones, foto: s.usuario.foto_url || null, acciones: s.acciones,
     todasAsociaciones: s.todas, centros: s.centros.map((c) => ({ id: c.id, cod: c.cod_centro, nombre: c.desc_centro })),
     etiqueta: etiquetaSesion(s), hoy: todayCO()
   });
@@ -218,7 +239,10 @@ router.get('/entidades', (req, res) => {
   for (const clave in CLAVE_ENTIDAD) {
     if (!tiene(req, clave)) continue;
     const key = CLAVE_ENTIDAD[clave], e = ENTITIES[key];
-    out[clave] = { label: e.label, fields: camposVisibles(req, key, e), soloLectura: !puedeEscribir(req, key, e) };
+    const acc = { crear: puede(req, clave, 'crear'), editar: puede(req, clave, 'editar'), borrar: puede(req, clave, 'borrar') };
+    const escribe = puedeEscribir(req, key, e);
+    out[clave] = { label: e.label, fields: camposVisibles(req, key, e), soloLectura: !escribe || !(acc.crear || acc.editar || acc.borrar),
+      acciones: escribe ? acc : { crear: false, editar: false, borrar: false } };
   }
   for (const clave in CLAVE_CATALOGO) {
     if (!tiene(req, clave)) continue;
@@ -317,7 +341,7 @@ function quitarReservados(req, key, body) {
 router.post('/datos/:clave', guard(async (req, res) => {
   const p = pantalla(req, res); if (!p) return;
   const { key, entity } = p;
-  if (!puedeEscribir(req, key, entity)) return res.status(403).json({ error: 'Esta tabla es de solo lectura para tu perfil.' });
+  if (!puedeEscribir(req, key, entity) || !puede(req, req.params.clave, 'crear')) return res.status(403).json({ error: !puedeEscribir(req, key, entity) ? 'Esta tabla es de solo lectura para tu perfil.' : NO_PUEDE.crear });
   const body = { ...(await valoresPorDefecto(key)), ...soloOriginales(key, { ...(req.body || {}) }) };
   if (entity.fields.some((f) => f.name === 'id_centro')) {
     const c = centroDestino(req, body.id_centro);
@@ -344,7 +368,7 @@ router.post('/datos/:clave', guard(async (req, res) => {
 router.put('/datos/:clave/:id', guard(async (req, res) => {
   const p = pantalla(req, res); if (!p) return;
   const { key, entity } = p;
-  if (!puedeEscribir(req, key, entity)) return res.status(403).json({ error: 'Esta tabla es de solo lectura para tu perfil.' });
+  if (!puedeEscribir(req, key, entity) || !puede(req, req.params.clave, 'editar')) return res.status(403).json({ error: !puedeEscribir(req, key, entity) ? 'Esta tabla es de solo lectura para tu perfil.' : NO_PUEDE.editar });
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Id inválido.' });
   const actual = await filaVisible(req, key, entity, id);
@@ -377,7 +401,7 @@ router.delete('/datos/:clave/:id', guard(async (req, res) => {
   const p = pantalla(req, res); if (!p) return;
   const { key, entity } = p;
   if (key === 'centros') return res.status(403).json({ error: 'Las asociaciones no se eliminan desde aquí.' });
-  if (!puedeEscribir(req, key, entity)) return res.status(403).json({ error: 'Esta tabla es de solo lectura para tu perfil.' });
+  if (!puedeEscribir(req, key, entity) || !puede(req, req.params.clave, 'borrar')) return res.status(403).json({ error: !puedeEscribir(req, key, entity) ? 'Esta tabla es de solo lectura para tu perfil.' : NO_PUEDE.borrar });
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'Id inválido.' });
   if (!(await filaVisible(req, key, entity, id))) return res.status(404).json({ error: 'Registro no encontrado.' });
@@ -477,7 +501,7 @@ router.get('/precios', exigir('precios_material'), guard(async (req, res) => {
 }));
 
 // PUT /sistema/precios {id_centro, id_tipo_material, precio} -> guarda (precio vacio = quitar el precio fijo)
-router.put('/precios', exigir('precios_material'), guard(async (req, res) => {
+router.put('/precios', exigirAccion('precios_material', 'editar'), guard(async (req, res) => {
   const b = req.body || {};
   const idCentro = centroDePrecios(req, b.id_centro);
   if (!idCentro) return res.status(400).json({ error: 'Elige una asociación.' });
@@ -621,9 +645,15 @@ async function prepararDia(req, res) {
 }
 router.post('/bm/dia', exigir('balance_masas'), guard(async (req, res, next) => {
   if (!(await prepararDia(req, res))) return;
+  if (req.sis.acciones) {
+    const ya = (await pool.query('SELECT count(*)::int n FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2', [Number(req.body.id_reciclador), String(req.body.fecha || '')])).rows[0].n;
+    const vacio = !Array.isArray(req.body.materiales) || !req.body.materiales.some((m) => Number(m.cantidad) || Number(m.valor) || Number(m.cantidad_rechazo) || Number(m.cantidad_nosui));
+    const accion = ya && vacio ? 'borrar' : (ya && String(req.body.fecha) < todayCO() ? 'editar' : 'crear');
+    if (!puede(req, 'balance_masas', accion)) return res.status(403).json({ error: accion === 'editar' ? 'Tu usuario puede registrar material, pero no modificar días anteriores que ya estaban registrados.' : NO_PUEDE[accion] });
+  }
   return HANDLERS.bmDiaPost(req, res, next);
 }));
-router.post('/bm/anexar', exigir('balance_masas'), guard(async (req, res, next) => {
+router.post('/bm/anexar', exigirAccion('balance_masas', 'crear'), guard(async (req, res, next) => {
   if (!(await prepararDia(req, res))) return;
   return HANDLERS.bmDiaAnexar(req, res, next);
 }));
@@ -653,7 +683,7 @@ router.get('/importar/plantilla/:tipo', exigir('importar'), guard(async (req, re
 }));
 
 // POST /sistema/importar/:tipo (archivo) -> crea filas nuevas y registra el cargue
-router.post('/importar/:tipo', exigir('importar'), uploadExcel.single('file'), guard(async (req, res) => {
+router.post('/importar/:tipo', exigirAccion('importar', 'crear'), uploadExcel.single('file'), guard(async (req, res) => {
   const c = tipoCargue(req, res); if (!c) return;
   if (!req.file) return res.status(400).json({ error: 'Falta el archivo.' });
   const entity = getEntity(c.entidad);
@@ -712,6 +742,7 @@ router.get('/cargues/:clave', guard(async (req, res) => {
 // DELETE /sistema/cargues/:clave/:id -> borra todas las filas de ese cargue
 router.delete('/cargues/:clave/:id', guard(async (req, res) => {
   const t = listaCargue(req, res); if (!t) return;
+  if (!puede(req, req.params.clave, 'borrar')) return res.status(403).json({ error: NO_PUEDE.borrar });
   const id = parseId(req.params.id);
   const g = (await pool.query('SELECT id FROM gt_cargues WHERE id = $1 AND tipo = $2 AND id_centro = ANY($3::int[])', [id, t, req.sis.idsCentros])).rows[0];
   if (!g) return res.status(404).json({ error: 'Cargue no encontrado.' });
@@ -789,6 +820,7 @@ router.post('/documentos/asociaciones', exigir('documentos_asociaciones'), uploa
   const vigencia = req.body.vigencia ? String(req.body.vigencia) : null;
   if (vigencia && !isValidYmd(vigencia)) return res.status(400).json({ error: 'La vigencia no es una fecha válida.' });
   const actual = (await pool.query("SELECT id FROM gt_documentos WHERE grupo = 'asociacion' AND id_centro = $1 AND id_tipo = $2", [idCentro, tipo.id])).rows[0];
+  if (!puede(req, 'documentos_asociaciones', actual ? 'editar' : 'crear')) return res.status(403).json({ error: NO_PUEDE[actual ? 'editar' : 'crear'] });
   if (!req.file && !actual) return res.status(400).json({ error: 'Falta el archivo.' });
   if (req.file && !EXT_OK.test(req.file.originalname || '')) return res.status(400).json({ error: 'Formato no permitido. Usa PDF, imagen, Word o Excel.' });
   if (req.file) {
@@ -803,7 +835,7 @@ router.post('/documentos/asociaciones', exigir('documentos_asociaciones'), uploa
   res.json({ message: 'Documento guardado.' });
 }));
 
-router.delete('/documentos/asociaciones/:id', exigir('documentos_asociaciones'), guard(async (req, res) => {
+router.delete('/documentos/asociaciones/:id', exigirAccion('documentos_asociaciones', 'borrar'), guard(async (req, res) => {
   const r = await pool.query("DELETE FROM gt_documentos WHERE id = $1 AND grupo = 'asociacion' AND id_centro = ANY($2::int[]) RETURNING id", [parseId(req.params.id), req.sis.idsCentros]);
   if (!r.rows.length) return res.status(404).json({ error: 'Documento no encontrado.' });
   await logActivity(req.user.id, 'sistema_documento_eliminado', { id: r.rows[0].id }, req.ip);
@@ -998,7 +1030,7 @@ router.put('/admin/menu/:tipo/:id', exigir('menu'), guard(async (req, res) => {
 // pero nunca a los administradores (perfil ADM ni rol pro).
 router.get('/admin/colaboradores', exigir('colaboradores'), guard(async (req, res) => {
   const r = await pool.query(
-    `SELECT u.id, u.full_name, u.email, u.phone, u.id_perfil, p.cod_perfil, p.desc_perfil, u.activo, u.msg_login_desactivado,
+    `SELECT u.id, u.full_name, u.email, u.phone, u.id_perfil, p.cod_perfil, p.desc_perfil, u.activo, u.msg_login_desactivado, u.foto_url,
             u.association_id, c.id AS id_centro, COALESCE(c.desc_centro, a.name) AS asociacion,
             to_char(u.created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS creado
      FROM users u LEFT JOIN gt_perfiles p ON p.id = u.id_perfil LEFT JOIN associations a ON a.id = u.association_id
@@ -1092,6 +1124,218 @@ router.put('/admin/colaboradores/:id', exigir('colaboradores'), guard(async (req
   }
   await logActivity(req.user.id, 'sistema_colaborador_editado', { id, campos: cols.filter((c) => c !== 'password_hash').concat(v.values.password_hash ? ['password'] : []) }, req.ip);
   res.json({ id });
+}));
+
+// ============================== Trabajadores de la asociacion ==============================
+// La asociacion crea a sus trabajadores (perfil EMPLEADOS) y decide, opcion por opcion, si pueden
+// ver, crear, editar o borrar. El asesor (Colaboradores) tambien puede manejarlos.
+const PERFIL_TRABAJADOR = 25;
+const CLAVES_NO_ASIGNABLES = new Set(['perfiles', 'menu', 'colaboradores', 'trabajadores', 'sql_archivos']);
+const gestionaTrabajadores = (req) => tiene(req, 'trabajadores') || tiene(req, 'colaboradores');
+const exigirGestor = (req, res, next) => (gestionaTrabajadores(req) && !req.sis.acciones ? next() : res.status(403).json({ error: 'Tu perfil no puede manejar trabajadores.' }));
+
+// Trabajador visible para quien lo administra (de una de sus asociaciones), o null.
+async function trabajadorVisible(req, id) {
+  const r = await pool.query(
+    `SELECT u.id, u.association_id FROM users u JOIN tz_centros c ON c.association_id = u.association_id AND c.modulo = 'sistema'
+     WHERE u.id = $1 AND u.id_perfil = $2 AND c.id = ANY($3::int[])`, [parseId(id), PERFIL_TRABAJADOR, req.sis.idsCentros]);
+  return r.rows[0] || null;
+}
+
+// GET /sistema/trabajadores -> trabajadores de las asociaciones visibles, con sus permisos
+router.get('/trabajadores', exigirGestor, guard(async (req, res) => {
+  const r = await pool.query(
+    `SELECT u.id, u.full_name, u.email, u.phone, u.activo, u.msg_login_desactivado, u.foto_url, c.id AS id_centro, c.desc_centro AS asociacion,
+            to_char(u.created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS creado,
+            COALESCE((SELECT json_agg(json_build_object('id_submenu', p.id_submenu, 'crear', p.crear, 'editar', p.editar, 'borrar', p.borrar))
+                      FROM gt_usuario_permisos p WHERE p.user_id = u.id), '[]') AS permisos
+     FROM users u JOIN tz_centros c ON c.association_id = u.association_id AND c.modulo = 'sistema'
+     WHERE u.id_perfil = $1 AND c.id = ANY($2::int[]) ORDER BY c.desc_centro, u.full_name`, [PERFIL_TRABAJADOR, req.sis.idsCentros]);
+  res.json(r.rows);
+}));
+
+// GET /sistema/trabajadores/opciones -> opciones del menu que se le pueden dar a un trabajador
+// (solo las que tiene quien lo crea, sin las de administracion).
+router.get('/trabajadores/opciones', exigirGestor, guard(async (req, res) => {
+  const r = await pool.query('SELECT s.id, s.descripcion, s.clave, m.descripcion AS menu FROM gt_submenu s JOIN gt_menu m ON m.id = s.id_menu ORDER BY m.cod_item, s.cod_item, s.id');
+  res.json(r.rows.filter((x) => req.sis.claves.has(x.clave) && !CLAVES_NO_ASIGNABLES.has(x.clave)));
+}));
+
+async function datosTrabajador(req, b, nuevo) {
+  const errors = [], out = {};
+  if (nuevo || b.full_name !== undefined) { out.full_name = String(b.full_name || '').trim(); if (!out.full_name || out.full_name.length > 150) errors.push('Nombre obligatorio (máximo 150).'); }
+  if (nuevo || b.email !== undefined) { out.email = String(b.email || '').trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(out.email) || out.email.length > 150) errors.push('Correo inválido.'); }
+  if (b.phone !== undefined) out.phone = String(b.phone || '').trim().slice(0, 30) || null;
+  if (b.activo !== undefined) out.activo = b.activo === true || b.activo === 'true';
+  if (b.msg_login_desactivado !== undefined) out.msg_login_desactivado = String(b.msg_login_desactivado || '').trim().slice(0, 500) || null;
+  if (nuevo || b.password) {
+    const pw = String(b.password || '');
+    if (pw.length < 8) errors.push('La contraseña debe tener al menos 8 caracteres.'); else out.password_hash = await bcrypt.hash(pw, 10);
+  }
+  if (nuevo) {
+    const c = centroDestino(req, b.id_centro);
+    if (!c) errors.push('Elige la asociación.'); else out.association_id = req.sis.centros.find((x) => x.id === c).association_id;
+  }
+  return { errors, values: out };
+}
+
+// POST /sistema/trabajadores -> crea un trabajador (sin opciones: luego se le dan sus permisos)
+router.post('/trabajadores', exigirGestor, guard(async (req, res) => {
+  const v = await datosTrabajador(req, req.body || {}, true);
+  if (v.errors.length) return sendErrores(res, v.errors);
+  const d = { ...v.values, role: 'operativo', is_verified: true, id_perfil: PERFIL_TRABAJADOR };
+  const cols = Object.keys(d);
+  try {
+    const r = await pool.query(`INSERT INTO users (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`, cols.map((c) => d[c]));
+    await logActivity(req.user.id, 'sistema_trabajador_creado', { id: r.rows[0].id, nombre: d.full_name }, req.ip);
+    res.json({ id: r.rows[0].id });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
+    throw err;
+  }
+}));
+
+// PUT /sistema/trabajadores/:id -> datos, clave, bloqueo
+router.put('/trabajadores/:id', exigirGestor, guard(async (req, res) => {
+  const t = await trabajadorVisible(req, req.params.id);
+  if (!t) return res.status(404).json({ error: 'Trabajador no encontrado.' });
+  const v = await datosTrabajador(req, req.body || {}, false);
+  if (v.errors.length) return sendErrores(res, v.errors);
+  const cols = Object.keys(v.values);
+  if (!cols.length) return res.status(400).json({ error: 'Nada para actualizar.' });
+  try {
+    await pool.query(`UPDATE users SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${cols.length + 1}`, cols.map((c) => v.values[c]).concat(t.id));
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
+    throw err;
+  }
+  await logActivity(req.user.id, 'sistema_trabajador_editado', { id: t.id, campos: cols.filter((c) => c !== 'password_hash') }, req.ip);
+  res.json({ id: t.id });
+}));
+
+// PUT /sistema/trabajadores/:id/permisos {permisos:[{id_submenu, crear, editar, borrar}]} -> reemplaza sus permisos
+router.put('/trabajadores/:id/permisos', exigirGestor, guard(async (req, res) => {
+  const t = await trabajadorVisible(req, req.params.id);
+  if (!t) return res.status(404).json({ error: 'Trabajador no encontrado.' });
+  const lista = Array.isArray(req.body && req.body.permisos) ? req.body.permisos : null;
+  if (!lista) return res.status(400).json({ error: 'Faltan los permisos.' });
+  const permitidas = new Map((await pool.query('SELECT id, clave FROM gt_submenu')).rows
+    .filter((x) => req.sis.claves.has(x.clave) && !CLAVES_NO_ASIGNABLES.has(x.clave)).map((x) => [x.id, x.clave]));
+  const filas = [];
+  for (const p of lista) {
+    const id = Number(p && p.id_submenu);
+    if (!permitidas.has(id)) return res.status(400).json({ error: 'Una de las opciones no se puede asignar.' });
+    filas.push([id, p.crear === true, p.editar === true, p.borrar === true]);
+  }
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM gt_usuario_permisos WHERE user_id = $1', [t.id]);
+    for (const [id, c, e, b] of filas) {
+      await client.query('INSERT INTO gt_usuario_permisos (user_id, id_submenu, crear, editar, borrar) VALUES ($1,$2,$3,$4,$5)', [t.id, id, c, e, b]);
+    }
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+  await logActivity(req.user.id, 'sistema_trabajador_permisos', { id: t.id, opciones: filas.length }, req.ip);
+  res.json({ message: 'Permisos guardados.' });
+}));
+
+// ============================== Fotos de las personas ==============================
+const uploadFoto = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
+// Puede cambiar la foto: la misma persona, quien administra a ese trabajador, o el asesor/fundador
+// para los usuarios que puede ver en Colaboradores.
+async function puedeCambiarFoto(req, id) {
+  if (id === req.user.id) return true;
+  if (req.sis.acciones) return false;
+  if (gestionaTrabajadores(req) && await trabajadorVisible(req, id)) return true;
+  if (tiene(req, 'colaboradores')) {
+    const u = (await pool.query(
+      `SELECT u.role, p.cod_perfil, c.id AS id_centro, p.todas_asociaciones FROM users u LEFT JOIN gt_perfiles p ON p.id = u.id_perfil
+       LEFT JOIN tz_centros c ON c.association_id = u.association_id AND c.modulo = 'sistema' WHERE u.id = $1`, [id])).rows[0];
+    if (!u) return false;
+    if (req.sis.esAdm) return true;
+    return u.role !== 'pro' && u.cod_perfil !== PERFIL_ADM && (u.todas_asociaciones || req.sis.idsCentros.includes(u.id_centro));
+  }
+  return false;
+}
+// POST /sistema/usuarios/:id/foto (archivo) -> sube la foto (cuadrada, centrada en la cara)
+router.post('/usuarios/:id/foto', uploadFoto.single('file'), guard(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id || !(await puedeCambiarFoto(req, id))) return res.status(403).json({ error: 'No puedes cambiar la foto de este usuario.' });
+  if (!req.file || !/^image\/(jpeg|png|webp)$/.test(req.file.mimetype)) return res.status(400).json({ error: 'Sube una foto en JPG, PNG o WEBP (máximo 5 MB).' });
+  const url = await new Promise((resolve, reject) => {
+    const st = cloudinary.uploader.upload_stream({ folder: 'genesis/fotos_usuarios', resource_type: 'image',
+      transformation: [{ width: 300, height: 300, crop: 'fill', gravity: 'face' }] }, (err, r) => (err ? reject(err) : resolve(r.secure_url)));
+    st.end(req.file.buffer);
+  });
+  await pool.query('UPDATE users SET foto_url = $1 WHERE id = $2', [url, id]);
+  await logActivity(req.user.id, 'sistema_foto_cambiada', { id }, req.ip);
+  res.json({ foto: url });
+}));
+router.delete('/usuarios/:id/foto', guard(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id || !(await puedeCambiarFoto(req, id))) return res.status(403).json({ error: 'No puedes cambiar la foto de este usuario.' });
+  await pool.query('UPDATE users SET foto_url = NULL WHERE id = $1', [id]);
+  res.json({ message: 'Foto quitada.' });
+}));
+
+// ============================== Actividad de usuarios ==============================
+// Quien entro, a que hora y que hizo. La asociacion ve a su gente; el asesor, a las asociaciones que
+// atiende y al equipo; el fundador, a todos.
+const PANTALLA = (d) => (d && d.pantalla ? ' (' + String(d.pantalla).replace(/_/g, ' ') + ')' : '');
+const ACCIONES = {
+  inicio_sesion: () => 'Inició sesión',
+  sistema_creado: (d) => 'Creó un registro' + PANTALLA(d),
+  sistema_editado: (d) => 'Modificó un registro' + PANTALLA(d),
+  sistema_eliminado: (d) => 'Borró un registro' + PANTALLA(d),
+  pruebas_balance_masas_dia_guardado: (d) => 'Guardó balance de masas del ' + (d.fecha || '') + ' (' + (d.filas || 0) + ' materiales)',
+  pruebas_balance_compra_anexada: (d) => 'Anexó una compra del ' + (d.fecha || '') + ' (' + (d.kg || 0) + ' kg)',
+  sistema_factura_generada: (d) => 'Generó la factura ' + (d.numero || ''),
+  sistema_importado: (d) => 'Importó un archivo de ' + String(d.tipo || '').replace(/_/g, ' ') + ' (' + (d.filas || 0) + ' filas)',
+  sistema_cargue_borrado: (d) => 'Borró un cargue de ' + String(d.tipo || '').replace(/_/g, ' ') + ' (' + (d.filas || 0) + ' filas)',
+  sistema_documento_guardado: () => 'Subió o actualizó un documento',
+  sistema_documento_eliminado: () => 'Quitó un documento',
+  sistema_documento_referencia: (d) => 'Subió el documento de referencia ' + (d.nombre || ''),
+  sistema_precio_material: (d) => 'Cambió un precio de material a $' + (d.precio != null ? d.precio : ''),
+  sistema_password_cambiada: () => 'Cambió su contraseña',
+  sistema_trabajador_creado: (d) => 'Creó al trabajador ' + (d.nombre || ''),
+  sistema_trabajador_editado: () => 'Modificó un trabajador',
+  sistema_trabajador_permisos: (d) => 'Cambió los permisos de un trabajador (' + (d.opciones || 0) + ' opciones)',
+  sistema_colaborador_creado: () => 'Creó un usuario',
+  sistema_colaborador_editado: () => 'Modificó un usuario',
+  sistema_foto_cambiada: () => 'Cambió una foto',
+  sistema_catalogo_creado: () => 'Agregó un código a una lista',
+  sistema_catalogo_editado: () => 'Modificó un código de una lista',
+  sistema_catalogo_eliminado: () => 'Borró un código de una lista',
+  sistema_perfil_opciones: () => 'Cambió las opciones de un perfil'
+};
+router.get('/actividad', exigir('actividad'), guard(async (req, res) => {
+  const hoy = todayCO();
+  const desde = isValidYmd(req.query.desde) ? req.query.desde : hoy;
+  const hasta = isValidYmd(req.query.hasta) ? req.query.hasta : hoy;
+  if (desde > hasta) return res.status(400).json({ error: 'Rango de fechas inválido.' });
+  const params = [desde, hasta];
+  // Quienes puede ver
+  let alcance;
+  if (req.sis.esAdm) alcance = 'TRUE';
+  else if (req.sis.todas) {
+    params.push(req.sis.idsCentros);
+    alcance = `(u.association_id IN (SELECT association_id FROM tz_centros WHERE id = ANY($${params.length}::int[])) OR (p.todas_asociaciones AND p.cod_perfil <> 'ADM' AND u.role <> 'pro'))`;
+  } else {
+    params.push(req.sis.usuario.association_id);
+    alcance = `u.association_id = $${params.length} AND u.role <> 'pro'`;
+  }
+  if (parseId(req.query.user_id)) { params.push(parseId(req.query.user_id)); alcance += ` AND u.id = $${params.length}`; }
+  const r = await pool.query(
+    `SELECT l.id, to_char((l.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI:SS') AS fecha_hora,
+            l.action, l.details, u.id AS user_id, u.full_name, u.foto_url, p.desc_perfil
+     FROM activity_logs l JOIN users u ON u.id = l.user_id LEFT JOIN gt_perfiles p ON p.id = u.id_perfil
+     WHERE ((l.created_at AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')::date BETWEEN $1 AND $2 AND ${alcance}
+     ORDER BY l.created_at DESC LIMIT 2000`, params);
+  res.json(r.rows.map((x) => ({
+    id: x.id, fecha_hora: x.fecha_hora, user_id: x.user_id, usuario: x.full_name, foto: x.foto_url, perfil: x.desc_perfil,
+    accion: (ACCIONES[x.action] || (() => x.action.replace(/_/g, ' ')))(x.details || {})
+  })));
 }));
 
 // ---- Cambio password: el usuario cambia la suya (pide la actual) ----

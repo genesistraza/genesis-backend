@@ -21,6 +21,10 @@
   .routes-dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;}
   .routes-list-item .name{flex:1;}
   .routes-list-empty{padding:14px;text-align:center;color:var(--ink-soft);font-size:13.5px;}
+  /* Foto de la persona junto al logo de la asociacion */
+  .user-foto{width:96px;height:96px;border-radius:50%;object-fit:cover;border:3px solid #fff;box-shadow:0 2px 10px rgba(10,51,105,.18);display:inline-flex;align-items:center;justify-content:center;background:#DCEFFC;color:var(--blue-deep);font-family:'Poppins',sans-serif;font-weight:700;font-size:30px;flex:none;}
+  .user-foto.sm{width:34px;height:34px;font-size:13px;border-width:2px;box-shadow:none;}
+  .side-user{display:flex;align-items:center;gap:10px;}
   /* Recordatorio del robot (carpeta legal) */
   .robot-panel{display:flex;align-items:center;gap:22px;}
   .robot-img{height:240px;width:auto;max-width:190px;flex:none;object-fit:contain;}
@@ -73,8 +77,10 @@
     </div>
     <div class="side-spacer"></div>
     <div class="side-user">
-      <div class="name" id="sideUserName">—</div>
-      <div class="role" id="sideUserRole">—</div>
+      <div>
+        <div class="name" id="sideUserName">—</div>
+        <div class="role" id="sideUserRole">—</div>
+      </div>
     </div>
     <div class="side-logout" onclick="gtLogout()">Cerrar sesión</div>
   </aside>
@@ -84,6 +90,7 @@
     <div class="app-topbar">
       <div class="topbar-with-logo">
         <span id="topAssocLogo"></span>
+        <span id="topUserFoto" class="user-foto-wrap" style="display:none;"></span>
         <div>
           <h1>Hola, <span id="topUserName">—</span></h1>
           <p id="topAssociation">Cargando información de tu asociación…</p>
@@ -336,6 +343,20 @@
     }
   }
 
+  // Foto de la persona: junto al logo de la asociacion (arriba) y en la parte de abajo del menu lateral.
+  // La llama tambien Registro cuando la persona cambia su foto.
+  function actualizarFotoUsuario(url){
+    var nombre = (window.gtYo && window.gtYo.nombre) || session.fullName || '?';
+    var ini = String(nombre).split(/\s+/).filter(Boolean).slice(0, 2).map(function(w){ return w.charAt(0); }).join('').toUpperCase();
+    var html = function(cls){ return url ? '<img class="user-foto ' + cls + '" src="' + gtEscapeHtml(url) + '" alt="Foto de ' + gtEscapeHtml(nombre) + '">' : '<span class="user-foto ' + cls + '">' + gtEscapeHtml(ini) + '</span>'; };
+    var top = document.getElementById('topUserFoto');
+    top.innerHTML = html(''); top.style.display = '';
+    var side = document.querySelector('.side-user');
+    var prev = document.getElementById('sideUserFoto'); if(prev) prev.remove();
+    if(side){ var span = document.createElement('span'); span.id = 'sideUserFoto'; span.innerHTML = html('sm'); side.insertBefore(span, side.firstChild); }
+    if(window.gtYo) window.gtYo.foto = url;
+  }
+
   // ---- Recordatorio del robot: que documentos de la carpeta legal faltan, vencieron o estan por vencer ----
   function cargarRecordatorioRobot(){
     gtApiFetch('/sistema/documentos/asociaciones').then(function(res){
@@ -400,7 +421,17 @@
     gtApiFetch('/sistema/me').then(function(res){
       if(res.ok){
         document.getElementById('sideRegistro').style.display = '';
-        cargarRecordatorioRobot();
+        window.gtYo = res.data;
+        actualizarFotoUsuario(res.data.foto);
+        document.getElementById('sideUserRole').textContent = res.data.descPerfil || session.role;
+        if(res.data.esTrabajador){
+          // El trabajador solo usa Registro (con lo que su asociacion le permitio): sin plan, pagos ni rutas.
+          ['resumen', 'rutas', 'planes'].forEach(function(t){ var l = document.querySelector('.side-link[data-tab="' + t + '"]'); if(l) l.style.display = 'none'; });
+          ['dashboardGroupToggle', 'dashboardSubmenu'].forEach(function(id){ var el = document.getElementById(id); if(el) el.style.display = 'none'; });
+          showTab('registro');
+        } else {
+          cargarRecordatorioRobot();
+        }
       }
     });
 
