@@ -24,6 +24,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 // El link de facturacion debe ser https (es a donde se manda al cliente al iniciar sesion).
 const urlFacturacionValida = (u) => { try { return new URL(String(u)).protocol === 'https:'; } catch (e) { return false; } };
 const TIPOS_SERVICIO = ['facturacion', 'completo'];
+// Cuantas ECAs puede crear la asociacion en Registro (lo decide el fundador o el asesor).
+const maxEcasValido = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 50 ? n : null; };
 
 function normalizeRowKeys(row) {
   const out = {};
@@ -176,8 +178,8 @@ router.post('/associations', puede('crear_asociaciones'), asyncRoute(async (req,
   try {
     await client.query('BEGIN');
     const assocResult = await client.query(
-      `INSERT INTO associations (name, nit, recycler_count, facturacion_url, tipo_servicio) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [name.trim(), nit.trim(), recyclers, facturacionUrl || null, tipoServicio]
+      `INSERT INTO associations (name, nit, recycler_count, facturacion_url, tipo_servicio, max_ecas) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [name.trim(), nit.trim(), recyclers, facturacionUrl || null, tipoServicio, maxEcasValido(req.body.maxEcas) || 1]
     );
     association = assocResult.rows[0];
     // Sistema completo: queda habilitada de una vez en Registro, con su centro propio.
@@ -358,9 +360,10 @@ router.put('/associations/:id', puede('editar_asociaciones'), asyncRoute(async (
        nit = COALESCE($2, nit),
        recycler_count = COALESCE($3, recycler_count),
        facturacion_url = CASE WHEN $6::boolean THEN $4 ELSE facturacion_url END,
-       tipo_servicio = COALESCE($7, tipo_servicio)
+       tipo_servicio = COALESCE($7, tipo_servicio),
+       max_ecas = COALESCE($8, max_ecas)
      WHERE id = $5 RETURNING *`,
-    [name, nit, recyclerCount, facturacionUrl || null, req.params.id, facturacionUrl !== undefined, tipoServicio]
+    [name, nit, recyclerCount, facturacionUrl || null, req.params.id, facturacionUrl !== undefined, tipoServicio, maxEcasValido(req.body.maxEcas)]
   );
   if (result.rows.length === 0) {
     return res.status(404).json({ error: 'Asociación no encontrada.' });

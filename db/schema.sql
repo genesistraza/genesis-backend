@@ -1303,3 +1303,22 @@ ALTER TABLE associations ALTER COLUMN tipo_servicio SET DEFAULT 'completo';
 
 -- Permisos de cada asesor (role admin), los decide el fundador desde el panel. NULL = valores por defecto.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS permisos_admin JSONB;
+
+-- ECAs: varias por asociacion (pantalla "ECAs", junto a Asociaciones) y a que ECAs tiene acceso
+-- cada trabajador (sin ninguna marcada = todas las de su asociacion).
+WITH nuevo AS (
+  INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave)
+  VALUES (126, 2, 601, 'ECAs', 'bodegas')
+  ON CONFLICT (id) DO NOTHING RETURNING id
+)
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT p.id, n.id FROM nuevo n CROSS JOIN (VALUES (8), (9)) AS p(id)
+ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS gt_usuario_ecas (
+  user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_bodega INT NOT NULL REFERENCES tz_bodegas(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, id_bodega)
+);
+
+-- Cuantas ECAs puede crear cada asociacion en Registro (lo define el fundador o el asesor).
+ALTER TABLE associations ADD COLUMN IF NOT EXISTS max_ecas INT NOT NULL DEFAULT 1;

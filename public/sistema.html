@@ -202,6 +202,7 @@
     colaboradores: 'Personas que entran al sistema. Crea el usuario, asígnale perfil y asociación; para bloquearlo, ponlo en "Bloqueado" con un mensaje.',
     perfiles: 'Cada perfil define qué opciones del menú ve el usuario. Usa "Opciones" para marcarlas.',
     precios_material: 'Escribe el precio por kilo que paga la asociación por cada material. En el balance de masas se pone solo al escribir los kilos, y en cada compra lo puedes cambiar. Se guarda solo.',
+    bodegas: 'Las ECAs (bodegas) de cada asociación. Puede tener varias; en "Trabajadores" eliges a cuáles tiene acceso cada persona.',
     trabajadores: 'Crea aquí a las personas que trabajan en la asociación. Después, con "Permisos", decide qué opciones ven y si pueden crear, modificar o borrar.',
     actividad: 'Quién entró al sistema, a qué hora y qué hizo. Elige las fechas y, si quieres, una persona.',
     calendario: 'Días del año con su semana del mes y del año, como se usan en los reportes.'
@@ -428,9 +429,11 @@
       campos.map(function(f){
         var v = row ? row[f.name] : '';
         var lab = '<label>' + esc(f.label) + (f.required ? ' *' : '') + '</label>';
-        if(f.type === 'select-entity' || f.type === 'select-catalogo' || f.type === 'select-fixed') return '<div>' + lab + '<select data-f="' + f.name + '" data-v="' + esc(v == null ? '' : v) + '"><option value="">Cargando…</option></select></div>';
+        // Titulo de seccion (p. ej. la ECA dentro de Asociaciones): ocupa todo el ancho de la grilla.
+        var sec = f.seccion ? '<div style="grid-column:1/-1;font-weight:700;color:#0B3D80;margin-top:6px;border-top:1px solid #9DCBF2;padding-top:8px;">' + esc(f.seccion) + '</div>' : '';
+        if(f.type === 'select-entity' || f.type === 'select-catalogo' || f.type === 'select-fixed') return sec + '<div>' + lab + '<select data-f="' + f.name + '" data-v="' + esc(v == null ? '' : v) + '"><option value="">Cargando…</option></select></div>';
         var tipo = f.type === 'date' ? 'date' : (f.type === 'number' || f.type === 'decimal') ? 'number' : 'text';
-        return '<div>' + lab + '<input type="' + tipo + '"' + (f.type === 'decimal' ? ' step="any"' : '') + ' data-f="' + f.name + '" value="' + esc(v == null ? '' : (f.type === 'date' ? String(v).slice(0, 10) : v)) + '"></div>';
+        return sec + '<div>' + lab + '<input type="' + tipo + '"' + (f.type === 'decimal' ? ' step="any"' : '') + ' data-f="' + f.name + '" value="' + esc(v == null ? '' : (f.type === 'date' ? String(v).slice(0, 10) : v)) + '"></div>';
       }).join('') + '</div><p id="frmMsg" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="frmOk">Guardar</button></div>');
     campos.forEach(function(f){
       var sel = document.querySelector('#frm select[data-f="' + f.name + '"]'); if(!sel) return;
@@ -1257,14 +1260,14 @@
   PANTALLAS.trabajadores = function(main){
     main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>' + ic('usuarios') + ' ' + esc(titulo('trabajadores')) + '</h2><input id="trBuscar" placeholder="Buscar…"><span class="spacer"></span><button class="b pri" id="trNuevo">' + ic('mas') + ' Nuevo trabajador</button></div>' +
       ayuda('trabajadores') + '<p id="trMsg" class="msg"></p><div class="tw" id="trTabla"></div></div>';
-    var filas = [], opciones = [];
+    var filas = [], opciones = [], ecas = [];
     var pintar = function(){
       var q = $('trBuscar').value.trim().toLowerCase();
       var l = filas.filter(function(x){ return !q || [x.full_name, x.email, x.asociacion].join(' ').toLowerCase().indexOf(q) !== -1; });
-      $('trTabla').innerHTML = l.length ? '<table class="t"><thead><tr><th></th><th>Trabajador</th><th>Correo</th><th>Teléfono</th>' + (SIS.me.todasAsociaciones ? '<th>Asociación</th>' : '') + '<th>Puede usar</th><th>Estado</th><th>Creado</th></tr></thead><tbody>' +
+      $('trTabla').innerHTML = l.length ? '<table class="t"><thead><tr><th></th><th>Trabajador</th><th>Correo</th><th>Teléfono</th>' + (SIS.me.todasAsociaciones ? '<th>Asociación</th>' : '') + '<th>Puede usar / ECAs</th><th>Estado</th><th>Creado</th></tr></thead><tbody>' +
         l.map(function(x){ return '<tr><td class="acc"><button class="b sm" data-ed="' + x.id + '">' + ic('editar') + ' Editar</button> <button class="b sm pri" data-pm="' + x.id + '">Permisos</button> <button class="b sm" data-ft="' + x.id + '">Foto</button></td>' +
           '<td>' + avatar(x.foto_url, x.full_name, 'sm') + ' ' + esc(x.full_name) + '</td><td>' + esc(x.email) + '</td><td>' + esc(x.phone || '') + '</td>' + (SIS.me.todasAsociaciones ? '<td>' + esc(x.asociacion) + '</td>' : '') +
-          '<td>' + (x.permisos.length ? x.permisos.length + ' opción(es)' : '<span class="tag por">Sin permisos aún</span>') + '</td><td>' + (x.activo ? '<span class="tag vig">Activo</span>' : '<span class="tag ven">Bloqueado</span>') + '</td><td>' + esc(x.creado) + '</td></tr>'; }).join('') + '</tbody></table>'
+          '<td>' + (x.permisos.length ? x.permisos.length + ' opción(es)' : '<span class="tag por">Sin permisos aún</span>') + '<br><span class="muted" style="font-size:11.5px;">ECA: ' + esc(nombresEcas(x.ecas)) + '</span></td><td>' + (x.activo ? '<span class="tag vig">Activo</span>' : '<span class="tag ven">Bloqueado</span>') + '</td><td>' + esc(x.creado) + '</td></tr>'; }).join('') + '</tbody></table>'
         : '<p class="muted" style="padding:10px;">Aún no hay trabajadores. Créalos con "Nuevo trabajador".</p>';
       var buscar = function(b, at){ return filas.find(function(x){ return String(x.id) === b.getAttribute(at); }); };
       $('trTabla').querySelectorAll('[data-ed]').forEach(function(b){ b.onclick = function(){ formTrab(buscar(b, 'data-ed')); }; });
@@ -1272,10 +1275,14 @@
       $('trTabla').querySelectorAll('[data-ft]').forEach(function(b){ b.onclick = function(){ var x = buscar(b, 'data-ft'); ventanaFoto(x.id, x.full_name, x.foto_url, function(){ cargar(); }); }; });
     };
     var cargar = function(){
-      Promise.all([api('/trabajadores'), api('/trabajadores/opciones')]).then(function(r){
+      Promise.all([api('/trabajadores'), api('/trabajadores/opciones'), api('/trabajadores/ecas')]).then(function(r){
         if(!r[0].ok){ $('trTabla').innerHTML = '<p class="msg err" style="padding:10px;">' + esc(r[0].data.error) + '</p>'; return; }
-        filas = r[0].data; opciones = r[1].ok ? r[1].data : []; pintar();
+        filas = r[0].data; opciones = r[1].ok ? r[1].data : []; ecas = r[2].ok ? r[2].data : []; pintar();
       });
+    };
+    var nombresEcas = function(ids){
+      if(!ids || !ids.length) return 'todas';
+      return ids.map(function(id){ var e = ecas.find(function(z){ return z.id === id; }); return e ? (e.cod_bodega || e.desc_bodega) : id; }).join(', ');
     };
     var formTrab = function(x){
       abrirModal('<h3>' + (x ? 'Editar trabajador' : 'Nuevo trabajador') + '</h3><div class="fg">' +
@@ -1285,10 +1292,22 @@
         (!x && SIS.me.todasAsociaciones ? '<div><label>Asociación *</label><select id="tCen">' + SIS.me.centros.map(function(c){ return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('') + '</select></div>' : '') +
         '<div><label>' + (x ? 'Nueva contraseña (vacío = no cambiar)' : 'Contraseña inicial * (mín. 8)') + '</label><input id="tPwd" type="password" autocomplete="new-password"></div>' +
         '<div><label>Estado</label><select id="tAct"><option value="true">Activo</option><option value="false"' + (x && !x.activo ? ' selected' : '') + '>Bloqueado</option></select></div>' +
+        '<div style="grid-column:1/-1;" id="tEcasBox"></div>' +
         '<div style="grid-column:1/-1;"><label>Mensaje al intentar ingresar (cuando está bloqueado)</label><textarea id="tMsgL" rows="2">' + esc(x ? x.msg_login_desactivado || '' : '') + '</textarea></div>' +
         '</div><p id="tMMsg" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="tOk">Guardar</button></div>');
+      // ECAs de la asociacion del trabajador: se marcan las que puede usar (ninguna = todas)
+      var pintarEcas = function(){
+        var cen = $('tCen') ? Number($('tCen').value) : (x ? x.id_centro : (SIS.me.centros[0] && SIS.me.centros[0].id));
+        var lista = ecas.filter(function(e){ return e.id_centro === cen; });
+        var marcadas = x ? (x.ecas || []) : [];
+        $('tEcasBox').innerHTML = '<label>ECAs a las que tiene acceso</label>' + (lista.length
+          ? '<div style="display:flex;flex-wrap:wrap;gap:4px 16px;">' + lista.map(function(e){ return '<label style="font-weight:400;display:flex;align-items:center;gap:6px;"><input type="checkbox" class="tEca" value="' + e.id + '"' + (marcadas.indexOf(e.id) !== -1 ? ' checked' : '') + '> ' + esc((e.cod_bodega || '') + ' - ' + (e.desc_bodega || '')) + '</label>'; }).join('') + '</div><span class="muted" style="font-size:11.5px;">Si no marcas ninguna, tiene acceso a todas.</span>'
+          : '<span class="muted" style="font-size:12px;">Esta asociación aún no tiene ECAs. Créalas en "ECAs".</span>');
+      };
+      pintarEcas(); if($('tCen')) $('tCen').onchange = pintarEcas;
       $('tOk').onclick = function(){
-        var body = { full_name: $('tNom').value, email: $('tMail').value, phone: $('tTel').value, activo: $('tAct').value === 'true', msg_login_desactivado: $('tMsgL').value };
+        var body = { full_name: $('tNom').value, email: $('tMail').value, phone: $('tTel').value, activo: $('tAct').value === 'true', msg_login_desactivado: $('tMsgL').value,
+          ecas: Array.prototype.map.call(document.querySelectorAll('.tEca:checked'), function(c){ return Number(c.value); }) };
         if($('tCen')) body.id_centro = Number($('tCen').value);
         if($('tPwd').value) body.password = $('tPwd').value;
         api('/trabajadores' + (x ? '/' + x.id : ''), { method: x ? 'PUT' : 'POST', body: JSON.stringify(body) }).then(function(r){

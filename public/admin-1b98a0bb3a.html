@@ -435,6 +435,7 @@
         <div class="form-field"><label>Nombre de la asociación</label><input id="newAssocName"></div>
         <div class="form-field"><label>NIT</label><input id="newAssocNit"></div>
         <div class="form-field"><label># de recicladores</label><input id="newAssocRecyclerCount" type="number" min="0"></div>
+        <div class="form-field"><label>ECAs que puede crear</label><input id="newAssocMaxEcas" type="number" min="1" max="50" value="1"></div>
         <div class="form-field gt-perm-link"><label>Tipo de cliente</label><select id="newAssocTipo"><option value="completo">Sistema completo (trazabilidad + facturación)</option><option value="facturacion">Solo facturación electrónica</option></select></div>
         <div class="form-field gt-perm-link" style="grid-column:1/-1;"><label>Link de facturación (a donde se le lleva para facturar)</label><input id="newAssocFacturacionUrl" placeholder="https://asociacion.facturargenesis.com"></div>
       </div>
@@ -875,6 +876,7 @@
       html += '<div class="form-field"><label>Nombre</label><input id="editAssocName" value="' + esc(d.association.name) + '"></div>';
       html += '<div class="form-field"><label>NIT</label><input id="editAssocNit" value="' + esc(d.association.nit) + '"></div>';
       html += '<div class="form-field"><label># de recicladores</label><input id="editAssocRecyclerCount" type="number" min="0" value="' + esc(d.association.recycler_count) + '"></div>';
+      html += '<div class="form-field"><label>ECAs que puede crear</label><input id="editAssocMaxEcas" type="number" min="1" max="50" value="' + esc(d.association.max_ecas || 1) + '"></div>';
       // Tipo de cliente y link de facturacion: el fundador o el asesor con ese permiso.
       if(gtPerm.link_facturacion){
         html += '<div class="form-field"><label>Tipo de cliente</label><select id="editAssocTipo"><option value="completo"' + (d.association.tipo_servicio === 'completo' ? ' selected' : '') + '>Sistema completo (trazabilidad + facturación)</option><option value="facturacion"' + (d.association.tipo_servicio === 'facturacion' ? ' selected' : '') + '>Solo facturación electrónica</option></select></div>';
@@ -950,7 +952,7 @@
       // Solo los campos basicos de la asociacion cuentan para la advertencia de "cambios sin
       // guardar" al cerrar: son los unicos con datos escritos a mano que se pierden sin aviso;
       // corregir plan, pago en efectivo, etc. son acciones con su propio boton y confirmacion.
-      ['editAssocName','editAssocNit','editAssocRecyclerCount','editAssocFacturacionUrl'].forEach(function(fieldId){
+      ['editAssocName','editAssocNit','editAssocRecyclerCount','editAssocMaxEcas','editAssocFacturacionUrl'].forEach(function(fieldId){
         var el = document.getElementById(fieldId);
         if(el) el.addEventListener('input', function(){ clientModalDirty = true; });
       });
@@ -1017,6 +1019,7 @@
       name: document.getElementById('editAssocName').value.trim(),
       nit: document.getElementById('editAssocNit').value.trim(),
       recyclerCount: Number(document.getElementById('editAssocRecyclerCount').value) || undefined,
+      maxEcas: Number(document.getElementById('editAssocMaxEcas').value) || undefined,
       facturacionUrl: document.getElementById('editAssocFacturacionUrl') ? document.getElementById('editAssocFacturacionUrl').value.trim() : undefined,
       tipoServicio: document.getElementById('editAssocTipo') ? document.getElementById('editAssocTipo').value : undefined
     };
@@ -1718,6 +1721,7 @@
     ['newAssocName','newAssocNit','newAssocRecyclerCount','newAssocFacturacionUrl',
      'newAssocContactName','newAssocContactEmail','newAssocContactPhone','newAssocContactPassword']
       .forEach(function(id){ document.getElementById(id).value = ''; });
+    document.getElementById('newAssocMaxEcas').value = '1';
     document.getElementById('newAssociationError').style.display = 'none';
     document.getElementById('newAssociationModalOverlay').classList.add('open');
   }
@@ -1728,6 +1732,7 @@
       name: document.getElementById('newAssocName').value.trim(),
       nit: document.getElementById('newAssocNit').value.trim(),
       recyclerCount: Number(document.getElementById('newAssocRecyclerCount').value) || undefined,
+      maxEcas: Number(document.getElementById('newAssocMaxEcas').value) || 1,
       facturacionUrl: document.getElementById('newAssocFacturacionUrl').value.trim() || undefined,
       tipoServicio: document.getElementById('newAssocTipo').value,
       contactFullName: document.getElementById('newAssocContactName').value.trim() || undefined,

@@ -49,8 +49,13 @@ const CAMPOS_ORIGINAL = {
   microrrutas_detalle: ['id_formulario_microrruta', 'desc_microrruta', 'id_tipo_microrruta', 'direccion_inicio', 'hora_inicio', 'direccion_finalizacion', 'hora_finalizacion',
     'distancia_via_no_pavimentada', 'distancia_via_pavimentada', 'frecuencia_semanal', 'dias_frecuencia', 'id_estacion_transferencia'],
   aprovechamiento: ['id_centro', 'periodo', 'id_usuario', 'id_numacro', 'toneladas'],
-  recursos: ['id_centro', 'fecha', 'nuap', 'operador', 'valor']
+  recursos: ['id_centro', 'fecha', 'nuap', 'operador', 'valor'],
+  bodegas: ['id_centro', 'cod_bodega', 'desc_bodega', 'direccion', 'desc_ubicacion', 'longitud', 'latitud', 'fecha_inicio_operaciones']
 };
+// ECAs: una asociacion puede tener varias (pantalla "ECAs"). A cada trabajador se le dice a cuales
+// tiene acceso (gt_usuario_ecas); sin ninguna marcada = todas las de su asociacion.
+const ecaPermitida = (req, idBodega) => !req.sis.ecas || req.sis.ecas.includes(Number(idBodega));
+
 // Campos obligatorios de la tabla que el original no pedia: valor fijo al crear.
 async function valoresPorDefecto(key) {
   if (key === 'recicladores') {
@@ -137,7 +142,13 @@ router.use(guard(async (req, res, next) => {
     claves = (await pool.query('SELECT s.clave FROM gt_perfil_opciones o JOIN gt_submenu s ON s.id = o.id_submenu WHERE o.id_perfil = $1', [u.id_perfil])).rows.map((r) => r.clave);
   }
 
-  req.sis = { usuario: u, esAdm, todas, centros, idsCentros: centros.map((c) => c.id), claves: new Set(claves), acciones };
+  // ECAs a las que tiene acceso el trabajador (null = todas)
+  let ecas = null;
+  if (acciones) {
+    const e = (await pool.query('SELECT id_bodega FROM gt_usuario_ecas WHERE user_id = $1', [u.id])).rows.map((x) => x.id_bodega);
+    if (e.length) ecas = e;
+  }
+  req.sis = { usuario: u, esAdm, todas, centros, idsCentros: centros.map((c) => c.id), claves: new Set(claves), acciones, ecas };
   next();
 }));
 
@@ -229,8 +240,11 @@ function centroDestino(req, valor) {
 // Campos que el usuario no debe ver/llenar: el centro (si es de una sola asociacion) y los codigos
 // fijos del destino del rechazo y el enlace del dashboard (tareas del administrador).
 const SOLO_ADMIN = new Set(['id_tipo_destino', 'numero_sitio_destino', 'link_dashboard']);
+// Nombres que se ven en Registro (los de Pruebas quedan igual).
+const ETIQUETAS_REGISTRO = { bodegas: { id_centro: 'Asociación', cod_bodega: 'Número ECA (NUECA)', desc_bodega: 'Nombre de la ECA', desc_ubicacion: 'Barrio / ubicación' } };
 function camposVisibles(req, key, entity) {
-  return entity.fields.filter((f) => campoOriginal(key, f.name) && (req.sis.todas || f.name !== 'id_centro') && (req.sis.todas || key !== 'centros' || !SOLO_ADMIN.has(f.name)));
+  const et = ETIQUETAS_REGISTRO[key] || {};
+  return entity.fields.map((f) => (et[f.name] ? Object.assign({}, f, { label: et[f.name] }) : f)).filter((f) => campoOriginal(key, f.name) && (req.sis.todas || f.name !== 'id_centro') && (req.sis.todas || key !== 'centros' || !SOLO_ADMIN.has(f.name)));
 }
 
 // GET /sistema/entidades -> metadata de campos de las pantallas permitidas (para armar tablas y formularios)
@@ -267,7 +281,7 @@ router.get('/opciones/:entidad', guard(async (req, res) => {
   const r = await pool.query(
     `SELECT t.id AS value, ${label} AS label FROM ${entity.table} t ${cond ? 'WHERE ' + cond : ''} ORDER BY 2`,
     cond ? [req.sis.idsCentros] : []);
-  res.json(r.rows);
+  res.json(req.params.entidad === 'bodegas' && req.sis.ecas ? r.rows.filter((x) => ecaPermitida(req, x.value)) : r.rows);
 }));
 
 // GET /sistema/catalogo-opciones/:categoria -> opciones de un select-catalogo
@@ -307,6 +321,11 @@ router.get('/datos/:clave', guard(async (req, res) => {
     params.push(parseId(req.query.id_formulario_microrruta));
     filtros.push('t.id_formulario_microrruta = $' + params.length);
   }
+  // Trabajador con ECAs asignadas: solo esas ECAs y el balance registrado en ellas.
+  if (req.sis.ecas && (key === 'bodegas' || key === 'balance_masas')) {
+    params.push(req.sis.ecas);
+    filtros.push((key === 'bodegas' ? 't.id' : 't.id_bodega') + ' = ANY($' + params.length + '::int[])');
+  }
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 500, 1), 5000);
   const r = await pool.query(
     `SELECT ${cols.join(', ')} FROM ${entity.table} t ${joins.join(' ')} ${filtros.length ? 'WHERE ' + filtros.join(' AND ') : ''} ORDER BY t.id DESC LIMIT ${limit}`,
@@ -321,7 +340,9 @@ async function filaVisible(req, key, entity, id) {
   const r = cond
     ? await pool.query(`SELECT t.* FROM ${entity.table} t WHERE t.id = $2 AND ${cond}`, [req.sis.idsCentros, id])
     : await pool.query(`SELECT t.* FROM ${entity.table} t WHERE t.id = $1`, [id]);
-  return r.rows[0] || null;
+  const fila = r.rows[0] || null;
+  if (fila && req.sis.ecas && ((key === 'bodegas' && !ecaPermitida(req, fila.id)) || (key === 'balance_masas' && !ecaPermitida(req, fila.id_bodega)))) return null;
+  return fila;
 }
 
 // La microrruta padre de un detalle debe ser de una asociacion visible.
@@ -351,6 +372,17 @@ router.post('/datos/:clave', guard(async (req, res) => {
   if (key === 'microrrutas_detalle' && !(await microrrutaVisible(req, body.id_formulario_microrruta))) {
     return res.status(400).json({ error: 'La microrruta no existe o es de otra asociación.' });
   }
+  if (req.sis.ecas && key === 'bodegas') return res.status(403).json({ error: 'Tu usuario solo maneja las ECAs que le asignaron; no puede crear ECAs nuevas.' });
+  if (key === 'bodegas') {
+    // Tope de ECAs de la asociacion (lo pone el fundador o el asesor en el panel de administracion).
+    const lim = (await pool.query(
+      `SELECT a.max_ecas, (SELECT count(*)::int FROM tz_bodegas b JOIN tz_centros c2 ON c2.id = b.id_centro WHERE c2.association_id = a.id) AS usadas
+       FROM tz_centros c JOIN associations a ON a.id = c.association_id WHERE c.id = $1`, [body.id_centro])).rows[0];
+    if (lim && lim.usadas >= lim.max_ecas) {
+      return res.status(403).json({ error: `Esta asociación puede tener ${lim.max_ecas} ECA${lim.max_ecas === 1 ? '' : 's'} y ya ${lim.usadas === 1 ? 'tiene 1' : 'tiene ' + lim.usadas}. Para crear más, pídele a Genesis que amplíe el cupo.` });
+    }
+  }
+  if (req.sis.ecas && key === 'balance_masas' && !ecaPermitida(req, body.id_bodega)) return res.status(403).json({ error: 'Elige una de las ECAs que tienes asignadas.' });
   const v = await validateRecord(ENTITIES, key, body);
   if (v.errors.length) return sendErrores(res, v.errors);
   let datos = v.values;
@@ -548,7 +580,7 @@ router.get('/bm/reciclador/:id', exigir('balance_masas'), guard(async (req, res)
   const rec = await recicladorVisible(req, req.params.id);
   if (!rec) return res.status(404).json({ error: 'Reciclador no encontrado.' });
   const [b, m, d] = await Promise.all([
-    pool.query('SELECT id, cod_bodega, desc_bodega FROM tz_bodegas WHERE id_centro = $1 ORDER BY cod_bodega', [rec.id_centro]),
+    pool.query('SELECT id, cod_bodega, desc_bodega FROM tz_bodegas WHERE id_centro = $1 AND ($2::int[] IS NULL OR id = ANY($2::int[])) ORDER BY cod_bodega', [rec.id_centro, req.sis.ecas]),
     pool.query('SELECT id, cod_macrorruta, desc_macrorruta FROM tz_macrorrutas WHERE id_centro = $1 ORDER BY cod_macrorruta', [rec.id_centro]),
     pool.query(`SELECT d.id, d.desc_microrruta FROM tz_formulario_microrrutas_detalle d JOIN tz_formulario_microrrutas f ON f.id = d.id_formulario_microrruta
                 WHERE f.id_centro = $1 AND (f.id_reciclador = $2 OR f.id_reciclador IS NULL) ORDER BY d.id`, [rec.id_centro, rec.id])
@@ -628,6 +660,7 @@ async function prepararDia(req, res) {
   const rec = await recicladorVisible(req, req.body && req.body.id_reciclador);
   if (!rec) { res.status(404).json({ error: 'Reciclador no encontrado.' }); return false; }
   req.body.id_centro = rec.id_centro;
+  if (req.sis.ecas && !ecaPermitida(req, req.body.id_bodega)) { res.status(403).json({ error: 'Elige la ECA donde se recibió el material (una de las que tienes asignadas).' }); return false; }
   // Rechazo vacio (null o '') -> porcentaje fijo de la asociacion sobre los kilos, marcado como
   // estimado. Si el usuario escribio un valor (aunque sea 0), se respeta tal cual.
   const pct = Number((await pool.query('SELECT pct_rechazo_estimado FROM tz_centros WHERE id = $1', [rec.id_centro])).rows[0].pct_rechazo_estimado) || 0;
@@ -1148,7 +1181,8 @@ router.get('/trabajadores', exigirGestor, guard(async (req, res) => {
     `SELECT u.id, u.full_name, u.email, u.phone, u.activo, u.msg_login_desactivado, u.foto_url, c.id AS id_centro, c.desc_centro AS asociacion,
             to_char(u.created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS creado,
             COALESCE((SELECT json_agg(json_build_object('id_submenu', p.id_submenu, 'crear', p.crear, 'editar', p.editar, 'borrar', p.borrar))
-                      FROM gt_usuario_permisos p WHERE p.user_id = u.id), '[]') AS permisos
+                      FROM gt_usuario_permisos p WHERE p.user_id = u.id), '[]') AS permisos,
+            COALESCE((SELECT json_agg(e.id_bodega) FROM gt_usuario_ecas e WHERE e.user_id = u.id), '[]') AS ecas
      FROM users u JOIN tz_centros c ON c.association_id = u.association_id AND c.modulo = 'sistema'
      WHERE u.id_perfil = $1 AND c.id = ANY($2::int[]) ORDER BY c.desc_centro, u.full_name`, [PERFIL_TRABAJADOR, req.sis.idsCentros]);
   res.json(r.rows);
@@ -1179,14 +1213,41 @@ async function datosTrabajador(req, b, nuevo) {
   return { errors, values: out };
 }
 
+// ECAs que se le pueden dar al trabajador: las de su asociacion. Devuelve la lista limpia o un error.
+async function ecasValidas(associationId, lista) {
+  if (lista === undefined) return { ids: undefined };
+  if (!Array.isArray(lista)) return { error: 'Las ECAs vienen mal.' };
+  const ids = [...new Set(lista.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (!ids.length) return { ids };
+  const ok = (await pool.query(
+    `SELECT b.id FROM tz_bodegas b JOIN tz_centros c ON c.id = b.id_centro WHERE b.id = ANY($1::int[]) AND c.association_id = $2`, [ids, associationId])).rows;
+  if (ok.length !== ids.length) return { error: 'Una de las ECAs no es de la asociación del trabajador.' };
+  return { ids };
+}
+async function guardarEcasTrabajador(userId, ids) {
+  if (ids === undefined) return;
+  await pool.query('DELETE FROM gt_usuario_ecas WHERE user_id = $1', [userId]);
+  for (const id of ids) await pool.query('INSERT INTO gt_usuario_ecas (user_id, id_bodega) VALUES ($1,$2)', [userId, id]);
+}
+
+// GET /sistema/trabajadores/ecas -> ECAs de las asociaciones visibles (para escoger a cuales tiene acceso)
+router.get('/trabajadores/ecas', exigirGestor, guard(async (req, res) => {
+  const r = await pool.query(
+    `SELECT b.id, b.id_centro, b.cod_bodega, b.desc_bodega FROM tz_bodegas b WHERE b.id_centro = ANY($1::int[]) ORDER BY b.cod_bodega, b.id`, [req.sis.idsCentros]);
+  res.json(r.rows);
+}));
+
 // POST /sistema/trabajadores -> crea un trabajador (sin opciones: luego se le dan sus permisos)
 router.post('/trabajadores', exigirGestor, guard(async (req, res) => {
   const v = await datosTrabajador(req, req.body || {}, true);
   if (v.errors.length) return sendErrores(res, v.errors);
+  const ev = await ecasValidas(v.values.association_id, (req.body || {}).ecas);
+  if (ev.error) return res.status(400).json({ error: ev.error });
   const d = { ...v.values, role: 'operativo', is_verified: true, id_perfil: PERFIL_TRABAJADOR };
   const cols = Object.keys(d);
   try {
     const r = await pool.query(`INSERT INTO users (${cols.join(',')}) VALUES (${cols.map((_, i) => '$' + (i + 1)).join(',')}) RETURNING id`, cols.map((c) => d[c]));
+    await guardarEcasTrabajador(r.rows[0].id, ev.ids);
     await logActivity(req.user.id, 'sistema_trabajador_creado', { id: r.rows[0].id, nombre: d.full_name }, req.ip);
     res.json({ id: r.rows[0].id });
   } catch (err) {
@@ -1201,14 +1262,17 @@ router.put('/trabajadores/:id', exigirGestor, guard(async (req, res) => {
   if (!t) return res.status(404).json({ error: 'Trabajador no encontrado.' });
   const v = await datosTrabajador(req, req.body || {}, false);
   if (v.errors.length) return sendErrores(res, v.errors);
+  const ev = await ecasValidas(t.association_id, (req.body || {}).ecas);
+  if (ev.error) return res.status(400).json({ error: ev.error });
   const cols = Object.keys(v.values);
-  if (!cols.length) return res.status(400).json({ error: 'Nada para actualizar.' });
+  if (!cols.length && ev.ids === undefined) return res.status(400).json({ error: 'Nada para actualizar.' });
   try {
-    await pool.query(`UPDATE users SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${cols.length + 1}`, cols.map((c) => v.values[c]).concat(t.id));
+    if (cols.length) await pool.query(`UPDATE users SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')} WHERE id = $${cols.length + 1}`, cols.map((c) => v.values[c]).concat(t.id));
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'Ya existe un usuario con ese correo.' });
     throw err;
   }
+  await guardarEcasTrabajador(t.id, ev.ids);
   await logActivity(req.user.id, 'sistema_trabajador_editado', { id: t.id, campos: cols.filter((c) => c !== 'password_hash') }, req.ip);
   res.json({ id: t.id });
 }));
