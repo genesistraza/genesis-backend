@@ -667,6 +667,12 @@ async function prepararDia(req, res) {
   if (!rec) { res.status(404).json({ error: 'Reciclador no encontrado.' }); return false; }
   req.body.id_centro = rec.id_centro;
   if (req.sis.ecas && !ecaPermitida(req, req.body.id_bodega)) { res.status(403).json({ error: 'Elige la ECA donde se recibió el material (una de las que tienes asignadas).' }); return false; }
+  // El reporte al SUI necesita la ECA (NUECA) y el Numacro de cada registro: se exigen al capturar.
+  const conMaterial = Array.isArray(req.body.materiales) && req.body.materiales.some((m) => Number(m && m.cantidad) > 0);
+  if (conMaterial && (!req.body.id_bodega || !req.body.id_numacro)) {
+    res.status(400).json({ error: 'Elige la ECA (NUECA) y el Numacro antes de guardar. Si no aparecen, créalos en "ECAs" y en "Numacros".' });
+    return false;
+  }
   // Rechazo vacio (null o '') -> porcentaje fijo de la asociacion sobre los kilos, marcado como
   // estimado. Si el usuario escribio un valor (aunque sea 0), se respeta tal cual.
   const pct = Number((await pool.query('SELECT pct_rechazo_estimado FROM tz_centros WHERE id = $1', [rec.id_centro])).rows[0].pct_rechazo_estimado) || 0;
@@ -935,6 +941,46 @@ router.delete('/documentos/referencia/:id', exigir('documentos_referencia'), gua
 // ============================== Resumenes ==============================
 
 // GET /sistema/resumen-masas?desde&hasta[&id_centro] -> totales por asociacion, mes y material
+// GET /sistema/validador/balance?desde&hasta[&id_centro] -> filas del formato SUI de balance de masas
+// (una por material registrado), tal cual el export del sistema original. Las 11 primeras columnas
+// van al CSV del validador; el resto es solo de control para la asociacion.
+//  - Semana: semana del mes empezando en domingo (igual al calendario del sistema original).
+//  - Tipo ident. 1 (cedula), placa 999 (traccion humana), tipo de destino 1 y sitio 655611001
+//    (Doña Juana) son fijos por definicion del cliente.
+//  - Tipo material: codigo SUI del material padre (los de 4 digitos son variantes del de 3).
+router.get('/validador/balance', exigir('validador_bm'), guard(async (req, res) => {
+  const { desde, hasta } = req.query;
+  if (!isValidYmd(desde) || !isValidYmd(hasta) || desde > hasta) return res.status(400).json({ error: 'Elige las fechas inicial y final.' });
+  let ids = req.sis.idsCentros;
+  if (req.query.id_centro) {
+    const n = Number(req.query.id_centro);
+    if (!ids.includes(n)) return res.status(403).json({ error: 'No tienes acceso a esa asociación.' });
+    ids = [n];
+  }
+  const r = await pool.query(
+    `SELECT bm.id, bm.fecha, b.cod_bodega AS nueca, nm.cod_numacro AS numacro,
+            ((EXTRACT(DAY FROM bm.fecha)::int - 1 + EXTRACT(DOW FROM date_trunc('month', bm.fecha))::int) / 7) + 1 AS semana,
+            r.nro_documento, ROUND(bm.cantidad / 1000.0, 4)::float AS toneladas,
+            COALESCE(tm.cod_tipo_material_padre, CASE WHEN length(tm.cod_tipo_material) = 4 THEN left(tm.cod_tipo_material, 3) ELSE tm.cod_tipo_material END) AS tipo_material,
+            ROUND(COALESCE(bm.cantidad_rechazo, 0) / 1000.0, 4)::float AS toneladas_rechazo, bm.rechazo_estimado,
+            c.desc_centro AS asociacion, r.nombre_completo,
+            COALESCE(tm.desc_tipo_material_padre, p.desc_tipo_material, tm.desc_tipo_material) AS material,
+            ROUND(COALESCE(bm.valor, 0), 2)::float AS valor_kilogramo, ROUND(COALESCE(bm.valor, 0) * COALESCE(bm.cantidad, 0), 2)::float AS valor_total,
+            ROUND(COALESCE(bm.cantidad_rechazo, 0), 2)::float AS cantidad_rechazo, ROUND(COALESCE(bm.cantidad_nosui, 0), 2)::float AS cantidad_nosui
+     FROM tz_formulario_balance_masas bm
+     JOIN tz_centros c ON c.id = bm.id_centro
+     LEFT JOIN tz_recicladores r ON r.id = bm.id_reciclador
+     LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+     LEFT JOIN tz_tipos_material p ON p.cod_tipo_material = CASE WHEN length(tm.cod_tipo_material) = 4 THEN left(tm.cod_tipo_material, 3) ELSE tm.cod_tipo_material END
+     LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega
+     LEFT JOIN tz_numacros nm ON nm.id = bm.id_numacro
+     WHERE bm.id_centro = ANY($1::int[]) AND bm.fecha BETWEEN $2 AND $3 AND COALESCE(bm.cantidad, 0) > 0
+       AND ($4::int[] IS NULL OR bm.id_bodega = ANY($4::int[]))
+     ORDER BY bm.fecha, r.nombre_completo, tm.secuencia_orden, bm.id LIMIT 20000`,
+    [ids, desde, hasta, req.sis.ecas]);
+  res.json(r.rows);
+}));
+
 router.get('/resumen-masas', exigir('resumen_masas'), guard(async (req, res) => {
   const { desde, hasta } = req.query;
   if (!isValidYmd(desde) || !isValidYmd(hasta) || desde > hasta) return res.status(400).json({ error: 'Rango de fechas inválido.' });

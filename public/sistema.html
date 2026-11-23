@@ -200,6 +200,7 @@
     importar: '1) Elige el tipo de archivo · 2) Descarga la plantilla · 3) Llénala en Excel · 4) Súbela con "Importar". Las filas con errores no entran y se listan abajo.',
     documentos_asociaciones: 'Sube cada documento de la asociación con su fecha de vencimiento. El estado avisa cuando está por vencer o vencido.',
     documentos_referencia: 'Normas, formatos y documentos de consulta para todas las asociaciones.',
+    validador_bm: 'Revisa el balance de masas del periodo y descarga el CSV para el validador del SUI. Columnas azules = van al CSV; grises = solo control.',
     resumen_masas: 'Elige el rango de fechas y "Ver" para sumar el material recibido por mes, material o familia.',
     colaboradores: 'Personas que entran al sistema. Crea el usuario, asígnale perfil y asociación; para bloquearlo, ponlo en "Bloqueado" con un mensaje.',
     perfiles: 'Cada perfil define qué opciones del menú ve el usuario. Usa "Opciones" para marcarlas.',
@@ -661,6 +662,8 @@
       desdeExistentes(); salirAnexo();
       var f = filas[0] || {};
       $('bmBodega').value = f.id_bodega || ''; $('bmMacro').value = f.id_numacro || ''; $('bmMicro1').value = f.id_microrruta_1 || ''; $('bmMicro2').value = f.id_microrruta_2 || '';
+      // Si la asociacion tiene una sola ECA o un solo Numacro, queda elegido solo.
+      ['bmBodega', 'bmMacro'].forEach(function(id){ var ops = $(id).querySelectorAll('option[value]:not([value=""])'); if(!$(id).value && ops.length === 1){ $(id).value = ops[0].value; if(filas.length){ BM.dirty = true; programarGuardado(800); } } });
       pintarGridBm(); pasoBm();
       botonBm(filas.length ? 'guardado' : 'vacio');
       estadoBm(filas.length ? '✓ Este día ya tiene ' + filas.length + ' material(es) guardado(s). Puedes corregir o imprimir.' : 'Escribe los kilos de cada material. Se guarda solo.', filas.length ? 'ok' : '');
@@ -684,6 +687,9 @@
     var f = $('bmFecha').value;
     if(!f) out.unshift('Elige la fecha.'); else if(f > (SIS.me.hoy || gtTodayCO())) out.unshift('No se puede registrar material con fecha futura.');
     if($('bmMicro1').value && $('bmMicro1').value === $('bmMicro2').value) out.unshift('Microrruta 1 y Microrruta 2 no pueden ser la misma.');
+    // Para el reporte al SUI cada registro necesita su ECA y su Numacro.
+    var hayKg = Object.keys(BM.valores).some(function(id){ return n0(BM.valores[id].cantidad) > 0; });
+    if(hayKg && BM.sel && (!$('bmBodega').value || !$('bmMacro').value)) out.unshift(($('bmBodega').querySelectorAll('option').length > 1 && $('bmMacro').querySelectorAll('option').length > 1) ? 'Elige la ECA (NUECA) y el Numacro.' : 'Esta asociación no tiene ' + ($('bmBodega').querySelectorAll('option').length > 1 ? 'Numacros' : 'ECAs') + ' creados: créalos primero en Tablas de referencia.');
     return out;
   }
   // Precio fijo del material para la asociacion del reciclador elegido (o null).
@@ -1092,6 +1098,71 @@
   };
 
   // ---------- Resumenes ----------
+  // ---------- Descarga para validador (balance de masas en formato SUI) ----------
+  // Se ve todo (19 columnas) y el CSV solo lleva las 11 del formato SUI, separadas por ";" y con
+  // coma decimal, igual al export del sistema original.
+  var VAL_COLS = [
+    { k: 'nueca', t: 'NUECA' }, { k: 'numacro', t: 'NUMACRO' }, { k: 'semana', t: 'Número de semana' },
+    { k: 'tipo_ident', t: 'Tipo ident.', fijo: 1 }, { k: 'nro_documento', t: 'Nro ident.' }, { k: 'placa', t: 'placa', fijo: '999' },
+    { k: 'toneladas', t: 'toneladas', dec: 4 }, { k: 'tipo_material', t: 'Tipo Material' }, { k: 'toneladas_rechazo', t: 'Toneladas_rechazo', dec: 4 },
+    { k: 'tipo_destino', t: 'Tipo de destino ', fijo: 1 }, { k: 'sitio', t: 'Número único del sitio de destino', fijo: '655611001' },
+    // Control de la asociacion (no van al CSV)
+    { k: 'asociacion', t: 'Asociación', ctl: true }, { k: 'fecha', t: 'fecha', ctl: true }, { k: 'nombre_completo', t: 'nombre_completo', ctl: true },
+    { k: 'material', t: 'desc_tipo_material_padre', ctl: true }, { k: 'valor_kilogramo', t: 'valor_kilogramo', dec: 2, ctl: true },
+    { k: 'valor_total', t: 'valor_total', dec: 2, ctl: true }, { k: 'cantidad_rechazo', t: 'cantidad_rechazo', dec: 2, ctl: true }, { k: 'cantidad_nosui', t: 'cantidad_nosui', dec: 2, ctl: true }
+  ];
+  function valorVal(c, x){ var v = c.fijo !== undefined ? c.fijo : x[c.k]; return v === null || v === undefined ? '' : v; }
+  PANTALLAS.validador_bm = function(main){
+    var hoy = SIS.me.hoy || gtTodayCO();
+    main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>' + ic('excel') + ' Descarga para validador</h2>' +
+      (SIS.me.todasAsociaciones ? '<select id="vlCentro">' + SIS.me.centros.map(function(c){ return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('') + '</select>' : '') +
+      '<span class="muted">Fecha inicial</span><input type="date" id="vlDesde" value="' + hoy.slice(0, 8) + '01"><span class="muted">Fecha final</span><input type="date" id="vlHasta" value="' + hoy + '"><button class="b pri" id="vlVer">Ver</button>' +
+      '<span class="spacer"></span><button class="b nar" id="vlCsv" disabled>' + ic('excel') + ' Descargar CSV para el validador</button></div>' + ayuda('validador_bm') +
+      '<p id="vlMsg" class="msg"></p><div id="vlRes" class="muted" style="padding:2px 4px 8px;font-size:12.5px;"></div><div class="tw" id="vlTabla"></div></div>';
+    var filas = [];
+    var pintar = function(){
+      var faltan = filas.filter(function(x){ return !x.nueca || !x.numacro; });
+      var ton = filas.reduce(function(s, x){ return s + Number(x.toneladas); }, 0);
+      var est = filas.filter(function(x){ return x.rechazo_estimado; }).length;
+      $('vlRes').innerHTML = filas.length ? filas.length + ' fila(s) · ' + num(ton, 4) + ' toneladas' + (est ? ' · ' + est + ' con rechazo estimado (' + esc('1,8 %') + ')' : '') : '';
+      $('vlCsv').disabled = !filas.length || faltan.length > 0;
+      if(faltan.length) setMsg('vlMsg', faltan.length + ' fila(s) no tienen ECA (NUECA) o Numacro (marcadas en rojo). Corrígelas en el Formulario Balance de Masas antes de descargar: el validador las rechazaría.', 'err');
+      else setMsg('vlMsg', filas.length ? 'Listo para descargar. El CSV lleva solo las columnas azules (formato SUI).' : '', filas.length ? 'ok' : '');
+      $('vlTabla').innerHTML = filas.length ? '<table class="t"><thead><tr>' + VAL_COLS.map(function(c, i){
+          return '<th' + (c.dec ? ' class="num"' : '') + ' style="' + (c.ctl ? 'background:#F1F3F6;color:#5b6b80;' : 'background:#DCEBFA;color:#0B3D80;') + '" title="' + (c.ctl ? 'Solo control (no va al CSV)' : 'Va al CSV del validador') + '">' + (i + 1) + '. ' + esc(c.t) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+        filas.slice(0, 3000).map(function(x){
+          return '<tr>' + VAL_COLS.map(function(c){
+            var v = valorVal(c, x), mal = (c.k === 'nueca' || c.k === 'numacro') && !v;
+            var txt = c.dec ? num(Number(v), c.dec) : String(v);
+            if(c.k === 'toneladas_rechazo' && x.rechazo_estimado) txt += ' <span class="muted" title="Rechazo estimado">est.</span>';
+            return '<td' + (c.dec ? ' class="num"' : '') + (mal ? ' style="background:#FDE2E1;color:#B42318;font-weight:600;"' : '') + '>' + (mal ? 'Falta' : (c.k === 'toneladas_rechazo' ? txt : esc(txt))) + '</td>';
+          }).join('') + '</tr>'; }).join('') + '</tbody></table>' + (filas.length > 3000 ? '<p class="muted" style="padding:6px;">Se muestran 3.000 de ' + filas.length + ' filas; el CSV las lleva todas.</p>' : '')
+        : '<p class="muted" style="padding:10px;">Sin registros de balance de masas en esas fechas.</p>';
+    };
+    var cargar = function(){
+      var d = $('vlDesde').value, h = $('vlHasta').value;
+      if(!d || !h) return setMsg('vlMsg', 'Se deben seleccionar fechas de inicio y fin del export.', 'err');
+      if(d > h) return setMsg('vlMsg', 'La fecha inicial no puede ser mayor que la final.', 'err');
+      $('vlTabla').innerHTML = '<p class="muted" style="padding:10px;">Cargando…</p>';
+      api('/validador/balance?desde=' + d + '&hasta=' + h + ($('vlCentro') ? '&id_centro=' + $('vlCentro').value : '')).then(function(r){
+        if(!r.ok){ $('vlTabla').innerHTML = ''; return setMsg('vlMsg', r.data.error || 'No se pudo cargar.', 'err'); }
+        filas = r.data; pintar();
+      });
+    };
+    $('vlVer').onclick = cargar;
+    $('vlCsv').onclick = function(){
+      var sui = VAL_COLS.filter(function(c){ return !c.ctl; });
+      // Igual al archivo del sistema original (SheetJS + MySQL FORMAT): BOM UTF-8, ";" entre columnas,
+      // salto de linea \n sin linea final, miles con "." y decimales con "," (FORMAT(x,4) -> 1.234,5678),
+      // y comillas solo si el valor trae ; o comillas.
+      var dec = function(v, n){ var p = Number(v).toFixed(n).split('.'); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1]; };
+      var cel = function(c, x){ var v = valorVal(c, x); v = c.dec ? dec(v, c.dec) : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      var txt = [sui.map(function(c){ return c.t; }).join(';')].concat(filas.map(function(x){ return sui.map(function(c){ return cel(c, x); }).join(';'); })).join('\n');
+      descargar('﻿' + txt, 'formulario_de_masas_' + $('vlDesde').value + '_a_' + $('vlHasta').value + '.csv');
+    };
+    cargar();
+  };
+
   PANTALLAS.resumen_masas = function(main){
     var hoy = SIS.me.hoy || gtTodayCO();
     main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Resumen formulario masas</h2>' +

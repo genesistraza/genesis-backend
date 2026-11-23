@@ -1322,3 +1322,13 @@ CREATE TABLE IF NOT EXISTS gt_usuario_ecas (
 
 -- Cuantas ECAs puede crear cada asociacion en Registro (lo define el fundador o el asesor).
 ALTER TABLE associations ADD COLUMN IF NOT EXISTS max_ecas INT NOT NULL DEFAULT 1;
+
+-- Descarga del balance de masas para el validador del SUI (menu Resumenes).
+WITH nuevo AS (
+  INSERT INTO gt_submenu (id, id_menu, cod_item, descripcion, clave)
+  VALUES (127, 17, 300, 'Descarga para validador', 'validador_bm')
+  ON CONFLICT (id) DO NOTHING RETURNING id
+)
+INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
+SELECT p.id, n.id FROM nuevo n CROSS JOIN (VALUES (8), (9)) AS p(id)
+ON CONFLICT DO NOTHING;
