@@ -1,5 +1,20 @@
 const pool = require('./pool');
 
+// Fuente del balance de masas de una asociacion ($1 = association_id): lo subido por Excel desde el
+// panel de administracion (mass_balance_entries) MAS lo registrado en Registro (formulario de balance
+// del sistema). En Registro la cantidad y el rechazo van en kilos y el valor es por kilo.
+const FUENTE = `(
+  SELECT fecha, semana, reciclador_documento, reciclador_nombre, material_desc, toneladas, toneladas_rechazo, valor_total
+  FROM mass_balance_entries WHERE association_id = $1
+  UNION ALL
+  SELECT bm.fecha, ((EXTRACT(DAY FROM bm.fecha)::int - 1) / 7) + 1 AS semana, r.nro_documento, r.nombre_completo, tm.desc_tipo_material,
+         COALESCE(bm.cantidad, 0) / 1000.0, COALESCE(bm.cantidad_rechazo, 0) / 1000.0, COALESCE(bm.cantidad, 0) * COALESCE(bm.valor, 0)
+  FROM tz_formulario_balance_masas bm
+  JOIN tz_centros c ON c.id = bm.id_centro AND c.modulo = 'sistema' AND c.association_id = $1
+  LEFT JOIN tz_recicladores r ON r.id = bm.id_reciclador
+  LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
+) src`;
+
 // Traduce (period, value) a una condicion SQL y a la granularidad con la que se debe agrupar
 // la grafica: por año -> se agrupa por mes; por mes o por semana -> se agrupa por dia.
 function resolvePeriodFilter(period, value) {
@@ -33,7 +48,7 @@ async function getMassBalanceSummary(associationId, period, value) {
        COUNT(DISTINCT reciclador_documento) AS recicladores_activos,
        MIN(fecha) AS fecha_min,
        MAX(fecha) AS fecha_max
-     FROM mass_balance_entries WHERE association_id = $1 ${filter.whereExtra}`,
+     FROM ${FUENTE} WHERE true ${filter.whereExtra}`,
     params
   );
 
@@ -41,7 +56,7 @@ async function getMassBalanceSummary(associationId, period, value) {
     `SELECT ${filter.groupExpr} AS bucket,
             COALESCE(SUM(toneladas), 0) AS toneladas,
             COALESCE(SUM(valor_total), 0) AS valor
-     FROM mass_balance_entries WHERE association_id = $1 ${filter.whereExtra}
+     FROM ${FUENTE} WHERE true ${filter.whereExtra}
      GROUP BY 1 ORDER BY 1`,
     params
   );
@@ -50,15 +65,15 @@ async function getMassBalanceSummary(associationId, period, value) {
     `SELECT material_desc,
             COALESCE(SUM(toneladas), 0) AS toneladas,
             COALESCE(SUM(valor_total), 0) AS valor
-     FROM mass_balance_entries WHERE association_id = $1 ${filter.whereExtra}
+     FROM ${FUENTE} WHERE true ${filter.whereExtra}
      GROUP BY material_desc ORDER BY toneladas DESC`,
     params
   );
 
   const recent = await pool.query(
     `SELECT fecha, reciclador_nombre, material_desc, toneladas, valor_total
-     FROM mass_balance_entries WHERE association_id = $1 ${filter.whereExtra}
-     ORDER BY fecha DESC, id DESC LIMIT 30`,
+     FROM ${FUENTE} WHERE true ${filter.whereExtra}
+     ORDER BY fecha DESC LIMIT 30`,
     params
   );
 
@@ -75,18 +90,16 @@ async function getMassBalanceSummary(associationId, period, value) {
 // filtro sin adivinar rangos vacios.
 async function getMassBalancePeriods(associationId) {
   const years = await pool.query(
-    `SELECT DISTINCT to_char(fecha,'YYYY') AS year FROM mass_balance_entries
-     WHERE association_id = $1 ORDER BY 1 DESC`,
+    `SELECT DISTINCT to_char(fecha,'YYYY') AS year FROM ${FUENTE} ORDER BY 1 DESC`,
     [associationId]
   );
   const months = await pool.query(
-    `SELECT DISTINCT to_char(fecha,'YYYY-MM') AS month FROM mass_balance_entries
-     WHERE association_id = $1 ORDER BY 1 DESC`,
+    `SELECT DISTINCT to_char(fecha,'YYYY-MM') AS month FROM ${FUENTE} ORDER BY 1 DESC`,
     [associationId]
   );
   const weeks = await pool.query(
     `SELECT to_char(fecha,'YYYY') AS year, semana, MIN(fecha) AS inicio, MAX(fecha) AS fin
-     FROM mass_balance_entries WHERE association_id = $1 AND semana IS NOT NULL
+     FROM ${FUENTE} WHERE semana IS NOT NULL
      GROUP BY 1, 2 ORDER BY 1 DESC, 2 DESC`,
     [associationId]
   );
@@ -116,14 +129,21 @@ async function getRecicladoresConPagoMes(associationId, month) {
     `SELECT r.id, r.documento_numero, r.nombre_completo,
             COALESCE(m.toneladas, 0) AS toneladas_mes,
             COALESCE(m.valor_total, 0) AS pago_mes
-     FROM recicladores r
+     FROM (
+       -- Recicladores subidos por Excel y los creados en Registro (sin repetir la misma cedula)
+       SELECT DISTINCT ON (documento_numero) * FROM (
+         SELECT id, documento_numero, nombre_completo, 1 AS orden FROM recicladores WHERE association_id = $1
+         UNION ALL
+         SELECT t.id, t.nro_documento, t.nombre_completo, 2 FROM tz_recicladores t
+         JOIN tz_centros c ON c.id = t.id_centro AND c.modulo = 'sistema' AND c.association_id = $1
+       ) u ORDER BY documento_numero, orden
+     ) r
      LEFT JOIN (
        SELECT reciclador_documento, SUM(toneladas) AS toneladas, SUM(valor_total) AS valor_total
-       FROM mass_balance_entries
-       WHERE association_id = $1 AND to_char(fecha, 'YYYY-MM') = $2
+       FROM ${FUENTE}
+       WHERE to_char(fecha, 'YYYY-MM') = $2
        GROUP BY reciclador_documento
      ) m ON m.reciclador_documento = r.documento_numero
-     WHERE r.association_id = $1
      ORDER BY r.nombre_completo`,
     [associationId, targetMonth]
   );

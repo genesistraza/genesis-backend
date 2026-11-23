@@ -50,6 +50,8 @@ const CAMPOS_ORIGINAL = {
     'distancia_via_no_pavimentada', 'distancia_via_pavimentada', 'frecuencia_semanal', 'dias_frecuencia', 'id_estacion_transferencia'],
   aprovechamiento: ['id_centro', 'periodo', 'id_usuario', 'id_numacro', 'toneladas'],
   recursos: ['id_centro', 'fecha', 'nuap', 'operador', 'valor'],
+  // Sin "Macrorruta": en Registro la ruta es el Numacro (las macrorrutas son de Pruebas).
+  balance_masas: ['id_centro', 'id_reciclador', 'id_tipo_material', 'id_numacro', 'id_bodega', 'fecha', 'cantidad', 'valor', 'cantidad_rechazo', 'cantidad_nosui'],
   bodegas: ['id_centro', 'cod_bodega', 'desc_bodega', 'direccion', 'desc_ubicacion', 'fecha_inicio_operaciones']
 };
 // ECAs: una asociacion puede tener varias (pantalla "ECAs"). A cada trabajador se le dice a cuales
@@ -241,7 +243,7 @@ function centroDestino(req, valor) {
 // fijos del destino del rechazo y el enlace del dashboard (tareas del administrador).
 const SOLO_ADMIN = new Set(['id_tipo_destino', 'numero_sitio_destino', 'link_dashboard']);
 // Nombres que se ven en Registro (los de Pruebas quedan igual).
-const ETIQUETAS_REGISTRO = { bodegas: { id_centro: 'Asociación', cod_bodega: 'Número ECA (NUECA)', desc_bodega: 'Nombre de la ECA', desc_ubicacion: 'Barrio / ubicación' } };
+const ETIQUETAS_REGISTRO = { balance_masas: { id_centro: 'Asociación', id_bodega: 'ECA (NUECA)' }, bodegas: { id_centro: 'Asociación', cod_bodega: 'Número ECA (NUECA)', desc_bodega: 'Nombre de la ECA', desc_ubicacion: 'Barrio / ubicación' } };
 function camposVisibles(req, key, entity) {
   const et = ETIQUETAS_REGISTRO[key] || {};
   return entity.fields.map((f) => (et[f.name] ? Object.assign({}, f, { label: et[f.name] }) : f)).filter((f) => campoOriginal(key, f.name) && (req.sis.todas || f.name !== 'id_centro') && (req.sis.todas || key !== 'centros' || !SOLO_ADMIN.has(f.name)));
