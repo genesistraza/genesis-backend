@@ -63,7 +63,9 @@
   /* Modal */
   .ov{ display:none;position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:100;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto; }
   .ov.open{ display:flex; }
-  .md{ background:#fff;border-radius:10px;width:100%;max-width:640px;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  .md{ position:relative;background:#fff;border-radius:10px;width:100%;max-width:640px;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  .md-x{ position:absolute;top:8px;right:10px;border:0;background:transparent;font-size:24px;line-height:1;color:#5b6b80;cursor:pointer;padding:2px 6px;border-radius:6px; }
+  .md-x:hover{ background:#EAF4FD;color:#0B3D80; }
   .md h3{ margin:0 0 10px;font-size:14px;color:var(--blue-deep); }
   .fg{ display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px 12px; }
   .fg label{ display:block;font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px; }
@@ -240,9 +242,10 @@
   function fecha(s){ if(!s) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? m[3] + '/' + m[2] + '/' + m[1] : String(s); }
   function api(path, opt){ return gtApiFetch('/sistema' + path, opt); }
   function setMsg(id, txt, tipo){ var el = $(id); if(!el) return; el.className = 'msg ' + (tipo || ''); el.textContent = txt || ''; }
-  function abrirModal(html){ $('md').innerHTML = html; $('ov').classList.add('open'); }
+  // Las ventanas solo se cierran con la X (o Cancelar): un clic por fuera ya no las cierra,
+  // para no perder lo que se estaba escribiendo.
+  function abrirModal(html){ $('md').innerHTML = '<button type="button" class="md-x" title="Cerrar" onclick="cerrarModal()">&times;</button>' + html; $('ov').classList.add('open'); }
   function cerrarModal(){ $('ov').classList.remove('open'); $('md').innerHTML = ''; }
-  $('ov').addEventListener('click', function(e){ if(e.target === $('ov')) cerrarModal(); });
   function descargar(contenido, nombre, mime){
     var blob = contenido instanceof Blob ? contenido : new Blob([contenido], { type: mime || 'text/csv;charset=utf-8' });
     var url = URL.createObjectURL(blob); var a = document.createElement('a');

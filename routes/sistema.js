@@ -50,7 +50,7 @@ const CAMPOS_ORIGINAL = {
     'distancia_via_no_pavimentada', 'distancia_via_pavimentada', 'frecuencia_semanal', 'dias_frecuencia', 'id_estacion_transferencia'],
   aprovechamiento: ['id_centro', 'periodo', 'id_usuario', 'id_numacro', 'toneladas'],
   recursos: ['id_centro', 'fecha', 'nuap', 'operador', 'valor'],
-  bodegas: ['id_centro', 'cod_bodega', 'desc_bodega', 'direccion', 'desc_ubicacion', 'longitud', 'latitud', 'fecha_inicio_operaciones']
+  bodegas: ['id_centro', 'cod_bodega', 'desc_bodega', 'direccion', 'desc_ubicacion', 'fecha_inicio_operaciones']
 };
 // ECAs: una asociacion puede tener varias (pantalla "ECAs"). A cada trabajador se le dice a cuales
 // tiene acceso (gt_usuario_ecas); sin ninguna marcada = todas las de su asociacion.
