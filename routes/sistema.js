@@ -581,11 +581,13 @@ router.get('/bm/reciclador/:id', exigir('balance_masas'), guard(async (req, res)
   if (!rec) return res.status(404).json({ error: 'Reciclador no encontrado.' });
   const [b, m, d] = await Promise.all([
     pool.query('SELECT id, cod_bodega, desc_bodega FROM tz_bodegas WHERE id_centro = $1 AND ($2::int[] IS NULL OR id = ANY($2::int[])) ORDER BY cod_bodega', [rec.id_centro, req.sis.ecas]),
-    pool.query('SELECT id, cod_macrorruta, desc_macrorruta FROM tz_macrorrutas WHERE id_centro = $1 ORDER BY cod_macrorruta', [rec.id_centro]),
+    // Numacros de la asociacion (pantalla Numacros Asociaciones/Localidades), como en el sistema original.
+    pool.query(`SELECT n.id, n.cod_numacro, l.desc_localidad FROM tz_numacros n LEFT JOIN tz_localidades l ON l.id = n.id_localidad
+                WHERE n.id_centro = $1 ORDER BY n.cod_numacro`, [rec.id_centro]),
     pool.query(`SELECT d.id, d.desc_microrruta FROM tz_formulario_microrrutas_detalle d JOIN tz_formulario_microrrutas f ON f.id = d.id_formulario_microrruta
                 WHERE f.id_centro = $1 AND (f.id_reciclador = $2 OR f.id_reciclador IS NULL) ORDER BY d.id`, [rec.id_centro, rec.id])
   ]);
-  res.json({ bodegas: b.rows, macrorrutas: m.rows, microrrutas: d.rows });
+  res.json({ bodegas: b.rows, numacros: m.rows, microrrutas: d.rows });
 }));
 
 // POST /sistema/bm/factura {id_reciclador, fecha} -> factura diaria del reciclador (mismo diseño de
@@ -603,10 +605,12 @@ router.post('/bm/factura', exigir('balance_masas'), guard(async (req, res) => {
      FROM tz_recicladores r JOIN tz_centros c ON c.id = r.id_centro LEFT JOIN associations a ON a.id = c.association_id WHERE r.id = $1`, [vis.id])).rows[0];
   const filas = (await pool.query(
     `SELECT bm.cantidad, bm.valor, bm.cantidad_rechazo, bm.cantidad_nosui, tm.desc_tipo_material,
-            b.cod_bodega, b.desc_bodega, m.cod_macrorruta, m.desc_macrorruta, d1.desc_microrruta AS micro1, d2.desc_microrruta AS micro2
+            b.cod_bodega, b.desc_bodega, m.cod_macrorruta, m.desc_macrorruta, nm.cod_numacro, nl.desc_localidad AS numacro_localidad,
+            d1.desc_microrruta AS micro1, d2.desc_microrruta AS micro2
      FROM tz_formulario_balance_masas bm
      LEFT JOIN tz_tipos_material tm ON tm.id = bm.id_tipo_material
      LEFT JOIN tz_bodegas b ON b.id = bm.id_bodega LEFT JOIN tz_macrorrutas m ON m.id = bm.id_macrorruta
+     LEFT JOIN tz_numacros nm ON nm.id = bm.id_numacro LEFT JOIN tz_localidades nl ON nl.id = nm.id_localidad
      LEFT JOIN tz_formulario_microrrutas_detalle d1 ON d1.id = bm.id_microrruta_1 LEFT JOIN tz_formulario_microrrutas_detalle d2 ON d2.id = bm.id_microrruta_2
      WHERE bm.id_reciclador = $1 AND bm.fecha = $2 ORDER BY tm.secuencia_orden, bm.id`, [vis.id, fecha])).rows;
   if (!filas.length) return res.status(404).json({ error: 'Este reciclador no tiene material registrado ese día. Escribe primero los kilos.' });
@@ -624,7 +628,7 @@ router.post('/bm/factura', exigir('balance_masas'), guard(async (req, res) => {
     diaSemana: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'][new Date(Date.UTC(y, m - 1, d)).getUTCDay()],
     centro: { nombre: rec.desc_centro, nit: rec.nit, direccion: rec.direccion, telefono: rec.telefono, correo: rec.correo, logoUrl: rec.logo_url || null },
     reciclador: { nombre: rec.nombre_completo, documento: rec.nro_documento, vehiculo: rec.tipo_de_vehiculo, placa: rec.placa },
-    operacion: { eca: combo(f0.cod_bodega, f0.desc_bodega), macrorruta: combo(f0.cod_macrorruta, f0.desc_macrorruta), micro1: f0.micro1, micro2: f0.micro2 },
+    operacion: { eca: combo(f0.cod_bodega, f0.desc_bodega), macrorruta: combo(f0.cod_numacro, f0.numacro_localidad) || combo(f0.cod_macrorruta, f0.desc_macrorruta), micro1: f0.micro1, micro2: f0.micro2 },
     rows, totales
   };
   // Misma factura si los datos no cambiaron (el logo no cuenta como cambio).

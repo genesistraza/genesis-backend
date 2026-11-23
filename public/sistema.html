@@ -537,7 +537,7 @@
       '<div><label>Reciclador</label><button class="b pri" id="bmBuscar" style="width:100%;">' + ic('buscar') + ' Buscar reciclador</button></div>' +
       '<div><label>Nombre</label><input id="bmNombre" disabled></div><div><label>Documento</label><input id="bmDoc" disabled></div>' +
       '<div><label>Vehículo</label><input id="bmVeh" disabled></div><div><label>Placa</label><input id="bmPlaca" disabled></div>' +
-      '<div><label>ECA (NUECA)</label><select id="bmBodega" disabled></select></div><div><label>Macrorruta (NUMACRO)</label><select id="bmMacro" disabled></select></div>' +
+      '<div><label>ECA (NUECA)</label><select id="bmBodega" disabled></select></div><div><label>Numacro</label><select id="bmMacro" disabled></select></div>' +
       '<div><label>Microrruta 1</label><select id="bmMicro1" disabled></select></div><div><label>Microrruta 2</label><select id="bmMicro2" disabled></select></div>' +
       '<div><label>Familia de materiales</label><select id="bmFamilia"></select></div></div>' +
       '<div class="sis-bar">' +
@@ -632,9 +632,9 @@
     $('bmBorrar').disabled = false; $('bmBorrar').style.display = puedeAcc('balance_masas', 'borrar') ? '' : 'none';
     api('/bm/reciclador/' + r.id).then(function(res){
       if(BM.sel !== r) return;
-      var d = res.ok ? res.data : { bodegas: [], macrorrutas: [], microrrutas: [] };
+      var d = res.ok ? res.data : { bodegas: [], numacros: [], microrrutas: [] };
       llenarSel('bmBodega', d.bodegas, function(b){ return (b.cod_bodega || '') + ' - ' + (b.desc_bodega || ''); });
-      llenarSel('bmMacro', d.macrorrutas, function(m){ return (m.cod_macrorruta || '') + ' - ' + (m.desc_macrorruta || ''); });
+      llenarSel('bmMacro', d.numacros, function(m){ return (m.cod_numacro || '') + (m.desc_localidad ? ' - ' + m.desc_localidad : ''); });
       llenarSel('bmMicro1', d.microrrutas, function(m){ return m.desc_microrruta || ('Microrruta ' + m.id); });
       llenarSel('bmMicro2', d.microrrutas, function(m){ return m.desc_microrruta || ('Microrruta ' + m.id); });
       cargarDiaBm();
@@ -660,7 +660,7 @@
       filas.forEach(function(x){ BM.existentes[x.id_tipo_material] = x; });
       desdeExistentes(); salirAnexo();
       var f = filas[0] || {};
-      $('bmBodega').value = f.id_bodega || ''; $('bmMacro').value = f.id_macrorruta || ''; $('bmMicro1').value = f.id_microrruta_1 || ''; $('bmMicro2').value = f.id_microrruta_2 || '';
+      $('bmBodega').value = f.id_bodega || ''; $('bmMacro').value = f.id_numacro || ''; $('bmMicro1').value = f.id_microrruta_1 || ''; $('bmMicro2').value = f.id_microrruta_2 || '';
       pintarGridBm(); pasoBm();
       botonBm(filas.length ? 'guardado' : 'vacio');
       estadoBm(filas.length ? '✓ Este día ya tiene ' + filas.length + ' material(es) guardado(s). Puedes corregir o imprimir.' : 'Escribe los kilos de cada material. Se guarda solo.', filas.length ? 'ok' : '');
@@ -730,7 +730,7 @@
   }
   function cuerpoBm(materiales){
     return JSON.stringify({ id_reciclador: BM.sel.id, fecha: $('bmFecha').value, materiales: materiales,
-      id_bodega: $('bmBodega').value || null, id_macrorruta: $('bmMacro').value || null, id_microrruta_1: $('bmMicro1').value || null, id_microrruta_2: $('bmMicro2').value || null });
+      id_bodega: $('bmBodega').value || null, id_numacro: $('bmMacro').value || null, id_microrruta_1: $('bmMicro1').value || null, id_microrruta_2: $('bmMicro2').value || null });
   }
   function materialesBm(){
     return Object.keys(BM.valores).map(function(id){ var v = BM.valores[id]; return { id_tipo_material: Number(id), cantidad: n0(v.cantidad), valor: n0(v.valor), cantidad_rechazo: vacioRech(v) ? null : n0(v.cantidad_rechazo), cantidad_nosui: n0(v.cantidad_nosui) }; });

@@ -842,7 +842,7 @@ router.get('/balance-masas-dia', HANDLERS.bmDiaGet = guard(async (req, res) => {
   if (!idReciclador || !isValidYmd(req.query.fecha)) return res.status(400).json({ error: 'Falta id_reciclador o la fecha no es válida.' });
   const result = await pool.query(
     `SELECT id, id_tipo_material, cantidad, valor, cantidad_rechazo, cantidad_nosui, rechazo_estimado,
-            id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
+            id_numacro, id_bodega, id_macrorruta, id_microrruta_1, id_microrruta_2
      FROM tz_formulario_balance_masas WHERE id_reciclador = $1 AND fecha = $2`,
     [idReciclador, req.query.fecha]
   );
