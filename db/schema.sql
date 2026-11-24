@@ -1404,3 +1404,54 @@ CREATE TABLE IF NOT EXISTS ss_novedades (
   created_by INT REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP
 );
+
+-- Salud fase 1: liquidacion mensual de recicladores (Decreto 271/2026, Res. 1529/2026) y archivo PILA.
+CREATE TABLE IF NOT EXISTS ss_parametros (
+  anio INT PRIMARY KEY,
+  smlmv NUMERIC(14,2) NOT NULL,
+  tarifa_arl_clase5 NUMERIC(8,5) NOT NULL DEFAULT 6.96,
+  tarifa_beps NUMERIC(6,3) NOT NULL DEFAULT 5,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+-- 2026: Decreto 159 de 2026 (transitorio). Editable desde Salud > Parametros.
+INSERT INTO ss_parametros (anio, smlmv) VALUES (2026, 1750905) ON CONFLICT (anio) DO NOTHING;
+
+ALTER TABLE ss_empresas ADD COLUMN IF NOT EXISTS codigo_arl VARCHAR(6);
+ALTER TABLE ss_empresas ADD COLUMN IF NOT EXISTS cod_dane_municipio VARCHAR(5);
+ALTER TABLE ss_empresas ADD COLUMN IF NOT EXISTS centro_trabajo VARCHAR(9);
+ALTER TABLE ss_personas ADD COLUMN IF NOT EXISTS cod_dane_municipio VARCHAR(5);
+
+CREATE TABLE IF NOT EXISTS ss_liquidaciones (
+  id SERIAL PRIMARY KEY,
+  id_empresa INT NOT NULL REFERENCES ss_empresas(id) ON DELETE RESTRICT,
+  periodo VARCHAR(7) NOT NULL,
+  estado VARCHAR(12) NOT NULL DEFAULT 'Borrador',
+  smlmv NUMERIC(14,2) NOT NULL,
+  tarifa_arl NUMERIC(8,5) NOT NULL,
+  tarifa_beps NUMERIC(6,3) NOT NULL,
+  cotizantes INT NOT NULL DEFAULT 0,
+  total_arl NUMERIC(14,2) NOT NULL DEFAULT 0,
+  total_beps NUMERIC(14,2) NOT NULL DEFAULT 0,
+  cerrada_en TIMESTAMP, cerrada_por INT REFERENCES users(id) ON DELETE SET NULL,
+  numero_planilla VARCHAR(20), operador_pago VARCHAR(100), fecha_pago DATE, valor_pagado NUMERIC(14,2),
+  pago_registrado_por INT REFERENCES users(id) ON DELETE SET NULL,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP,
+  UNIQUE (id_empresa, periodo)
+);
+CREATE TABLE IF NOT EXISTS ss_liquidacion_detalle (
+  id SERIAL PRIMARY KEY,
+  id_liquidacion INT NOT NULL REFERENCES ss_liquidaciones(id) ON DELETE CASCADE,
+  id_persona INT REFERENCES ss_personas(id) ON DELETE SET NULL,
+  tipo_doc VARCHAR(5), nro_doc VARCHAR(20), nombres VARCHAR(100), apellidos VARCHAR(100),
+  cod_dane_municipio VARCHAR(5),
+  ingreso_mes NUMERIC(14,2) NOT NULL DEFAULT 0, fuente_ingreso VARCHAR(20),
+  dias_registro INT NOT NULL DEFAULT 0,
+  dias_arl INT NOT NULL DEFAULT 30, dias_irl INT NOT NULL DEFAULT 0,
+  fecha_inicio_irl DATE, fecha_fin_irl DATE,
+  ibc_arl NUMERIC(14,2) NOT NULL DEFAULT 0, aporte_arl NUMERIC(14,2) NOT NULL DEFAULT 0,
+  beps NUMERIC(14,2) NOT NULL DEFAULT 0,
+  nov_ingreso BOOLEAN NOT NULL DEFAULT FALSE, fecha_ingreso DATE,
+  nov_retiro BOOLEAN NOT NULL DEFAULT FALSE, fecha_retiro DATE,
+  alertas TEXT
+);

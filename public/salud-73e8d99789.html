@@ -100,8 +100,10 @@
   var MENU = [
     { t: 'Inicio', p: 'inicio' },
     { t: 'Registro de datos', items: [['empresas', 'Empresas'], ['recicladores', 'Recicladores'], ['trabajadores', 'Trabajadores'], ['beneficiarios', 'Beneficiarios']] },
-    { t: 'Novedades', p: 'novedades' }
+    { t: 'Novedades', p: 'novedades' },
+    { t: 'Liquidación', items: [['liquidacion', 'Liquidar mes (PILA)'], ['pagos', 'Control de pagos'], ['parametros', 'Parámetros']] }
   ];
+  var ESPECIALES = { liquidacion: pintarLiquidacion, pagos: pintarPagos, parametros: pintarParametros };
   var AYUDA = {
     empresas: 'Registra cada asociación que administran en seguridad social: datos, representante legal, ARL/caja/operador PILA y los documentos de afiliación recibidos (contrato, confidencialidad, mandato, Cámara, RUT, RUPS, cédula).',
     recicladores: 'Recicladores de oficio de la empresa (Decreto 271 de 2026): ARL que paga la organización sobre 1 SMLMV y aporte BEPS del 5 % del ingreso. Si la empresa está enlazada a su asociación de Genesis Traza, usa "Traer de Registro".',
@@ -127,7 +129,7 @@
   function abrirFly(el){ var ab = el.classList.contains('open'); document.querySelectorAll('.sis-mi.open').forEach(function(x){ x.classList.remove('open'); }); if(!ab) el.classList.add('open'); }
   document.addEventListener('click', function(e){ if(!e.target.closest('.sis-mi')) document.querySelectorAll('.sis-mi.open').forEach(function(x){ x.classList.remove('open'); }); });
 
-  function ir(p){ PANT = p; try { location.hash = p; } catch(e) {} pintarMenu(); if(p === 'inicio') return pintarInicio(); pintarPantalla(p); }
+  function ir(p){ PANT = p; try { location.hash = p; } catch(e) {} pintarMenu(); if(p === 'inicio') return pintarInicio(); if(ESPECIALES[p]) return ESPECIALES[p](); pintarPantalla(p); }
 
   function cargarEmpresas(){
     return api('/opciones/empresas').then(function(r){ EMPRESAS = r.ok ? r.data : []; });
@@ -265,13 +267,133 @@
     });
   }
 
+  // ---------- Liquidación mensual (recicladores, Decreto 271 / Res. 1529) ----------
+  var LIQ = null;
+  function cop(v){ return '$ ' + Number(v || 0).toLocaleString('es-CO', { maximumFractionDigits: 0 }); }
+  function mesAnterior(){ var h = gtTodayCO(), y = Number(h.slice(0, 4)), m = Number(h.slice(5, 7)) - 1; if(!m){ m = 12; y--; } return y + '-' + String(m).padStart(2, '0'); }
+  function bajar(path, nombre){
+    fetch(API_BASE + '/salud' + path, { headers: { 'Authorization': 'Bearer ' + gtGetToken() } }).then(function(r){
+      if(!r.ok) return r.json().then(function(d){ throw new Error(d.error || 'No se pudo descargar.'); });
+      var cd = r.headers.get('Content-Disposition') || '', m = cd.match(/filename="([^"]+)"/);
+      return r.blob().then(function(b){ var u = URL.createObjectURL(b), a = document.createElement('a'); a.href = u; a.download = m ? m[1] : nombre; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u); });
+    }).catch(function(e){ alert(e.message); });
+  }
+  function pintarLiquidacion(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Liquidar mes — recicladores (planilla Y · aportante 17 · cotizante 74)</h2></div>' +
+      '<div class="sis-bar">' + selectorEmpresa().replace('<option value="">Todas las empresas</option>', '<option value="">— Elige la empresa —</option>') +
+      '<span class="muted">Mes a liquidar</span><input type="month" id="lPer" value="' + mesAnterior() + '"><button class="b pri" id="lCalc">Calcular</button></div>' +
+      '<div class="ayuda">ARL: la paga la organización sobre 1 salario mínimo, clase de riesgo 5, mes vencido (los días de incapacidad laboral no cotizan). BEPS: 5 % de lo que ganó cada reciclador en el mes según Registro. Nada se le descuenta al reciclador. Revisa, guarda, cierra el mes y descarga el archivo para subirlo al operador PILA.</div>' +
+      '<p id="lMsg" class="msg"></p><div id="lRes"></div></div>';
+    $('lCalc').onclick = function(){ calcularLiq(); };
+    if($('fEmp')) $('fEmp').onchange = function(){ FILTRO_EMP = this.value; try { localStorage.setItem('salud_emp', FILTRO_EMP); } catch(e) {} };
+    if(FILTRO_EMP) calcularLiq();
+  }
+  function calcularLiq(msgOk){
+    var emp = $('fEmp').value, per = $('lPer').value;
+    if(!emp || !per) return setMsg('lMsg', 'Elige la empresa y el mes.', 'err');
+    setMsg('lMsg', 'Calculando…');
+    api('/liquidacion/calcular', { method: 'POST', body: JSON.stringify({ id_empresa: Number(emp), periodo: per }) }).then(function(r){
+      if(!r.ok){ $('lRes').innerHTML = ''; return setMsg('lMsg', (r.data && r.data.error) || 'No se pudo calcular.', 'err'); }
+      LIQ = r.data; setMsg('lMsg', msgOk || '', msgOk ? 'ok' : ''); pintarResultado();
+    });
+  }
+  function pintarResultado(){
+    var d = LIQ, g = d.guardada, est = g ? g.estado : null;
+    var tag = function(e){ return '<span class="tag ' + ({ Borrador: 'por', Cerrada: 'vig', Pagada: 'vig' }[e] || 'sin') + '">' + esc(e) + '</span>'; };
+    var kp = [[d.totales.cotizantes, 'Recicladores en planilla'], [cop(d.totales.arl), 'Total ARL (PILA)'], [cop(d.totales.beps), 'Total BEPS (Colpensiones)'], [cop(d.smlmv), 'Salario mínimo ' + d.periodo.slice(0, 4)], [String(d.tarifa_arl).replace('.', ',') + ' %', 'Tarifa ARL clase 5']];
+    var acc = '';
+    if(!est || est === 'Borrador') acc += '<button class="b pri" id="lGuardar">' + (est ? 'Volver a guardar borrador' : 'Guardar borrador') + '</button> ';
+    if(est === 'Borrador') acc += '<button class="b nar" id="lCerrar">Cerrar el mes</button> ';
+    if(est === 'Cerrada' || est === 'Pagada') acc += '<button class="b pri" onclick="bajar(\'/liquidaciones/' + g.id + '/pila\', \'PILA.txt\')">⇩ Archivo PILA (.txt)</button> ';
+    if(g) acc += '<button class="b" onclick="bajar(\'/liquidaciones/' + g.id + '/beps\', \'BEPS.csv\')">⇩ BEPS (.csv)</button> ';
+    if(est === 'Cerrada') acc += '<button class="b nar" onclick="registrarPago(' + g.id + ', ' + d.totales.arl + ')">Registrar pago</button> ';
+    var filas = d.filas;
+    $('lRes').innerHTML = '<div class="kpis">' + kp.map(function(k){ return '<div class="kpi"><div class="v">' + k[0] + '</div><div class="l">' + esc(k[1]) + '</div></div>'; }).join('') + '</div>' +
+      '<div class="sis-bar"><b>' + esc(d.empresa.nombre) + '</b> · periodo ' + esc(d.periodo) + ' · ' + (est ? tag(est) : '<span class="tag sin">Sin guardar</span>') + '<span class="spacer"></span>' + acc + '</div>' +
+      (d.errores.length ? '<div class="ayuda" style="background:#FDECEA;border-color:#F5C2BE;color:#B42318;"><b>Antes de cerrar:</b><br>' + d.errores.map(esc).join('<br>') + '</div>' : '') +
+      (filas.length ? '<div class="tw"><table class="t"><thead><tr><th>Documento</th><th>Reciclador</th><th class="num">Ingreso del mes</th><th>Fuente</th><th class="num">Días con registro</th><th class="num">Días ARL</th><th class="num">IRL</th><th class="num">IBC ARL</th><th class="num">Aporte ARL</th><th class="num">BEPS 5 %</th><th>Novedad</th><th>Alertas</th></tr></thead><tbody>' +
+        filas.map(function(f){
+          var malas = f.alertas.filter(function(a){ return a[0] === '!'; }), otras = f.alertas.filter(function(a){ return a[0] !== '!'; });
+          return '<tr' + (malas.length ? ' style="background:#FFF4F3;"' : '') + '><td>' + esc(f.tipo_doc + ' ' + f.nro_doc) + '</td><td>' + esc(f.apellidos + ' ' + f.nombres) + '</td><td class="num">' + cop(f.ingreso_mes) + '</td><td>' + esc(f.fuente_ingreso) + '</td><td class="num">' + f.dias_registro + '</td><td class="num">' + f.dias_arl + '</td><td class="num">' + (f.dias_irl || '') + '</td><td class="num">' + cop(f.ibc_arl) + '</td><td class="num"><b>' + cop(f.aporte_arl) + '</b></td><td class="num"><b>' + cop(f.beps) + '</b></td><td>' +
+            (f.nov_ingreso ? '<span class="tag vig" title="' + esc(f.fecha_ingreso) + '">ING</span> ' : '') + (f.nov_retiro ? '<span class="tag ven" title="' + esc(f.fecha_retiro) + '">RET</span>' : '') + '</td><td style="white-space:normal;max-width:360px;">' +
+            malas.map(function(a){ return '<div style="color:#B42318;font-weight:600;">⛔ ' + esc(a.slice(1)) + '</div>'; }).join('') + otras.map(function(a){ return '<div style="color:#A35F00;">⚠ ' + esc(a) + '</div>'; }).join('') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' : '');
+    if($('lGuardar')) $('lGuardar').onclick = function(){
+      this.disabled = true;
+      api('/liquidaciones', { method: 'POST', body: JSON.stringify({ id_empresa: d.empresa.id, periodo: d.periodo }) }).then(function(r){
+        if(!r.ok){ $('lGuardar').disabled = false; return setMsg('lMsg', (r.data && r.data.error) || 'No se pudo guardar.', 'err'); }
+        calcularLiq('Borrador guardado. Si todo está bien, cierra el mes para descargar el archivo PILA.');
+      });
+    };
+    if($('lCerrar')) $('lCerrar').onclick = function(){
+      if(!confirm('¿Cerrar la liquidación de ' + d.periodo + '? Después no se puede recalcular (solo el fundador puede reabrirla si aún no está pagada).')) return;
+      api('/liquidaciones/' + g.id + '/cerrar', { method: 'POST' }).then(function(r){
+        if(!r.ok) return setMsg('lMsg', (r.data && r.data.error) || 'No se pudo cerrar.', 'err');
+        calcularLiq('Mes cerrado. Descarga el archivo PILA y súbelo al operador (SOI, Aportes en Línea, Mi Planilla…).');
+      });
+    };
+  }
+  function registrarPago(id, total){
+    abrirModal('<h3>Registrar pago de la planilla</h3><div class="fg"><div><label>Número de planilla (del operador) *</label><input id="pNum"></div><div><label>Operador</label><input id="pOp" placeholder="SOI, Aportes en Línea, Mi Planilla…"></div>' +
+      '<div><label>Fecha de pago *</label><input type="date" id="pFec" value="' + gtTodayCO() + '"></div><div><label>Valor pagado *</label><input type="number" id="pVal" min="0" value="' + total + '"></div></div><p id="pMsg" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="pOk">Guardar</button></div>');
+    $('pOk').onclick = function(){
+      api('/liquidaciones/' + id + '/pago', { method: 'POST', body: JSON.stringify({ numero_planilla: $('pNum').value.trim(), operador_pago: $('pOp').value.trim(), fecha_pago: $('pFec').value, valor_pagado: $('pVal').value }) }).then(function(r){
+        if(!r.ok) return setMsg('pMsg', (r.data && r.data.error) || 'No se pudo guardar.', 'err');
+        cerrarModal(); if(PANT === 'liquidacion') calcularLiq(); else pintarPagos();
+      });
+    };
+  }
+  // ---------- Control de pagos ----------
+  function pintarPagos(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Control de pagos de planillas</h2>' + selectorEmpresa() + '</div><div class="ayuda">Cada mes liquidado: borrador, cerrado (listo para pagar) o pagado con su número de planilla. Lo que lleva más de 15 días cerrado sin pago se marca en rojo.</div><p id="cMsg" class="msg"></p><div class="tw" id="tb"></div></div>';
+    $('fEmp').onchange = function(){ FILTRO_EMP = this.value; try { localStorage.setItem('salud_emp', FILTRO_EMP); } catch(e) {} pintarPagos(); };
+    api('/liquidaciones' + (FILTRO_EMP ? '?id_empresa=' + FILTRO_EMP : '')).then(function(r){
+      if(!r.ok) return setMsg('cMsg', (r.data && r.data.error) || 'No se pudo cargar.', 'err');
+      var hoy = Date.parse(gtTodayCO() + 'T00:00:00Z');
+      $('tb').innerHTML = r.data.length ? '<table class="t"><thead><tr><th></th><th>Empresa</th><th>Periodo</th><th>Estado</th><th class="num">Recicladores</th><th class="num">Total ARL</th><th class="num">Total BEPS</th><th>Cerrada</th><th>Planilla</th><th>Operador</th><th>Fecha pago</th><th class="num">Valor pagado</th></tr></thead><tbody>' +
+        r.data.map(function(l){
+          var dias = l.cerrada_en ? Math.floor((hoy - Date.parse(l.cerrada_en.slice(0, 10) + 'T00:00:00Z')) / 86400000) : 0;
+          var mora = l.estado === 'Cerrada' && dias > 15;
+          return '<tr' + (mora ? ' style="background:#FFF4F3;"' : '') + '><td class="acc"><button class="b sm" onclick="FILTRO_EMP=\'' + l.id_empresa + '\';ir(\'liquidacion\');setTimeout(function(){ $(\'lPer\').value=\'' + l.periodo + '\'; calcularLiq(); }, 200)">Ver</button>' +
+            (l.estado !== 'Borrador' ? ' <button class="b sm" onclick="bajar(\'/liquidaciones/' + l.id + '/pila\', \'PILA.txt\')">PILA</button>' : '') +
+            (l.estado === 'Cerrada' ? ' <button class="b sm nar" onclick="registrarPago(' + l.id + ', ' + l.total_arl + ')">Pago</button>' : '') +
+            (l.estado === 'Cerrada' && session.role === 'pro' ? ' <button class="b sm" onclick="reabrir(' + l.id + ')">Reabrir</button>' : '') + '</td>' +
+            '<td>' + esc(l.empresa) + '</td><td>' + esc(l.periodo) + '</td><td><span class="tag ' + ({ Borrador: 'por', Cerrada: mora ? 'ven' : 'por', Pagada: 'vig' }[l.estado]) + '">' + esc(l.estado) + (mora ? ' · ' + dias + ' días sin pagar' : '') + '</span></td><td class="num">' + l.cotizantes + '</td><td class="num">' + cop(l.total_arl) + '</td><td class="num">' + cop(l.total_beps) + '</td><td>' + esc(l.cerrada_en || '') + '</td><td>' + esc(l.numero_planilla || '') + '</td><td>' + esc(l.operador_pago || '') + '</td><td>' + esc(l.fecha_pago || '') + '</td><td class="num">' + (l.valor_pagado ? cop(l.valor_pagado) : '') + '</td></tr>';
+        }).join('') + '</tbody></table>' : '<p class="muted" style="padding:10px;">Aún no hay meses liquidados.</p>';
+    });
+  }
+  function reabrir(id){
+    if(!confirm('¿Reabrir esta liquidación? Vuelve a borrador para recalcularla.')) return;
+    api('/liquidaciones/' + id + '/reabrir', { method: 'POST' }).then(function(r){ if(!r.ok) return alert((r.data && r.data.error) || 'No se pudo.'); pintarPagos(); });
+  }
+  // ---------- Parámetros ----------
+  function pintarParametros(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Parámetros por año</h2><span class="spacer"></span>' + (session.role === 'pro' ? '<button class="b pri" onclick="editarParam(null)">+ Año</button>' : '') + '</div><div class="ayuda">Salario mínimo y tarifas con que se liquida cada año. 2026: $1.750.905 (Decreto 159 de 2026). ARL clase 5: 6,96 %. BEPS: 5 %. Solo el fundador los cambia.</div><p id="prMsg" class="msg"></p><div class="tw" id="tb"></div></div>';
+    api('/parametros').then(function(r){
+      if(!r.ok) return setMsg('prMsg', (r.data && r.data.error) || 'No se pudo cargar.', 'err');
+      window.PARAMS = r.data;
+      $('tb').innerHTML = '<table class="t"><thead><tr><th></th><th>Año</th><th class="num">Salario mínimo</th><th class="num">Tarifa ARL clase 5</th><th class="num">BEPS</th></tr></thead><tbody>' +
+        r.data.map(function(p){ return '<tr><td class="acc">' + (session.role === 'pro' ? '<button class="b sm" onclick="editarParam(' + p.anio + ')">Editar</button>' : '') + '</td><td>' + p.anio + '</td><td class="num">' + cop(p.smlmv) + '</td><td class="num">' + String(p.tarifa_arl_clase5).replace('.', ',') + ' %</td><td class="num">' + String(p.tarifa_beps).replace('.', ',') + ' %</td></tr>'; }).join('') + '</tbody></table>';
+    });
+  }
+  function editarParam(anio){
+    var p = (window.PARAMS || []).filter(function(x){ return x.anio === anio; })[0] || { anio: new Date().getFullYear() + 1, smlmv: '', tarifa_arl_clase5: 6.96, tarifa_beps: 5 };
+    abrirModal('<h3>Parámetros ' + (anio || 'nuevo año') + '</h3><div class="fg"><div><label>Año *</label><input type="number" id="prA" value="' + p.anio + '"' + (anio ? ' disabled' : '') + '></div><div><label>Salario mínimo *</label><input type="number" id="prS" value="' + p.smlmv + '"></div><div><label>Tarifa ARL clase 5 (%) *</label><input type="number" step="any" id="prT" value="' + p.tarifa_arl_clase5 + '"></div><div><label>BEPS (%) *</label><input type="number" step="any" id="prB" value="' + p.tarifa_beps + '"></div></div><p id="prM" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="prOk">Guardar</button></div>');
+    $('prOk').onclick = function(){
+      api('/parametros/' + $('prA').value, { method: 'PUT', body: JSON.stringify({ smlmv: $('prS').value, tarifa_arl_clase5: $('prT').value, tarifa_beps: $('prB').value }) }).then(function(r){
+        if(!r.ok) return setMsg('prM', (r.data && r.data.error) || 'No se pudo guardar.', 'err');
+        cerrarModal(); pintarParametros();
+      });
+    };
+  }
+
   if(session){
     $('tInfo').textContent = session.fullName || '';
     Promise.all([api('/meta'), cargarEmpresas()]).then(function(r){
       if(!r[0].ok){ $('main').innerHTML = '<div class="sis-panel"><p class="msg err">' + esc((r[0].data && r[0].data.error) || 'No se pudo cargar Salud.') + '</p></div>'; return; }
       META = r[0].data;
       var h = (location.hash || '').replace('#', '');
-      ir(h && (META[h] || h === 'inicio') ? h : 'inicio');
+      ir(h && (META[h] || h === 'inicio' || ESPECIALES[h]) ? h : 'inicio');
     });
   }
 </script>
