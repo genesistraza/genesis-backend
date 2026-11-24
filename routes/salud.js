@@ -176,6 +176,11 @@ function chequeosCruzados(clave, v, previo) {
   if (x.fecha_retiro && x.fecha_ingreso && x.fecha_retiro < x.fecha_ingreso) e.push('La fecha de retiro no puede ser anterior a la de ingreso.');
   if (x.fecha_fin && x.fecha_inicio && x.fecha_fin < x.fecha_inicio) e.push('"Hasta" no puede ser anterior a la fecha de la novedad.');
   if ((clave === 'recicladores' || clave === 'trabajadores') && x.estado === 'Retirado' && !x.fecha_retiro) e.push('Escribe la fecha de retiro.');
+  // Novedades: los dias se calculan solos (dias calendario contando el primero y el ultimo).
+  if (clave === 'novedades' && ('fecha_inicio' in v || 'fecha_fin' in v || 'dias' in v)) {
+    v.dias = x.fecha_inicio && x.fecha_fin && x.fecha_fin >= x.fecha_inicio
+      ? Math.round((Date.parse(x.fecha_fin + 'T00:00:00Z') - Date.parse(x.fecha_inicio + 'T00:00:00Z')) / 86400000) + 1 : null;
+  }
   return e;
 }
 

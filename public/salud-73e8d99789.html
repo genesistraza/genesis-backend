@@ -217,6 +217,17 @@
       return sec + '<div>' + lab + '<input type="' + tipo + '"' + (c.t === 'num' ? ' step="any" min="0"' : c.t === 'int' ? ' step="1" min="0"' : '') + ' data-f="' + c.n + '" value="' + esc(c.t === 'date' ? String(v).slice(0, 10) : v) + '"></div>';
     }).join('') + '</div><p id="fMsg" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="fOk">Guardar</button></div>';
     abrirModal(html);
+    // Novedades: "Días" se calcula solo con la fecha y "Hasta" (días calendario, contando ambos días).
+    var fIni = document.querySelector('#frm [data-f="fecha_inicio"]'), fFin = document.querySelector('#frm [data-f="fecha_fin"]'), fDias = document.querySelector('#frm [data-f="dias"]');
+    if(fIni && fFin && fDias){
+      fDias.readOnly = true; fDias.title = 'Se calcula solo con la fecha y "Hasta"'; fDias.style.background = '#F4F6FA';
+      var calcDias = function(){
+        if(!fIni.value || !fFin.value){ fDias.value = ''; return; }
+        var d = Math.round((Date.parse(fFin.value + 'T00:00:00Z') - Date.parse(fIni.value + 'T00:00:00Z')) / 86400000) + 1;
+        fDias.value = d > 0 ? d : '';
+      };
+      fIni.addEventListener('change', calcDias); fFin.addEventListener('change', calcDias); calcDias();
+    }
     document.querySelectorAll('#frm select[data-ref]').forEach(function(sel){
       api('/opciones/' + sel.getAttribute('data-ref')).then(function(r){
         var v = sel.getAttribute('data-v');
