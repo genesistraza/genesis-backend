@@ -1332,3 +1332,75 @@ WITH nuevo AS (
 INSERT INTO gt_perfil_opciones (id_perfil, id_submenu)
 SELECT p.id, n.id FROM nuevo n CROSS JOIN (VALUES (8), (9)) AS p(id)
 ON CONFLICT DO NOTHING;
+
+-- ============================================================================================
+-- Salud (seguridad social): sandbox para los prestadores. Empresas (asociaciones que se administran),
+-- personas (recicladores - Decreto 271 de 2026 - y trabajadores), beneficiarios y novedades.
+CREATE TABLE IF NOT EXISTS ss_empresas (
+  id SERIAL PRIMARY KEY,
+  nombre VARCHAR(200) NOT NULL,
+  nit VARCHAR(20) NOT NULL,
+  dv VARCHAR(1),
+  association_id INT REFERENCES associations(id) ON DELETE SET NULL,
+  direccion VARCHAR(200), municipio VARCHAR(100), departamento VARCHAR(100),
+  telefono VARCHAR(30), correo VARCHAR(150),
+  rep_legal_nombre VARCHAR(150), rep_legal_doc VARCHAR(20),
+  arl VARCHAR(100), caja_compensacion VARCHAR(100), operador_pila VARCHAR(100),
+  estado VARCHAR(20) NOT NULL DEFAULT 'Prospecto',
+  fecha_vinculacion DATE,
+  doc_contrato BOOLEAN NOT NULL DEFAULT FALSE, doc_confidencialidad BOOLEAN NOT NULL DEFAULT FALSE,
+  doc_mandato BOOLEAN NOT NULL DEFAULT FALSE, doc_camara BOOLEAN NOT NULL DEFAULT FALSE,
+  doc_rut BOOLEAN NOT NULL DEFAULT FALSE, doc_rups BOOLEAN NOT NULL DEFAULT FALSE,
+  doc_cedula_rl BOOLEAN NOT NULL DEFAULT FALSE,
+  observaciones TEXT,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ss_empresas_nit_uq ON ss_empresas (nit);
+
+CREATE TABLE IF NOT EXISTS ss_personas (
+  id SERIAL PRIMARY KEY,
+  id_empresa INT NOT NULL REFERENCES ss_empresas(id) ON DELETE RESTRICT,
+  tipo VARCHAR(12) NOT NULL CHECK (tipo IN ('reciclador', 'trabajador')),
+  tipo_doc VARCHAR(5) NOT NULL, nro_doc VARCHAR(20) NOT NULL,
+  nombres VARCHAR(100) NOT NULL, apellidos VARCHAR(100) NOT NULL,
+  fecha_nacimiento DATE, sexo VARCHAR(1),
+  telefono VARCHAR(30), correo VARCHAR(150), direccion VARCHAR(200), municipio VARCHAR(100),
+  ingreso_mensual NUMERIC(14,2),
+  cargo VARCHAR(100), tipo_contrato VARCHAR(40), salario NUMERIC(14,2), fecha_ingreso DATE,
+  eps VARCHAR(100), regimen_salud VARCHAR(20), afp VARCHAR(100), caja_compensacion VARCHAR(100),
+  arl_afiliado BOOLEAN NOT NULL DEFAULT FALSE, fecha_afiliacion_arl DATE,
+  beps_vinculado BOOLEAN NOT NULL DEFAULT FALSE,
+  estado VARCHAR(12) NOT NULL DEFAULT 'Activo', fecha_retiro DATE,
+  autoriza_datos BOOLEAN NOT NULL DEFAULT FALSE,
+  observaciones TEXT,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP,
+  UNIQUE (id_empresa, tipo, tipo_doc, nro_doc)
+);
+
+CREATE TABLE IF NOT EXISTS ss_beneficiarios (
+  id SERIAL PRIMARY KEY,
+  id_persona INT NOT NULL REFERENCES ss_personas(id) ON DELETE RESTRICT,
+  parentesco VARCHAR(40) NOT NULL,
+  tipo_doc VARCHAR(5) NOT NULL, nro_doc VARCHAR(20) NOT NULL,
+  nombres VARCHAR(100) NOT NULL, apellidos VARCHAR(100) NOT NULL,
+  fecha_nacimiento DATE, sexo VARCHAR(1),
+  afiliado_eps BOOLEAN NOT NULL DEFAULT FALSE, afiliado_caja BOOLEAN NOT NULL DEFAULT FALSE,
+  observaciones TEXT,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ss_novedades (
+  id SERIAL PRIMARY KEY,
+  id_persona INT NOT NULL REFERENCES ss_personas(id) ON DELETE RESTRICT,
+  tipo VARCHAR(40) NOT NULL, entidad VARCHAR(20),
+  fecha_inicio DATE NOT NULL, fecha_fin DATE, dias INT,
+  formato VARCHAR(10), radicado VARCHAR(60),
+  estado VARCHAR(20) NOT NULL DEFAULT 'Pendiente',
+  valor NUMERIC(14,2),
+  observaciones TEXT,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(), updated_at TIMESTAMP
+);

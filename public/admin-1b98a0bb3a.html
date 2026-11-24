@@ -44,7 +44,13 @@
     <div class="side-link pro-only" data-tab="subadmins" onclick="showTab('subadmins')">Asesores Genesis</div>
     <div class="side-link pro-only" data-tab="actividad" onclick="showTab('actividad')">Logs de actividad</div>
     <div class="side-link pro-only" data-tab="errores" onclick="showTab('errores')">Logs de errores</div>
-    <a class="side-link pro-only" href="pruebas-437ce78188.html" target="_blank" rel="noopener" style="color:var(--orange);">Pruebas &#8599;</a>
+    <div class="side-link side-group-toggle pro-only" id="pruebasGroupToggle" onclick="gtTogglePruebasGroup()" style="display:flex;justify-content:space-between;align-items:center;color:var(--orange);">
+      <span>Pruebas</span><span class="caret">▾</span>
+    </div>
+    <div id="pruebasSubmenu" style="display:none;">
+      <a class="side-link sub" href="pruebas-437ce78188.html" target="_blank" rel="noopener" style="padding-left:30px;">Trazabilidad &#8599;</a>
+      <a class="side-link sub" href="salud-73e8d99789.html" target="_blank" rel="noopener" style="padding-left:30px;">Salud &#8599;</a>
+    </div>
     <a class="side-link" href="sistema.html" target="_blank" rel="noopener">Registro &#8599;</a>
     <div class="side-link side-group-toggle" id="salirGroupToggle" onclick="gtToggleSalirGroup()" style="display:flex;justify-content:space-between;align-items:center;">
       <span>Salir</span><span class="caret">▾</span>
@@ -548,6 +554,12 @@
     if(name === 'subadmins') cargarAsesores();
   }
 
+  function gtTogglePruebasGroup(){
+    var submenu = document.getElementById('pruebasSubmenu');
+    var willOpen = submenu.style.display === 'none';
+    submenu.style.display = willOpen ? 'block' : 'none';
+    document.getElementById('pruebasGroupToggle').classList.toggle('open', willOpen);
+  }
   function gtToggleSalirGroup(){
     var submenu = document.getElementById('salirSubmenu');
     var willOpen = submenu.style.display === 'none';

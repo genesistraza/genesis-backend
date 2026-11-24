@@ -54,7 +54,12 @@ const ACCIONES = {
   sistema_catalogo_creado: () => 'Agregó un código a una lista',
   sistema_catalogo_editado: () => 'Modificó un código de una lista',
   sistema_catalogo_eliminado: () => 'Borró un código de una lista',
-  sistema_perfil_opciones: () => 'Cambió las opciones de un perfil'
+  sistema_perfil_opciones: () => 'Cambió las opciones de un perfil',
+  // Salud (seguridad social)
+  salud_creado: (d) => 'Salud: creó un registro' + PANTALLA(d),
+  salud_editado: (d) => 'Salud: modificó un registro' + PANTALLA(d),
+  salud_eliminado: (d) => 'Salud: borró un registro' + PANTALLA(d),
+  salud_recicladores_traidos: (d) => 'Salud: trajo ' + (d.filas || 0) + ' reciclador(es) desde Registro'
 };
 
 function textoAccion(action, details) {

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="/favicon.png">
+<title>Salud — Seguridad social | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body{ font-size:13px;background:#F4F6FA;margin:0; }
+  :root{ --borde:#9DCBF2; }
+  .sis-title{ display:flex;align-items:center;gap:12px;background:var(--blue-deep);color:#fff;padding:7px 16px; }
+  .sis-title .marca{ font-family:Poppins,sans-serif;font-weight:700;font-size:15px;white-space:nowrap; }
+  .sis-title .marca b{ color:var(--orange); }
+  .sis-title .spacer{ flex:1; }
+  .sis-title .info{ font-size:12px;opacity:.95;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .sis-title .pill{ font-size:10.5px;font-weight:700;background:var(--orange);color:#fff;border-radius:10px;padding:2px 8px; }
+  .sis-menu{ display:flex;flex-wrap:wrap;gap:2px;background:#fff;border-bottom:2px solid var(--orange);padding:0 12px;position:relative;z-index:30; }
+  .sis-mi{ position:relative; }
+  .sis-mi > button{ background:none;border:none;font-family:inherit;font-weight:600;font-size:12px;color:var(--ink);padding:9px 13px;cursor:pointer;white-space:nowrap; }
+  .sis-mi > button:hover, .sis-mi.open > button{ background:var(--blue-light);color:var(--blue-deep); }
+  .sis-mi.activo > button{ color:var(--orange); }
+  .sis-fly{ display:none;position:absolute;top:100%;left:0;min-width:220px;background:#fff;border:1px solid var(--line);border-top:2px solid var(--orange);box-shadow:0 10px 24px rgba(10,51,105,.14);padding:4px; }
+  .sis-mi.open .sis-fly{ display:block; }
+  .sis-fly button{ display:block;width:100%;text-align:left;background:none;border:none;font-family:inherit;font-size:12px;color:var(--ink);padding:7px 10px;cursor:pointer;border-radius:4px;white-space:nowrap; }
+  .sis-fly button:hover{ background:#F3F5F8; }
+  .sis-fly button.activo{ background:var(--orange);color:#fff; }
+  .sis-main{ max-width:1320px;margin:0 auto;padding:12px 16px 40px; }
+  .sis-panel{ background:#fff;border:1px solid var(--borde);border-radius:8px;padding:12px 14px;margin-bottom:12px; }
+  .sis-bar{ display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px; }
+  .sis-bar h2{ font-size:14px;font-weight:700;margin:0 8px 0 0;color:var(--blue-deep); }
+  .sis-bar .spacer{ flex:1; }
+  .sis-bar input, .sis-bar select{ font-size:12px;padding:5px 7px;border:1px solid var(--borde);border-radius:5px;font-family:inherit; }
+  .b{ font-family:inherit;font-size:11.5px;font-weight:600;padding:5px 10px;border-radius:5px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;white-space:nowrap; }
+  .b:hover{ background:#F3F5F8; }
+  .b.pri{ background:var(--blue);border-color:var(--blue);color:#fff; }
+  .b.nar{ background:var(--orange);border-color:var(--orange);color:#fff; }
+  .b.rojo{ color:#C0392B; }
+  .b.sm{ font-size:11px;padding:3px 7px; }
+  .b:disabled{ opacity:.5;cursor:default; }
+  .muted{ color:var(--ink-soft); }
+  .msg{ font-size:12px;margin:4px 0; }
+  .msg.err{ color:#C0392B; } .msg.ok{ color:#3C7A12; }
+  .ayuda{ font-size:12px;color:#33557F;background:#EEF6FE;border:1px solid #CFE3F8;border-radius:6px;padding:6px 10px;margin-bottom:8px; }
+  .tw{ overflow:auto;max-height:68vh;border:1px solid var(--borde);border-radius:6px; }
+  table.t{ border-collapse:collapse;width:100%;font-size:12px; }
+  table.t th{ position:sticky;top:0;background:#EEF2F8;color:var(--blue-deep);text-align:left;font-weight:700;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:1; }
+  table.t td{ padding:5px 8px;border-bottom:1px solid #F0F2F6;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis; }
+  table.t tr:hover td{ background:#FAFBFD; }
+  table.t td.num, table.t th.num{ text-align:right; }
+  table.t td.acc{ width:1%; }
+  .tag{ display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px; }
+  .tag.vig{ background:#E6F4D7;color:#3C7A12; } .tag.por{ background:#FFF1DA;color:#A35F00; }
+  .tag.ven{ background:#FBE3E0;color:#C0392B; } .tag.sin{ background:#EEF0F4;color:#5B6779; }
+  .ov{ display:none;position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:100;align-items:flex-start;justify-content:center;padding:30px 12px;overflow:auto; }
+  .ov.open{ display:flex; }
+  .md{ position:relative;background:#fff;border-radius:10px;width:100%;max-width:760px;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.25); }
+  .md-x{ position:absolute;top:8px;right:10px;border:0;background:transparent;font-size:24px;line-height:1;color:#5b6b80;cursor:pointer;padding:2px 6px;border-radius:6px; }
+  .md-x:hover{ background:#EAF4FD;color:#0B3D80; }
+  .md h3{ margin:0 0 10px;font-size:14px;color:var(--blue-deep); }
+  .fg{ display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px 12px; }
+  .fg .sec{ grid-column:1/-1;font-weight:700;color:#0B3D80;border-top:1px solid var(--borde);padding-top:8px;margin-top:4px; }
+  .fg .sec:first-child{ border-top:0;padding-top:0;margin-top:0; }
+  .fg .full{ grid-column:1/-1; }
+  .fg label{ display:block;font-size:11px;font-weight:600;color:var(--ink-soft);margin-bottom:2px; }
+  .fg label.chk{ display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);font-weight:500;margin-top:14px; }
+  .fg input, .fg select, .fg textarea{ width:100%;box-sizing:border-box;font-size:12.5px;padding:6px 7px;border:1px solid var(--borde);border-radius:5px;font-family:inherit; }
+  .fg input[type=checkbox]{ width:auto; }
+  .md .pie{ display:flex;gap:6px;justify-content:flex-end;margin-top:12px; }
+  input:focus, select:focus, textarea:focus{ outline:none;border-color:var(--blue) !important;box-shadow:0 0 0 3px rgba(30,111,214,.15); }
+  .kpis{ display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:10px; }
+  .kpi{ background:#fff;border:1px solid var(--borde);border-radius:8px;padding:10px 12px; }
+  .kpi .v{ font-family:Poppins,sans-serif;font-size:20px;font-weight:700;color:var(--blue-deep); }
+  .kpi .l{ font-size:11.5px;color:var(--ink-soft); }
+  @media (max-width:640px){ .sis-title .info{ display:none; } .sis-main{ padding:10px 12px 30px; } }
+</style>
+</head>
+<body>
+<div class="sis-title">
+  <span class="marca">Genesis <b>Traza</b> · Salud</span><span class="pill">PRUEBAS</span>
+  <span class="spacer"></span><span class="info" id="tInfo"></span>
+</div>
+<nav class="sis-menu" id="menu"></nav>
+<main class="sis-main" id="main"></main>
+<div class="ov" id="ov"><div class="md" id="md"></div></div>
+
+<script src="app.js"></script>
+<script>
+  // Salud (seguridad social) - sandbox de los prestadores. Registro de empresas (asociaciones),
+  // recicladores (Decreto 271 de 2026), trabajadores, beneficiarios y novedades.
+  var session = gtRequireAuth(['pro', 'admin']);
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = gtEscapeHtml;
+  var META = {}, EMPRESAS = [], FILTRO_EMP = '', PANT = 'inicio';
+  try { FILTRO_EMP = localStorage.getItem('salud_emp') || ''; } catch(e) {}
+
+  var MENU = [
+    { t: 'Inicio', p: 'inicio' },
+    { t: 'Registro de datos', items: [['empresas', 'Empresas'], ['recicladores', 'Recicladores'], ['trabajadores', 'Trabajadores'], ['beneficiarios', 'Beneficiarios']] },
+    { t: 'Novedades', p: 'novedades' }
+  ];
+  var AYUDA = {
+    empresas: 'Registra cada asociación que administran en seguridad social: datos, representante legal, ARL/caja/operador PILA y los documentos de afiliación recibidos (contrato, confidencialidad, mandato, Cámara, RUT, RUPS, cédula).',
+    recicladores: 'Recicladores de oficio de la empresa (Decreto 271 de 2026): ARL que paga la organización sobre 1 SMLMV y aporte BEPS del 5 % del ingreso. Si la empresa está enlazada a su asociación de Genesis Traza, usa "Traer de Registro".',
+    trabajadores: 'Personas con contrato con la asociación (secretaria, conductor, operario de ECA…): PILA normal con salud, pensión, ARL y caja.',
+    beneficiarios: 'Grupo familiar de cada titular (cónyuge, hijos, padres) para EPS y caja de compensación.',
+    novedades: 'Afiliaciones, retiros, incapacidades, licencias y accidentes (FURAT/FUREL/FURIPS), con su radicado y estado.'
+  };
+
+  function api(path, opts){ return gtApiFetch('/salud' + path, opts); }
+  function setMsg(id, t, cls){ var e = $(id); if(e){ e.textContent = t || ''; e.className = 'msg' + (cls ? ' ' + cls : ''); } }
+  function abrirModal(html){ $('md').innerHTML = '<button type="button" class="md-x" title="Cerrar" onclick="cerrarModal()">&times;</button>' + html; $('ov').classList.add('open'); }
+  function cerrarModal(){ $('ov').classList.remove('open'); $('md').innerHTML = ''; }
+  function fmtNum(v){ return v === null || v === undefined || v === '' ? '' : Number(v).toLocaleString('es-CO', { maximumFractionDigits: 2 }); }
+
+  function pintarMenu(){
+    $('menu').innerHTML = MENU.map(function(m, i){
+      if(m.p) return '<div class="sis-mi' + (PANT === m.p ? ' activo' : '') + '"><button type="button" onclick="ir(\'' + m.p + '\')">' + esc(m.t) + '</button></div>';
+      var act = m.items.some(function(x){ return x[0] === PANT; });
+      return '<div class="sis-mi' + (act ? ' activo' : '') + '" data-i="' + i + '"><button type="button" onclick="abrirFly(this.parentNode)">' + esc(m.t) + ' ▾</button><div class="sis-fly">' +
+        m.items.map(function(x){ return '<button type="button" class="' + (PANT === x[0] ? 'activo' : '') + '" onclick="ir(\'' + x[0] + '\')">' + esc(x[1]) + '</button>'; }).join('') + '</div></div>';
+    }).join('');
+  }
+  function abrirFly(el){ var ab = el.classList.contains('open'); document.querySelectorAll('.sis-mi.open').forEach(function(x){ x.classList.remove('open'); }); if(!ab) el.classList.add('open'); }
+  document.addEventListener('click', function(e){ if(!e.target.closest('.sis-mi')) document.querySelectorAll('.sis-mi.open').forEach(function(x){ x.classList.remove('open'); }); });
+
+  function ir(p){ PANT = p; try { location.hash = p; } catch(e) {} pintarMenu(); if(p === 'inicio') return pintarInicio(); pintarPantalla(p); }
+
+  function cargarEmpresas(){
+    return api('/opciones/empresas').then(function(r){ EMPRESAS = r.ok ? r.data : []; });
+  }
+  function selectorEmpresa(){
+    return '<select id="fEmp"><option value="">Todas las empresas</option>' + EMPRESAS.map(function(e){ return '<option value="' + e.value + '"' + (String(e.value) === String(FILTRO_EMP) ? ' selected' : '') + '>' + esc(e.label) + '</option>'; }).join('') + '</select>';
+  }
+
+  // ---------- Inicio ----------
+  function pintarInicio(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Seguridad social · empresas administradas</h2><span class="spacer"></span><button class="b pri" onclick="ir(\'empresas\');setTimeout(function(){ formulario(\'empresas\', null); }, 300)">+ Nueva empresa</button></div>' +
+      '<div class="ayuda">Desde aquí, como prestadores, registran cada asociación y su gente. Empiecen por <b>Registro de datos → Empresas</b>, luego recicladores, trabajadores y beneficiarios.</div>' +
+      '<div class="kpis" id="kp"></div><div class="tw" id="tb"><p class="muted" style="padding:10px;">Cargando…</p></div></div>';
+    api('/resumen').then(function(r){
+      if(!r.ok){ $('tb').innerHTML = '<p class="msg err" style="padding:10px;">' + esc(r.data.error || 'No se pudo cargar.') + '</p>'; return; }
+      var l = r.data, s = function(k){ return l.reduce(function(a, x){ return a + (x[k] || 0); }, 0); };
+      $('kp').innerHTML = [[l.length, 'Empresas registradas'], [l.filter(function(x){ return x.estado === 'Vinculada'; }).length, 'Vinculadas'], [s('recicladores'), 'Recicladores activos'], [s('con_arl'), 'Recicladores con ARL'], [s('trabajadores'), 'Trabajadores activos'], [s('novedades_abiertas'), 'Novedades abiertas']]
+        .map(function(k){ return '<div class="kpi"><div class="v">' + k[0] + '</div><div class="l">' + k[1] + '</div></div>'; }).join('');
+      var tag = function(e){ return '<span class="tag ' + ({ Vinculada: 'vig', Prospecto: 'por', Suspendida: 'ven', Retirada: 'sin' }[e] || 'sin') + '">' + esc(e) + '</span>'; };
+      $('tb').innerHTML = l.length ? '<table class="t"><thead><tr><th>Empresa</th><th>NIT</th><th>Estado</th><th class="num">Recicladores</th><th class="num">Con ARL</th><th class="num">Trabajadores</th><th class="num">Novedades abiertas</th><th>Documentos de afiliación</th></tr></thead><tbody>' +
+        l.map(function(x){ return '<tr><td><b>' + esc(x.nombre) + '</b></td><td>' + esc(x.nit) + '</td><td>' + tag(x.estado) + '</td><td class="num">' + x.recicladores + '</td><td class="num">' + x.con_arl + '</td><td class="num">' + x.trabajadores + '</td><td class="num">' + x.novedades_abiertas + '</td><td>' + (x.documentos === 7 ? '<span class="tag vig">7 de 7</span>' : '<span class="tag por">' + x.documentos + ' de 7</span>') + '</td></tr>'; }).join('') + '</tbody></table>'
+        : '<p class="muted" style="padding:10px;">Aún no hay empresas. Créalas con "+ Nueva empresa".</p>';
+    });
+  }
+
+  // ---------- Pantallas de datos ----------
+  var DATOS = [];
+  // Columnas visibles en la tabla de cada pantalla (el resto se ve en el formulario).
+  var COLS = {
+    empresas: ['nombre', 'nit', 'estado', 'association_id', 'municipio', 'rep_legal_nombre', 'arl', 'operador_pila', 'fecha_vinculacion'],
+    recicladores: ['id_empresa', 'tipo_doc', 'nro_doc', 'apellidos', 'nombres', 'telefono', 'regimen_salud', 'arl_afiliado', 'beps_vinculado', 'estado', 'autoriza_datos'],
+    trabajadores: ['id_empresa', 'tipo_doc', 'nro_doc', 'apellidos', 'nombres', 'cargo', 'salario', 'eps', 'afp', 'arl_afiliado', 'estado'],
+    beneficiarios: ['id_persona', 'parentesco', 'tipo_doc', 'nro_doc', 'apellidos', 'nombres', 'afiliado_eps', 'afiliado_caja'],
+    novedades: ['id_persona', 'tipo', 'entidad', 'fecha_inicio', 'fecha_fin', 'dias', 'radicado', 'estado']
+  };
+  function campo(p, n){ return META[p].campos.filter(function(c){ return c.n === n; })[0]; }
+  function celda(c, r){
+    var v = r[c.n];
+    if(c.t === 'bool') return v ? '<span class="tag vig">Sí</span>' : '<span class="tag sin">No</span>';
+    if(c.t === 'ref') return esc(r[c.n + '_label'] || '');
+    if(c.t === 'num') return esc(fmtNum(v));
+    if(c.n === 'estado') return '<span class="tag ' + ({ Activo: 'vig', Vinculada: 'vig', Aprobada: 'vig', Pagada: 'vig', Cerrada: 'sin', Retirado: 'sin', Retirada: 'sin', Rechazada: 'ven', Suspendida: 'ven' }[v] || 'por') + '">' + esc(v || '') + '</span>';
+    return esc(v == null ? '' : String(v).slice(0, c.t === 'date' ? 10 : 200));
+  }
+  function pintarPantalla(p){
+    var m = META[p];
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>' + esc(m.titulo) + '</h2>' + (p === 'empresas' ? '' : selectorEmpresa()) +
+      '<input id="fBus" placeholder="Buscar…"><span class="spacer"></span>' +
+      (p === 'recicladores' ? '<button class="b" id="bTraer" title="Copia los recicladores que la asociación ya tiene en Registro">⇩ Traer de Registro</button>' : '') +
+      '<button class="b pri" id="bNuevo">+ Nuevo</button></div><div class="ayuda">' + esc(AYUDA[p] || '') + '</div><p id="pMsg" class="msg"></p><div class="tw" id="tb"><p class="muted" style="padding:10px;">Cargando…</p></div></div>';
+    $('bNuevo').onclick = function(){ formulario(p, null); };
+    $('fBus').oninput = function(){ tabla(p); };
+    if($('fEmp')) $('fEmp').onchange = function(){ FILTRO_EMP = this.value; try { localStorage.setItem('salud_emp', FILTRO_EMP); } catch(e) {} cargar(p); };
+    if($('bTraer')) $('bTraer').onclick = traerRecicladores;
+    cargar(p);
+  }
+  function cargar(p){
+    api('/datos/' + p + (FILTRO_EMP && p !== 'empresas' ? '?id_empresa=' + FILTRO_EMP : '')).then(function(r){
+      if(PANT !== p) return;
+      if(!r.ok){ $('tb').innerHTML = '<p class="msg err" style="padding:10px;">' + esc(r.data.error || 'No se pudo cargar.') + '</p>'; return; }
+      DATOS = r.data; tabla(p);
+    });
+  }
+  function tabla(p){
+    var q = ($('fBus').value || '').trim().toLowerCase();
+    var cols = COLS[p].map(function(n){ return campo(p, n); });
+    var l = DATOS.filter(function(r){ return !q || cols.some(function(c){ return String(c.t === 'ref' ? r[c.n + '_label'] : r[c.n] || '').toLowerCase().indexOf(q) !== -1; }); });
+    $('tb').innerHTML = l.length ? '<table class="t"><thead><tr><th></th>' + cols.map(function(c){ return '<th' + (c.t === 'num' || c.t === 'int' ? ' class="num"' : '') + '>' + esc(c.l) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      l.map(function(r){ return '<tr><td class="acc"><button class="b sm" onclick="editar(\'' + p + '\',' + r.id + ')">Editar</button> <button class="b sm rojo" title="Borrar" onclick="borrar(\'' + p + '\',' + r.id + ')">✕</button></td>' +
+        cols.map(function(c){ return '<td' + (c.t === 'num' || c.t === 'int' ? ' class="num"' : '') + '>' + celda(c, r) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>'
+      : '<p class="muted" style="padding:10px;">Sin registros.</p>';
+  }
+  function editar(p, id){ formulario(p, DATOS.filter(function(x){ return x.id === id; })[0]); }
+
+  function formulario(p, row){
+    var m = META[p];
+    var html = '<h3>' + (row ? 'Editar' : 'Nuevo') + ' — ' + esc(m.titulo) + '</h3><div class="fg" id="frm">' + m.campos.map(function(c){
+      var v = row ? row[c.n] : (c.n === 'estado' ? (c.opts || [])[p === 'empresas' ? 0 : 0] : (c.n === 'id_empresa' && FILTRO_EMP ? FILTRO_EMP : (c.n === 'tipo_doc' ? 'CC' : '')));
+      if(v === null || v === undefined) v = '';
+      var sec = c.sec ? '<div class="sec">' + esc(c.sec) + '</div>' : '';
+      var lab = '<label>' + esc(c.l) + (c.req ? ' *' : '') + '</label>';
+      if(c.t === 'bool') return sec + '<div><label class="chk"><input type="checkbox" data-f="' + c.n + '"' + (v === true ? ' checked' : '') + '> ' + esc(c.l) + '</label></div>';
+      if(c.t === 'textarea') return sec + '<div class="full">' + lab + '<textarea data-f="' + c.n + '" rows="2">' + esc(v) + '</textarea></div>';
+      if(c.t === 'opt') return sec + '<div>' + lab + '<select data-f="' + c.n + '"><option value="">— Seleccionar —</option>' + c.opts.map(function(o){ return '<option' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></div>';
+      if(c.t === 'ref') return sec + '<div>' + lab + '<select data-f="' + c.n + '" data-ref="' + c.ref + '" data-v="' + esc(v) + '"><option value="">Cargando…</option></select></div>';
+      var tipo = c.t === 'date' ? 'date' : (c.t === 'num' || c.t === 'int') ? 'number' : 'text';
+      return sec + '<div>' + lab + '<input type="' + tipo + '"' + (c.t === 'num' ? ' step="any" min="0"' : c.t === 'int' ? ' step="1" min="0"' : '') + ' data-f="' + c.n + '" value="' + esc(c.t === 'date' ? String(v).slice(0, 10) : v) + '"></div>';
+    }).join('') + '</div><p id="fMsg" class="msg"></p><div class="pie"><button class="b" onclick="cerrarModal()">Cancelar</button><button class="b pri" id="fOk">Guardar</button></div>';
+    abrirModal(html);
+    document.querySelectorAll('#frm select[data-ref]').forEach(function(sel){
+      api('/opciones/' + sel.getAttribute('data-ref')).then(function(r){
+        var v = sel.getAttribute('data-v');
+        sel.innerHTML = '<option value="">— Seleccionar —</option>' + (r.ok ? r.data : []).map(function(o){ return '<option value="' + o.value + '"' + (String(o.value) === v ? ' selected' : '') + '>' + esc(o.label) + '</option>'; }).join('');
+      });
+    });
+    $('fOk').onclick = function(){
+      var body = {};
+      document.querySelectorAll('#frm [data-f]').forEach(function(el){ body[el.getAttribute('data-f')] = el.type === 'checkbox' ? el.checked : (el.value === '' ? null : el.value); });
+      $('fOk').disabled = true;
+      api('/datos/' + p + (row ? '/' + row.id : ''), { method: row ? 'PUT' : 'POST', body: JSON.stringify(body) }).then(function(r){
+        $('fOk').disabled = false;
+        if(!r.ok) return setMsg('fMsg', (r.data && r.data.error) || 'No se pudo guardar.', 'err');
+        cerrarModal();
+        var tras = function(){ if(PANT === p){ setMsg('pMsg', 'Guardado.', 'ok'); cargar(p); } };
+        if(p === 'empresas') cargarEmpresas().then(tras); else tras();
+      });
+    };
+  }
+  function borrar(p, id){
+    if(!confirm('¿Borrar este registro? No se puede deshacer.')) return;
+    api('/datos/' + p + '/' + id, { method: 'DELETE' }).then(function(r){
+      if(!r.ok) return setMsg('pMsg', (r.data && r.data.error) || 'No se pudo borrar.', 'err');
+      setMsg('pMsg', 'Borrado.', 'ok');
+      if(p === 'empresas') cargarEmpresas();
+      cargar(p);
+    });
+  }
+  function traerRecicladores(){
+    if(!FILTRO_EMP) return setMsg('pMsg', 'Primero elige la empresa en el selector.', 'err');
+    api('/empresas/' + FILTRO_EMP + '/traer-recicladores', { method: 'POST' }).then(function(r){
+      if(!r.ok) return setMsg('pMsg', (r.data && r.data.error) || 'No se pudo traer.', 'err');
+      setMsg('pMsg', r.data.agregados ? 'Se agregaron ' + r.data.agregados + ' reciclador(es) desde Registro. Revisa nombres y completa su seguridad social.' : 'No había recicladores nuevos para traer.', 'ok');
+      cargar('recicladores');
+    });
+  }
+
+  if(session){
+    $('tInfo').textContent = session.fullName || '';
+    Promise.all([api('/meta'), cargarEmpresas()]).then(function(r){
+      if(!r[0].ok){ $('main').innerHTML = '<div class="sis-panel"><p class="msg err">' + esc((r[0].data && r[0].data.error) || 'No se pudo cargar Salud.') + '</p></div>'; return; }
+      META = r[0].data;
+      var h = (location.hash || '').replace('#', '');
+      ir(h && (META[h] || h === 'inicio') ? h : 'inicio');
+    });
+  }
+</script>
+</body>
+</html>
