@@ -20,6 +20,7 @@
   /* Menu horizontal con flyouts */
   .sis-menu{ display:flex;flex-wrap:wrap;gap:2px;background:#fff;border-bottom:2px solid var(--orange);padding:0 12px;position:relative;z-index:30; }
   .sis-mi{ position:relative; }
+  .sis-mi.open{ z-index:40; } /* el desplegable abierto queda encima de la segunda fila del menu (celular) */
   .sis-mi > button{ background:none;border:none;font-family:inherit;font-weight:600;font-size:12px;color:var(--ink);padding:9px 13px;cursor:pointer;white-space:nowrap; }
   .sis-mi > button:hover, .sis-mi.open > button{ background:var(--blue-light);color:var(--blue-deep); }
   .sis-mi.activo > button{ color:var(--orange); }
