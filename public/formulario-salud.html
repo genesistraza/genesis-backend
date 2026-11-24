@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="/favicon.png">
+<title>Formulario de seguridad social | Genesis Traza</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  :root{ --borde:#9DCBF2; }
+  body{ background:#F4F6FA;margin:0;font-size:14px; }
+  .top{ background:var(--blue-deep);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px; }
+  .top img{ width:40px;height:40px;border-radius:8px;background:#fff;padding:3px;box-sizing:border-box; }
+  .top .t{ font-family:Poppins,sans-serif;font-weight:700;font-size:17px; }
+  .top .t b{ color:var(--orange); }
+  .top .s{ font-size:12px;opacity:.9; }
+  .wrap{ max-width:1100px;margin:0 auto;padding:16px 16px 120px; }
+  .card{ background:#fff;border:1px solid var(--borde);border-radius:10px;padding:14px 16px;margin-bottom:14px; }
+  .card h2{ font-family:Poppins,sans-serif;font-size:16px;color:var(--blue-deep);margin:0 0 4px;display:flex;align-items:center;gap:8px; }
+  .card h2 .n{ background:var(--orange);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px; }
+  .card .d{ font-size:12.5px;color:var(--ink-soft);margin:0 0 10px; }
+  .fg{ display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px 14px; }
+  .fg label{ display:block;font-size:11.5px;font-weight:600;color:var(--ink-soft);margin-bottom:3px; }
+  .fg label.chk{ display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);font-weight:500;margin-top:18px; }
+  input, select, textarea{ width:100%;box-sizing:border-box;font-size:13px;padding:7px 8px;border:1px solid var(--borde);border-radius:6px;font-family:inherit;background:#fff; }
+  input[type=checkbox]{ width:auto; }
+  input:focus, select:focus, textarea:focus{ outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,111,214,.15); }
+  .b{ font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer; }
+  .b.pri{ background:var(--blue);border-color:var(--blue);color:#fff; }
+  .b.nar{ background:var(--orange);border-color:var(--orange);color:#fff; }
+  .b.sm{ font-size:11.5px;padding:4px 8px; }
+  .tw{ overflow:auto;border:1px solid var(--borde);border-radius:8px;max-height:60vh; }
+  table.t{ border-collapse:collapse;font-size:12px;min-width:100%; }
+  table.t th{ position:sticky;top:0;background:#EEF2F8;color:var(--blue-deep);text-align:left;padding:6px;white-space:nowrap;font-size:11px;z-index:1; }
+  table.t td{ padding:3px 4px;border-bottom:1px solid #F0F2F6; }
+  table.t td input, table.t td select{ min-width:110px;padding:5px 6px;font-size:12px; }
+  table.t td.n{ color:var(--ink-soft);font-size:11px;text-align:right; }
+  .acc{ display:flex;gap:6px;flex-wrap:wrap;margin:8px 0; }
+  .docs{ display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px; }
+  .msg{ font-size:13px;margin:6px 0; } .msg.err{ color:#B42318; } .msg.ok{ color:#3C7A12; }
+  .errs{ background:#FDECEA;border:1px solid #F5C2BE;color:#B42318;border-radius:8px;padding:10px 12px;font-size:12.5px;display:none; }
+  .barra{ position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:2px solid var(--orange);padding:10px 16px;display:flex;align-items:center;gap:10px;justify-content:flex-end;flex-wrap:wrap;z-index:20; }
+  .barra .muted{ font-size:12px;color:var(--ink-soft);margin-right:auto; }
+  .ov{ display:none;position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:50;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto; }
+  .ov.open{ display:flex; }
+  .md{ position:relative;background:#fff;border-radius:10px;width:100%;max-width:640px;padding:16px; }
+  .md-x{ position:absolute;top:8px;right:10px;border:0;background:transparent;font-size:24px;cursor:pointer;color:#5b6b80; }
+  .fin{ text-align:center;padding:40px 16px; }
+  .fin .folio{ font-family:Poppins,sans-serif;font-size:26px;color:var(--blue-deep);font-weight:700; }
+  @media (max-width:640px){ .wrap{ padding:12px 12px 140px; } }
+</style>
+</head>
+<body>
+<div class="top"><img src="/favicon.png" alt=""><div><div class="t">Genesis <b>Traza</b> · Seguridad social</div><div class="s" id="tEmp">Cargando…</div></div></div>
+<div class="wrap" id="app"><div class="card"><p class="d">Cargando formulario…</p></div></div>
+<div class="ov" id="ov"><div class="md" id="md"></div></div>
+
+<script src="app.js"></script>
+<script>
+  // Formulario publico por link unico: la empresa llena su informacion y la envia a Genesis Traza.
+  var $ = function(id){ return document.getElementById(id); };
+  var esc = gtEscapeHtml;
+  var TOKEN = (new URLSearchParams(location.search).get('t') || '').trim();
+  var META = null, FILAS = { recicladores: [], trabajadores: [], beneficiarios: [] };
+  var CLAVE_BORRADOR = null; // por NIT de la empresa: sobrevive al cambio de link
+  // Columnas de cada tabla, en el orden en que se pegan desde Excel.
+  var COLS = {
+    recicladores: ['tipo_doc', 'nro_doc', 'nombres', 'apellidos', 'fecha_nacimiento', 'sexo', 'telefono', 'direccion', 'municipio', 'cod_dane_municipio', 'eps', 'regimen_salud', 'autoriza_datos'],
+    trabajadores: ['tipo_doc', 'nro_doc', 'nombres', 'apellidos', 'fecha_nacimiento', 'sexo', 'telefono', 'correo', 'cargo', 'tipo_contrato', 'salario', 'fecha_ingreso', 'eps', 'afp', 'caja_compensacion', 'autoriza_datos'],
+    beneficiarios: ['titular_nro_doc', 'parentesco', 'tipo_doc', 'nro_doc', 'nombres', 'apellidos', 'fecha_nacimiento', 'sexo', 'afiliado_eps', 'afiliado_caja']
+  };
+  var TITULOS = { recicladores: 'Recicladores de oficio', trabajadores: 'Trabajadores con contrato', beneficiarios: 'Beneficiarios (grupo familiar)' };
+
+  function api(path, opts){ return fetch(API_BASE + '/salud-publico/' + TOKEN + (path || ''), opts).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }); }
+  function campo(tabla, n){
+    if(n === 'titular_nro_doc') return { n: n, l: 'Documento del titular', t: 'text', req: true };
+    return (META.campos[tabla] || []).filter(function(c){ return c.n === n; })[0];
+  }
+  function cols(tabla){ return COLS[tabla].map(function(n){ return campo(tabla, n); }).filter(Boolean); }
+  function guardarBorrador(){
+    try { localStorage.setItem(CLAVE_BORRADOR, JSON.stringify({ empresa: leerEmpresa(), filas: FILAS, quien: { nombre: $('qNom').value, cargo: $('qCar').value, telefono: $('qTel').value } })); } catch(e) {}
+  }
+  function leerEmpresa(){ var o = {}; document.querySelectorAll('#fEmpresa [data-f]').forEach(function(el){ o[el.getAttribute('data-f')] = el.type === 'checkbox' ? el.checked : el.value; }); return o; }
+
+  function input(c, v, attrs){
+    v = v === undefined || v === null ? '' : v;
+    if(c.t === 'bool') return '<input type="checkbox" ' + attrs + (v === true || v === 'true' ? ' checked' : '') + '>';
+    if(c.t === 'opt') return '<select ' + attrs + '><option value=""></option>' + c.opts.map(function(o){ return '<option' + (String(o) === String(v) ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+    if(c.t === 'textarea') return '<textarea rows="2" ' + attrs + '>' + esc(v) + '</textarea>';
+    var tipo = c.t === 'date' ? 'date' : (c.t === 'num' || c.t === 'int') ? 'number' : 'text';
+    return '<input type="' + tipo + '" ' + attrs + ' value="' + esc(v) + '">';
+  }
+
+  function pintar(){
+    var b = {}; try { b = JSON.parse(localStorage.getItem(CLAVE_BORRADOR) || '{}') || {}; } catch(e) {}
+    if(b.filas) FILAS = { recicladores: b.filas.recicladores || [], trabajadores: b.filas.trabajadores || [], beneficiarios: b.filas.beneficiarios || [] };
+    var emp = b.empresa || {}, q = b.quien || {};
+    var html = '<div class="card"><h2>Bienvenidos</h2><p class="d">Este formulario es para <b>' + esc(META.empresa.nombre) + '</b> (NIT ' + esc(META.empresa.nit) + '). Llenen lo que tengan: no todo es obligatorio. <b>El link dura 30 minutos y sirve para un solo envío.</b> Lo que escriban se guarda en este navegador: si el link vence, pidan uno nuevo y siguen donde iban (los archivos adjuntos sí hay que volver a escogerlos).</p></div>';
+    // 1. Empresa
+    html += '<div class="card"><h2><span class="n">1</span>Datos de la empresa</h2><p class="d">Datos de la asociación y de su representante legal.</p><div class="fg" id="fEmpresa">' +
+      META.campos.empresa.map(function(c){ var at = 'data-f="' + c.n + '"'; return c.t === 'bool' ? '<div><label class="chk">' + input(c, emp[c.n], at) + ' ' + esc(c.l) + '</label></div>' : '<div' + (c.t === 'textarea' ? ' style="grid-column:1/-1"' : '') + '><label>' + esc(c.l) + '</label>' + input(c, emp[c.n], at) + '</div>'; }).join('') + '</div></div>';
+    // 2. Documentos
+    html += '<div class="card"><h2><span class="n">2</span>Documentos</h2><p class="d">PDF o foto (JPG/PNG), máximo 8 MB cada uno. Los archivos no se guardan en el borrador: adjúntenlos justo antes de enviar.</p><div class="docs">' +
+      Object.keys(META.documentos).map(function(k){ return '<div><label style="font-size:11.5px;font-weight:600;color:var(--ink-soft);">' + esc(META.documentos[k]) + '</label><input type="file" data-doc="' + k + '" accept=".pdf,.jpg,.jpeg,.png"></div>'; }).join('') + '</div></div>';
+    // 3-5. Tablas
+    ['recicladores', 'trabajadores', 'beneficiarios'].forEach(function(t, i){
+      html += '<div class="card"><h2><span class="n">' + (i + 3) + '</span>' + esc(TITULOS[t]) + ' <span style="font-size:12px;color:var(--ink-soft);font-weight:500;" id="cnt_' + t + '"></span></h2>' +
+        '<p class="d">' + (t === 'beneficiarios' ? 'En "Documento del titular" escriban la cédula del reciclador o trabajador al que pertenece.' : 'Una fila por persona.') + ' Columnas en este orden para pegar desde Excel: <i>' + esc(cols(t).map(function(c){ return c.l; }).join(' · ')) + '</i>.</p>' +
+        '<div class="acc"><button type="button" class="b sm pri" onclick="agregar(\'' + t + '\')">+ Agregar fila</button><button type="button" class="b sm" onclick="pegar(\'' + t + '\')">⧉ Pegar desde Excel</button>' +
+        '<button type="button" class="b sm" onclick="vaciar(\'' + t + '\')">Vaciar tabla</button></div><div class="tw" id="tb_' + t + '"></div></div>';
+    });
+    // 6. Envio
+    html += '<div class="card"><h2><span class="n">6</span>Quién diligencia</h2><div class="fg"><div><label>Nombre completo *</label><input id="qNom" value="' + esc(q.nombre || '') + '"></div><div><label>Cargo</label><input id="qCar" value="' + esc(q.cargo || '') + '"></div><div><label>Celular</label><input id="qTel" value="' + esc(q.telefono || '') + '"></div></div>' +
+      '<label class="fg" style="display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:12.5px;"><input type="checkbox" id="qAcepta" style="margin-top:3px;"> <span>Declaro que la información es verídica y que la asociación cuenta con la autorización de las personas registradas para el tratamiento de sus datos personales (Ley 1581 de 2012), con el fin de gestionar su afiliación y aportes a la seguridad social.</span></label>' +
+      '<div class="errs" id="errs"></div></div>';
+    $('app').innerHTML = html;
+    document.body.insertAdjacentHTML('beforeend', '<div class="barra"><span class="muted" id="bReloj" style="font-weight:600;"></span><span class="muted" id="bInfo">Se guarda en este navegador.</span><button type="button" class="b nar" id="bEnviar">Enviar a Genesis Traza</button></div>');
+    ['recicladores', 'trabajadores', 'beneficiarios'].forEach(tabla);
+    $('app').addEventListener('input', guardarBorrador); $('app').addEventListener('change', guardarBorrador);
+    $('bEnviar').onclick = enviar;
+  }
+  function tabla(t){
+    var cs = cols(t);
+    $('cnt_' + t).textContent = FILAS[t].length ? '(' + FILAS[t].length + ')' : '';
+    $('tb_' + t).innerHTML = FILAS[t].length ? '<table class="t"><thead><tr><th>#</th>' + cs.map(function(c){ return '<th>' + esc(c.l) + (c.req ? ' *' : '') + '</th>'; }).join('') + '<th></th></tr></thead><tbody>' +
+      FILAS[t].map(function(f, i){ return '<tr><td class="n">' + (i + 1) + '</td>' + cs.map(function(c){ return '<td>' + input(c, f[c.n], 'data-t="' + t + '" data-i="' + i + '" data-c="' + c.n + '"' + (c.t === 'bool' ? '' : '')) + '</td>'; }).join('') +
+        '<td><button type="button" class="b sm" title="Quitar fila" onclick="quitar(\'' + t + '\',' + i + ')">✕</button></td></tr>'; }).join('') + '</tbody></table>'
+      : '<p style="padding:10px;margin:0;color:var(--ink-soft);font-size:12.5px;">Sin filas todavía.</p>';
+    $('tb_' + t).querySelectorAll('[data-c]').forEach(function(el){
+      var h = function(){ FILAS[t][Number(el.getAttribute('data-i'))][el.getAttribute('data-c')] = el.type === 'checkbox' ? el.checked : el.value; };
+      el.addEventListener('input', h); el.addEventListener('change', h);
+    });
+  }
+  function agregar(t){ var f = {}; if(t !== 'beneficiarios' || true) f.tipo_doc = 'CC'; FILAS[t].push(f); tabla(t); guardarBorrador(); }
+  function quitar(t, i){ FILAS[t].splice(i, 1); tabla(t); guardarBorrador(); }
+  function vaciar(t){ if(!FILAS[t].length || !confirm('¿Vaciar la tabla de ' + TITULOS[t].toLowerCase() + '?')) return; FILAS[t] = []; tabla(t); guardarBorrador(); }
+  // Convierte lo pegado desde Excel (columnas separadas por tabulador o ";") en filas.
+  function valorPegado(c, v){
+    v = String(v == null ? '' : v).trim();
+    if(c.t === 'bool') return /^(s[ií]|x|1|true|si)$/i.test(v);
+    if(c.t === 'date'){ var m = v.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/); if(m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0'); return v; }
+    if(c.t === 'opt'){ var o = c.opts.filter(function(x){ return x.toLowerCase() === v.toLowerCase() || x.toLowerCase().indexOf(v.toLowerCase()) === 0 && v.length > 2; })[0]; return o || v; }
+    if(c.t === 'num') return v.replace(/[$\s.]/g, '').replace(',', '.');
+    if(c.n === 'nro_doc' || c.n === 'titular_nro_doc') return v.replace(/[.\s]/g, '');
+    return v;
+  }
+  function pegar(t){
+    var cs = cols(t);
+    $('md').innerHTML = '<button type="button" class="md-x" onclick="cerrar()">&times;</button><h3 style="margin:0 0 6px;color:var(--blue-deep);font-size:15px;">Pegar ' + esc(TITULOS[t].toLowerCase()) + ' desde Excel</h3>' +
+      '<p style="font-size:12.5px;color:var(--ink-soft);margin:0 0 8px;">Copien las filas en Excel (sin la fila de títulos) con las columnas en este orden y péguenlas aquí:<br><b>' + esc(cs.map(function(c){ return c.l; }).join(' · ')) + '</b></p>' +
+      '<textarea id="pTxt" rows="10" placeholder="Pegar aquí (Ctrl+V)"></textarea><div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px;"><button type="button" class="b" onclick="cerrar()">Cancelar</button><button type="button" class="b pri" id="pOk">Agregar filas</button></div>';
+    $('ov').classList.add('open');
+    $('pOk').onclick = function(){
+      var n = 0;
+      $('pTxt').value.split(/\r?\n/).forEach(function(linea){
+        if(!linea.trim()) return;
+        var celdas = linea.indexOf('\t') !== -1 ? linea.split('\t') : linea.split(';');
+        var f = {}; cs.forEach(function(c, i){ f[c.n] = valorPegado(c, celdas[i]); });
+        if(!f.tipo_doc) f.tipo_doc = 'CC';
+        FILAS[t].push(f); n++;
+      });
+      cerrar(); tabla(t); guardarBorrador();
+      $('bInfo').textContent = 'Se agregaron ' + n + ' fila(s) a ' + TITULOS[t].toLowerCase() + '.';
+    };
+  }
+  function cerrar(){ $('ov').classList.remove('open'); $('md').innerHTML = ''; }
+
+  function enviar(){
+    var errs = $('errs'); errs.style.display = 'none';
+    var lista = [];
+    if(!$('qNom').value.trim()) lista.push('Escriban el nombre de quien diligencia (sección 6).');
+    if(!$('qAcepta').checked) lista.push('Deben aceptar la declaración de tratamiento de datos (sección 6).');
+    if(lista.length){ errs.innerHTML = lista.map(esc).join('<br>'); errs.style.display = 'block'; errs.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    var fd = new FormData();
+    fd.append('datos', JSON.stringify({ empresa: leerEmpresa(), recicladores: FILAS.recicladores, trabajadores: FILAS.trabajadores, beneficiarios: FILAS.beneficiarios,
+      diligencia: { nombre: $('qNom').value, cargo: $('qCar').value, telefono: $('qTel').value }, acepta: true }));
+    var grande = '';
+    document.querySelectorAll('[data-doc]').forEach(function(el){ if(el.files[0]){ if(el.files[0].size > 8 * 1024 * 1024) grande = el.files[0].name; fd.append(el.getAttribute('data-doc'), el.files[0]); } });
+    if(grande){ errs.innerHTML = 'El archivo ' + esc(grande) + ' pesa más de 8 MB.'; errs.style.display = 'block'; return; }
+    $('bEnviar').disabled = true; $('bInfo').textContent = 'Enviando…';
+    fetch(API_BASE + '/salud-publico/' + TOKEN, { method: 'POST', body: fd }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); }).then(function(r){
+      $('bEnviar').disabled = false;
+      if(r.data && r.data.estado){ guardarBorrador(); return pantallaVencido(r.data); } // vencio o ya se uso: el borrador queda
+      if(!r.ok){
+        $('bInfo').textContent = 'No se pudo enviar: revisen los errores.';
+        errs.innerHTML = '<b>Corrijan esto y vuelvan a enviar:</b><br>' + ((r.data && r.data.detalles) || [(r.data && r.data.error) || 'Error al enviar.']).map(esc).join('<br>');
+        errs.style.display = 'block'; errs.scrollIntoView({ behavior: 'smooth', block: 'center' }); return;
+      }
+      try { localStorage.removeItem(CLAVE_BORRADOR); } catch(e) {}
+      clearInterval(RELOJ); document.querySelector('.barra').remove();
+      var s = r.data.resumen;
+      $('app').innerHTML = '<div class="card fin"><div style="font-size:40px;">✅</div><h2 style="justify-content:center;">¡Recibido!</h2><div class="folio">' + esc(r.data.folio) + '</div>' +
+        '<p class="d" style="margin-top:10px;">Genesis Traza revisará la información. Llegaron ' + s.recicladores + ' reciclador(es), ' + s.trabajadores + ' trabajador(es), ' + s.beneficiarios + ' beneficiario(s) y ' + s.documentos + ' documento(s). Guarden este número de folio.</p>' +
+        '<p class="d">Este link ya quedó usado. Si necesitan enviar más información, pidan un link nuevo a Genesis Traza.</p></div>';
+      window.scrollTo(0, 0);
+    }).catch(function(){ $('bEnviar').disabled = false; $('bInfo').textContent = 'Sin conexión. Intenten de nuevo; lo escrito sigue guardado.'; });
+  }
+
+  // Link vencido, usado o desactivado: se avisa y se puede pedir uno nuevo (el borrador sigue guardado).
+  function pantallaVencido(d){
+    clearInterval(RELOJ);
+    var barra = document.querySelector('.barra'); if(barra) barra.remove();
+    if(d.empresa) $('tEmp').textContent = d.empresa.nombre + ' · NIT ' + d.empresa.nit;
+    var hay = false; try { hay = !!(d.empresa && localStorage.getItem('salud_form_' + d.empresa.nit)); } catch(e) {}
+    $('app').innerHTML = '<div class="card fin"><div style="font-size:40px;">⏰</div><h2 style="justify-content:center;color:#B42318;">Link ' + esc(d.estado === 'Usado' ? 'ya usado' : d.estado === 'Desactivado' ? 'desactivado' : 'vencido') + '</h2>' +
+      '<p class="d">' + esc(d.error || '') + '</p>' + (hay ? '<p class="d"><b>Lo que alcanzaron a escribir quedó guardado en este navegador</b> y aparecerá cuando abran el link nuevo aquí mismo.</p>' : '') +
+      (d.pedido ? '<p class="msg ok">Ya solicitaron un link nuevo. Genesis Traza se los enviará.</p>' : '<button class="b nar" id="bPedir">Solicitar un link nuevo</button><p id="pMsg" class="msg"></p>') + '</div>';
+    if($('bPedir')) $('bPedir').onclick = function(){
+      this.disabled = true;
+      api('/solicitar-nuevo', { method: 'POST' }).then(function(r){
+        if(!r.ok){ $('bPedir').disabled = false; $('pMsg').className = 'msg err'; $('pMsg').textContent = (r.data && r.data.error) || 'No se pudo enviar la solicitud.'; return; }
+        $('bPedir').remove(); $('pMsg').className = 'msg ok'; $('pMsg').textContent = r.data.mensaje;
+      });
+    };
+  }
+  // Cuenta regresiva de los 30 minutos del link.
+  var RELOJ = null;
+  function iniciarReloj(segundos){
+    var fin = Date.now() + segundos * 1000;
+    var tic = function(){
+      var s = Math.max(0, Math.round((fin - Date.now()) / 1000)), el = $('bReloj');
+      if(el){ el.textContent = '⏱ Este link vence en ' + Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); el.style.color = s < 300 ? '#B42318' : ''; }
+      if(!s){ guardarBorrador(); pantallaVencido({ estado: 'Vencido', error: 'Este link está vencido (dura 30 minutos). Soliciten un link nuevo.', empresa: META.empresa }); }
+    };
+    tic(); RELOJ = setInterval(tic, 1000);
+  }
+
+  if(!/^[a-f0-9]{48}$/.test(TOKEN)){ $('tEmp').textContent = ''; $('app').innerHTML = '<div class="card"><p class="msg err">Este link no es válido. Pidan a Genesis Traza el link de su empresa.</p></div>'; }
+  else api('').then(function(r){
+    if(r.data && r.data.estado) return pantallaVencido(r.data);
+    if(!r.ok){ $('tEmp').textContent = ''; $('app').innerHTML = '<div class="card"><p class="msg err">' + esc((r.data && r.data.error) || 'No se pudo abrir el formulario.') + '</p></div>'; return; }
+    META = r.data; CLAVE_BORRADOR = 'salud_form_' + META.empresa.nit;
+    $('tEmp').textContent = META.empresa.nombre + ' · NIT ' + META.empresa.nit; pintar(); iniciarReloj(META.segundos);
+  }).catch(function(){ $('app').innerHTML = '<div class="card"><p class="msg err">No hay conexión. Recarguen la página.</p></div>'; });
+</script>
+</body>
+</html>

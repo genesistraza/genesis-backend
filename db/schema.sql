@@ -1455,3 +1455,42 @@ CREATE TABLE IF NOT EXISTS ss_liquidacion_detalle (
   nov_retiro BOOLEAN NOT NULL DEFAULT FALSE, fecha_retiro DATE,
   alertas TEXT
 );
+
+-- Salud: link unico por empresa para que ella misma llene su informacion (formulario publico).
+-- Lo enviado queda como respuesta pendiente; un prestador la revisa y la aplica.
+CREATE TABLE IF NOT EXISTS ss_enlaces (
+  id SERIAL PRIMARY KEY,
+  id_empresa INT NOT NULL REFERENCES ss_empresas(id) ON DELETE CASCADE,
+  token VARCHAR(64) NOT NULL UNIQUE,
+  expira DATE NOT NULL,
+  activo BOOLEAN NOT NULL DEFAULT TRUE,
+  envios INT NOT NULL DEFAULT 0,
+  ultimo_envio TIMESTAMP,
+  created_by INT REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS ss_solicitudes (
+  id SERIAL PRIMARY KEY,
+  id_enlace INT REFERENCES ss_enlaces(id) ON DELETE SET NULL,
+  id_empresa INT NOT NULL REFERENCES ss_empresas(id) ON DELETE CASCADE,
+  datos JSONB NOT NULL,
+  estado VARCHAR(12) NOT NULL DEFAULT 'Pendiente',
+  diligenciado_por VARCHAR(150), cargo_diligencia VARCHAR(100), telefono_diligencia VARCHAR(30),
+  ip VARCHAR(60),
+  resultado TEXT,
+  revisado_por INT REFERENCES users(id) ON DELETE SET NULL, revisado_en TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS ss_documentos (
+  id SERIAL PRIMARY KEY,
+  id_empresa INT NOT NULL REFERENCES ss_empresas(id) ON DELETE CASCADE,
+  id_solicitud INT REFERENCES ss_solicitudes(id) ON DELETE SET NULL,
+  tipo VARCHAR(30) NOT NULL,
+  nombre VARCHAR(255), archivo_url TEXT NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+-- Link de un solo uso y de 30 minutos: expira pasa a fecha y hora; se marca cuando se usa y cuando la
+-- empresa pide uno nuevo.
+ALTER TABLE ss_enlaces ALTER COLUMN expira TYPE TIMESTAMP USING expira::timestamp;
+ALTER TABLE ss_enlaces ADD COLUMN IF NOT EXISTS usado_en TIMESTAMP;
+ALTER TABLE ss_enlaces ADD COLUMN IF NOT EXISTS pedido_nuevo_en TIMESTAMP;

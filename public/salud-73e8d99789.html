@@ -101,9 +101,10 @@
     { t: 'Inicio', p: 'inicio' },
     { t: 'Registro de datos', items: [['empresas', 'Empresas'], ['recicladores', 'Recicladores'], ['trabajadores', 'Trabajadores'], ['beneficiarios', 'Beneficiarios']] },
     { t: 'Novedades', p: 'novedades' },
+    { t: 'Links a empresas', items: [['enlaces', 'Generar link'], ['solicitudes', 'Respuestas recibidas']] },
     { t: 'Liquidación', items: [['liquidacion', 'Liquidar mes (PILA)'], ['pagos', 'Control de pagos'], ['parametros', 'Parámetros']] }
   ];
-  var ESPECIALES = { liquidacion: pintarLiquidacion, pagos: pintarPagos, parametros: pintarParametros };
+  var ESPECIALES = { liquidacion: pintarLiquidacion, pagos: pintarPagos, parametros: pintarParametros, enlaces: pintarEnlaces, solicitudes: pintarSolicitudes };
   var AYUDA = {
     empresas: 'Registra cada asociación que administran en seguridad social: datos, representante legal, ARL/caja/operador PILA y los documentos de afiliación recibidos (contrato, confidencialidad, mandato, Cámara, RUT, RUPS, cédula).',
     recicladores: 'Recicladores de oficio de la empresa (Decreto 271 de 2026): ARL que paga la organización sobre 1 SMLMV y aporte BEPS del 5 % del ingreso. Si la empresa está enlazada a su asociación de Genesis Traza, usa "Traer de Registro".',
@@ -264,6 +265,92 @@
       if(!r.ok) return setMsg('pMsg', (r.data && r.data.error) || 'No se pudo traer.', 'err');
       setMsg('pMsg', r.data.agregados ? 'Se agregaron ' + r.data.agregados + ' reciclador(es) desde Registro. Revisa nombres y completa su seguridad social.' : 'No había recicladores nuevos para traer.', 'ok');
       cargar('recicladores');
+    });
+  }
+
+  // ---------- Links a empresas: la empresa llena su información por un link de 30 minutos y un solo uso ----------
+  function copiar(txt, btn){
+    var ok = function(){ if(btn){ var t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(function(){ btn.textContent = t; }, 1500); } };
+    if(navigator.clipboard) navigator.clipboard.writeText(txt).then(ok, function(){ prompt('Copia el link:', txt); }); else prompt('Copia el link:', txt);
+  }
+  function pintarEnlaces(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Links para que cada empresa llene su información</h2></div>' +
+      '<div class="sis-bar">' + selectorEmpresa().replace('<option value="">Todas las empresas</option>', '<option value="">— Elige la empresa —</option>') + '<button class="b pri" id="eGen">Generar link</button></div>' +
+      '<div class="ayuda">El link <b>dura 30 minutos y sirve para un solo envío</b>. La empresa lo abre sin usuario ni contraseña y llena datos, documentos, recicladores, trabajadores y beneficiarios. Lo que envía llega a <b>Respuestas recibidas</b> para que lo revises y lo apliques. Si se le vence, la empresa puede pedir uno nuevo y aparece aquí marcado.</div>' +
+      '<p id="eMsg" class="msg"></p><div id="eNuevo"></div><div class="tw" id="tb"></div></div>';
+    $('fEmp').onchange = function(){ FILTRO_EMP = this.value; try { localStorage.setItem('salud_emp', FILTRO_EMP); } catch(e) {} cargarEnlaces(); };
+    $('eGen').onclick = function(){
+      var emp = $('fEmp').value; if(!emp) return setMsg('eMsg', 'Elige la empresa.', 'err');
+      api('/enlaces', { method: 'POST', body: JSON.stringify({ id_empresa: Number(emp) }) }).then(function(r){
+        if(!r.ok) return setMsg('eMsg', (r.data && r.data.error) || 'No se pudo generar.', 'err');
+        setMsg('eMsg', '');
+        var nom = ($('fEmp').selectedOptions[0] || {}).textContent || '';
+        var texto = 'Hola, este es el link para que ' + nom + ' llene su información de seguridad social en Genesis Traza. Vence a las ' + r.data.vence_hora + ' (30 minutos) y sirve para un solo envío: ' + r.data.url;
+        $('eNuevo').innerHTML = '<div class="ayuda" style="background:#EEFBE7;border-color:#BFE3A6;color:#2F6410;"><b>Link generado — vence a las ' + esc(r.data.vence_hora) + '</b><br><input readonly value="' + esc(r.data.url) + '" style="width:100%;margin:6px 0;font-size:12px;padding:6px;border:1px solid #BFE3A6;border-radius:5px;">' +
+          '<button class="b sm pri" id="eCop">Copiar link</button> <a class="b sm" style="text-decoration:none;" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent(texto) + '">Enviar por WhatsApp</a> <a class="b sm" style="text-decoration:none;" target="_blank" rel="noopener" href="' + esc(r.data.url) + '">Abrir</a></div>';
+        $('eCop').onclick = function(){ copiar(r.data.url, this); };
+        cargarEnlaces();
+      });
+    };
+    cargarEnlaces();
+  }
+  function cargarEnlaces(){
+    api('/enlaces' + (FILTRO_EMP ? '?id_empresa=' + FILTRO_EMP : '')).then(function(r){
+      if(!r.ok) return setMsg('eMsg', (r.data && r.data.error) || 'No se pudo cargar.', 'err');
+      var tg = { Vigente: 'vig', Usado: 'sin', Vencido: 'ven', Desactivado: 'sin' };
+      $('tb').innerHTML = r.data.length ? '<table class="t"><thead><tr><th></th><th>Empresa</th><th>Estado</th><th>Generado</th><th>Vence</th><th>Usado</th><th>Pidió uno nuevo</th></tr></thead><tbody>' +
+        r.data.map(function(l){ return '<tr' + (l.pide_nuevo ? ' style="background:#FFF7EC;"' : '') + '><td class="acc">' + (l.estado === 'Vigente' ? '<button class="b sm" onclick="copiar(\'' + l.url + '\', this)">Copiar</button> <button class="b sm rojo" onclick="desactivar(' + l.id + ')">Desactivar</button>' : '') +
+          (l.pide_nuevo ? '<button class="b sm nar" onclick="FILTRO_EMP=\'' + l.id_empresa + '\';pintarEnlaces();setTimeout(function(){ $(\'eGen\').click(); }, 300)">Generar nuevo</button>' : '') + '</td>' +
+          '<td>' + esc(l.empresa) + '</td><td><span class="tag ' + tg[l.estado] + '">' + esc(l.estado) + '</span></td><td>' + esc(l.creado) + '</td><td>' + esc(l.expira) + '</td><td>' + esc(l.usado_en || '') + '</td><td>' + (l.pide_nuevo ? '<span class="tag por">Sí · ' + esc(l.pedido_nuevo_en) + '</span>' : esc(l.pedido_nuevo_en ? 'Atendido' : '')) + '</td></tr>'; }).join('') + '</tbody></table>'
+        : '<p class="muted" style="padding:10px;">Aún no hay links.</p>';
+    });
+  }
+  function desactivar(id){ if(!confirm('¿Desactivar este link?')) return; api('/enlaces/' + id + '/desactivar', { method: 'POST' }).then(function(){ cargarEnlaces(); }); }
+
+  function pintarSolicitudes(){
+    $('main').innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>Respuestas recibidas por los links</h2><select id="sEst"><option value="Pendiente">Pendientes</option><option value="">Todas</option><option value="Aplicada">Aplicadas</option><option value="Rechazada">Rechazadas</option></select></div>' +
+      '<div class="ayuda">Revisa lo que envió cada empresa. <b>Aplicar</b> lo pasa a sus datos: actualiza a las personas que ya existen (por documento) y agrega las nuevas. Nada entra sin tu revisión.</div><p id="sMsg" class="msg"></p><div class="tw" id="tb"></div></div>';
+    $('sEst').onchange = cargarSolicitudes; cargarSolicitudes();
+  }
+  function cargarSolicitudes(){
+    api('/solicitudes' + ($('sEst').value ? '?estado=' + $('sEst').value : '')).then(function(r){
+      if(!r.ok) return setMsg('sMsg', (r.data && r.data.error) || 'No se pudo cargar.', 'err');
+      $('tb').innerHTML = r.data.length ? '<table class="t"><thead><tr><th></th><th>Folio</th><th>Empresa</th><th>Recibida</th><th>Diligenció</th><th class="num">Recicladores</th><th class="num">Trabajadores</th><th class="num">Beneficiarios</th><th class="num">Documentos</th><th>Estado</th><th>Resultado</th></tr></thead><tbody>' +
+        r.data.map(function(s){ return '<tr><td class="acc"><button class="b sm pri" onclick="verSolicitud(' + s.id + ')">Revisar</button></td><td>SAL-' + String(s.id).padStart(6, '0') + '</td><td>' + esc(s.empresa) + '</td><td>' + esc(s.recibida) + '</td><td>' + esc(s.diligenciado_por || '') + (s.cargo_diligencia ? ' · ' + esc(s.cargo_diligencia) : '') + (s.telefono_diligencia ? ' · ' + esc(s.telefono_diligencia) : '') + '</td>' +
+          '<td class="num">' + s.recicladores + '</td><td class="num">' + s.trabajadores + '</td><td class="num">' + s.beneficiarios + '</td><td class="num">' + s.documentos + '</td><td><span class="tag ' + ({ Pendiente: 'por', Aplicada: 'vig', Rechazada: 'ven' }[s.estado]) + '">' + esc(s.estado) + '</span></td><td style="white-space:normal;max-width:320px;">' + esc(s.resultado || '') + '</td></tr>'; }).join('') + '</tbody></table>'
+        : '<p class="muted" style="padding:10px;">No hay respuestas.</p>';
+    });
+  }
+  function tablaMini(filas, columnas){
+    if(!filas || !filas.length) return '<p class="muted" style="margin:4px 0 10px;">—</p>';
+    return '<div class="tw" style="max-height:240px;margin-bottom:10px;"><table class="t"><thead><tr><th>#</th>' + columnas.map(function(c){ return '<th>' + esc(c[1]) + '</th>'; }).join('') + '</tr></thead><tbody>' +
+      filas.map(function(f, i){ return '<tr><td>' + (i + 1) + '</td>' + columnas.map(function(c){ var v = f[c[0]]; return '<td>' + esc(v === true ? 'Sí' : v === false ? 'No' : v == null ? '' : v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>';
+  }
+  function verSolicitud(id){
+    api('/solicitudes/' + id).then(function(r){
+      if(!r.ok) return setMsg('sMsg', (r.data && r.data.error) || 'No se pudo abrir.', 'err');
+      var s = r.data, d = s.datos || {}, e = d.empresa || {};
+      var per = [['tipo_doc', 'Tipo'], ['nro_doc', 'Documento'], ['nombres', 'Nombres'], ['apellidos', 'Apellidos'], ['fecha_nacimiento', 'Nacimiento'], ['telefono', 'Celular'], ['eps', 'EPS']];
+      abrirModal('<h3>Folio SAL-' + String(s.id).padStart(6, '0') + ' · ' + esc(s.empresa) + '</h3><p class="muted" style="margin:0 0 8px;">Diligenció: ' + esc(s.diligenciado_por || '') + (s.cargo_diligencia ? ' (' + esc(s.cargo_diligencia) + ')' : '') + ' · Estado: ' + esc(s.estado) + '</p>' +
+        '<b>Datos de la empresa</b>' + (Object.keys(e).length ? '<div class="tw" style="max-height:200px;margin-bottom:10px;"><table class="t"><tbody>' + Object.keys(e).map(function(k){ var c = META.empresas.campos.filter(function(x){ return x.n === k; })[0]; return '<tr><td><b>' + esc(c ? c.l : k) + '</b></td><td>' + esc(e[k] === true ? 'Sí' : e[k]) + '</td></tr>'; }).join('') + '</tbody></table></div>' : '<p class="muted" style="margin:4px 0 10px;">—</p>') +
+        '<b>Documentos</b><div style="margin:4px 0 10px;">' + (s.documentos.length ? s.documentos.map(function(x){ return '<button class="b sm" onclick="bajar(\'/documentos/' + x.id + '/descargar\', \'' + esc(x.nombre).replace(/'/g, '') + '\')">⇩ ' + esc(x.tipo.replace('_', ' ')) + ': ' + esc(x.nombre) + '</button> '; }).join('') : '<span class="muted">—</span>') + '</div>' +
+        '<b>Recicladores (' + (d.recicladores || []).length + ')</b>' + tablaMini(d.recicladores, per.concat([['regimen_salud', 'Régimen']])) +
+        '<b>Trabajadores (' + (d.trabajadores || []).length + ')</b>' + tablaMini(d.trabajadores, per.concat([['cargo', 'Cargo'], ['salario', 'Salario']])) +
+        '<b>Beneficiarios (' + (d.beneficiarios || []).length + ')</b>' + tablaMini(d.beneficiarios, [['titular_nro_doc', 'Titular'], ['parentesco', 'Parentesco'], ['tipo_doc', 'Tipo'], ['nro_doc', 'Documento'], ['nombres', 'Nombres'], ['apellidos', 'Apellidos']]) +
+        (s.resultado ? '<p class="msg">' + esc(s.resultado) + '</p>' : '') + '<p id="vMsg" class="msg"></p>' +
+        '<div class="pie">' + (s.estado === 'Pendiente' ? '<button class="b rojo" id="vRech">Rechazar</button><button class="b pri" id="vApl">Aplicar a la empresa</button>' : '<button class="b" onclick="cerrarModal()">Cerrar</button>') + '</div>');
+      $('md').style.maxWidth = '980px';
+      if($('vApl')) $('vApl').onclick = function(){
+        this.disabled = true;
+        api('/solicitudes/' + id + '/aplicar', { method: 'POST' }).then(function(r2){
+          if(!r2.ok){ $('vApl').disabled = false; return setMsg('vMsg', (r2.data && r2.data.error) || 'No se pudo aplicar.', 'err'); }
+          cerrarModal(); $('md').style.maxWidth = ''; cargarEmpresas(); setMsg('sMsg', r2.data.resultado, 'ok'); cargarSolicitudes();
+        });
+      };
+      if($('vRech')) $('vRech').onclick = function(){
+        var m = prompt('¿Por qué se rechaza? (opcional)'); if(m === null) return;
+        api('/solicitudes/' + id + '/rechazar', { method: 'POST', body: JSON.stringify({ motivo: m }) }).then(function(){ cerrarModal(); $('md').style.maxWidth = ''; cargarSolicitudes(); });
+      };
     });
   }
 

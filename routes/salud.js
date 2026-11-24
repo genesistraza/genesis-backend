@@ -581,4 +581,146 @@ router.get('/liquidaciones/:id/beps', asyncRoute(async (req, res) => {
   res.send('﻿' + filas.map((f) => f.map(c).join(';')).join('\r\n'));
 }));
 
+// ============================ Links para que cada empresa llene su informacion ============================
+const crypto = require('crypto');
+const cloudinary = require('../db/cloudinary');
+const URL_FORM = 'https://genesistraza.com/formulario-salud.html?t=';
+const TIPOS_DOC_EMPRESA = { contrato: 'doc_contrato', confidencialidad: 'doc_confidencialidad', mandato: 'doc_mandato', camara: 'doc_camara', rut: 'doc_rut', rups: 'doc_rups', cedula_rl: 'doc_cedula_rl' };
+
+// GET /salud/enlaces[?id_empresa] -> links generados
+router.get('/enlaces', asyncRoute(async (req, res) => {
+  const emp = parseId(req.query.id_empresa);
+  // Hora de Colombia para mostrar; estado calculado en la base (los timestamps se guardan en UTC).
+  const r = await pool.query(
+    `SELECT l.id, l.id_empresa, e.nombre AS empresa, l.token, l.activo, l.envios,
+            to_char(l.expira AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS expira,
+            to_char(l.usado_en AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS usado_en,
+            to_char(l.pedido_nuevo_en AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS pedido_nuevo_en,
+            to_char(l.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS creado,
+            CASE WHEN NOT l.activo THEN 'Desactivado' WHEN l.usado_en IS NOT NULL THEN 'Usado'
+                 WHEN l.expira <= NOW() THEN 'Vencido' ELSE 'Vigente' END AS estado,
+            -- Pidio uno nuevo y todavia no se le ha generado otro despues de esa solicitud
+            (l.pedido_nuevo_en IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ss_enlaces n WHERE n.id_empresa = l.id_empresa AND n.created_at > l.pedido_nuevo_en)) AS pide_nuevo
+     FROM ss_enlaces l JOIN ss_empresas e ON e.id = l.id_empresa ${emp ? 'WHERE l.id_empresa = $1' : ''} ORDER BY l.created_at DESC LIMIT 300`, emp ? [emp] : []);
+  res.json(r.rows.map((x) => Object.assign(x, { url: URL_FORM + x.token })));
+}));
+// POST /salud/enlaces {id_empresa} -> nuevo link unico: dura 30 minutos y sirve para un solo envio
+router.post('/enlaces', asyncRoute(async (req, res) => {
+  const emp = parseId(req.body && req.body.id_empresa);
+  if (!emp || !(await pool.query('SELECT 1 FROM ss_empresas WHERE id = $1', [emp])).rows.length) return res.status(400).json({ error: 'Elige la empresa.' });
+  const token = crypto.randomBytes(24).toString('hex');
+  const r = await pool.query(
+    `INSERT INTO ss_enlaces (id_empresa, token, expira, created_by) VALUES ($1, $2, NOW() + interval '30 minutes', $3)
+     RETURNING id, to_char(expira AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'HH24:MI') AS hora`, [emp, token, req.user.id]);
+  await logActivity(req.user.id, 'salud_enlace_creado', { id: r.rows[0].id, id_empresa: emp }, req.ip);
+  res.json({ id: r.rows[0].id, url: URL_FORM + token, vence_hora: r.rows[0].hora });
+}));
+// POST /salud/enlaces/:id/desactivar
+router.post('/enlaces/:id/desactivar', asyncRoute(async (req, res) => {
+  const r = await pool.query('UPDATE ss_enlaces SET activo = FALSE WHERE id = $1 RETURNING id', [parseId(req.params.id)]);
+  if (!r.rowCount) return res.status(404).json({ error: 'Link no encontrado.' });
+  await logActivity(req.user.id, 'salud_enlace_desactivado', { id: parseId(req.params.id) }, req.ip);
+  res.json({ ok: true });
+}));
+
+// GET /salud/solicitudes[?estado] -> respuestas recibidas por los links
+router.get('/solicitudes', asyncRoute(async (req, res) => {
+  const est = ['Pendiente', 'Aplicada', 'Rechazada'].includes(req.query.estado) ? req.query.estado : null;
+  const r = await pool.query(
+    `SELECT s.id, s.id_empresa, e.nombre AS empresa, s.estado, s.diligenciado_por, s.cargo_diligencia, s.telefono_diligencia, s.resultado,
+            to_char(s.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD HH24:MI') AS recibida,
+            jsonb_array_length(COALESCE(s.datos->'recicladores', '[]')) AS recicladores,
+            jsonb_array_length(COALESCE(s.datos->'trabajadores', '[]')) AS trabajadores,
+            jsonb_array_length(COALESCE(s.datos->'beneficiarios', '[]')) AS beneficiarios,
+            (SELECT count(*)::int FROM ss_documentos d WHERE d.id_solicitud = s.id) AS documentos
+     FROM ss_solicitudes s JOIN ss_empresas e ON e.id = s.id_empresa ${est ? 'WHERE s.estado = $1' : ''} ORDER BY s.created_at DESC LIMIT 500`, est ? [est] : []);
+  res.json(r.rows);
+}));
+router.get('/solicitudes/:id', asyncRoute(async (req, res) => {
+  const s = (await pool.query('SELECT s.*, e.nombre AS empresa FROM ss_solicitudes s JOIN ss_empresas e ON e.id = s.id_empresa WHERE s.id = $1', [parseId(req.params.id)])).rows[0];
+  if (!s) return res.status(404).json({ error: 'Respuesta no encontrada.' });
+  s.documentos = (await pool.query('SELECT id, tipo, nombre FROM ss_documentos WHERE id_solicitud = $1 ORDER BY id', [s.id])).rows;
+  res.json(s);
+}));
+// POST /salud/solicitudes/:id/rechazar {motivo}
+router.post('/solicitudes/:id/rechazar', asyncRoute(async (req, res) => {
+  const motivo = String((req.body && req.body.motivo) || '').trim().slice(0, 500) || 'Rechazada';
+  const r = await pool.query(`UPDATE ss_solicitudes SET estado = 'Rechazada', resultado = $1, revisado_por = $2, revisado_en = NOW() WHERE id = $3 AND estado = 'Pendiente' RETURNING id`,
+    [motivo, req.user.id, parseId(req.params.id)]);
+  if (!r.rowCount) return res.status(409).json({ error: 'Solo se puede rechazar una respuesta pendiente.' });
+  await logActivity(req.user.id, 'salud_solicitud_rechazada', { id: parseId(req.params.id) }, req.ip);
+  res.json({ ok: true });
+}));
+// POST /salud/solicitudes/:id/aplicar -> pasa lo enviado a la empresa (actualiza si ya existe por documento)
+router.post('/solicitudes/:id/aplicar', asyncRoute(async (req, res) => {
+  const s = (await pool.query('SELECT * FROM ss_solicitudes WHERE id = $1', [parseId(req.params.id)])).rows[0];
+  if (!s) return res.status(404).json({ error: 'Respuesta no encontrada.' });
+  if (s.estado !== 'Pendiente') return res.status(409).json({ error: 'Esta respuesta ya fue ' + s.estado.toLowerCase() + '.' });
+  const d = s.datos || {}, cuenta = { empresa: 0, nuevos: 0, actualizados: 0, beneficiarios: 0, documentos: 0 }, avisos = [];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ce = Object.keys(d.empresa || {});
+    if (ce.length) {
+      await client.query(`UPDATE ss_empresas SET ${ce.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = NOW() WHERE id = $${ce.length + 1}`, [...ce.map((c) => d.empresa[c]), s.id_empresa]);
+      cuenta.empresa = ce.length;
+    }
+    const docs = (await client.query('SELECT DISTINCT tipo FROM ss_documentos WHERE id_solicitud = $1', [s.id])).rows.map((x) => x.tipo).filter((t) => TIPOS_DOC_EMPRESA[t]);
+    if (docs.length) { await client.query(`UPDATE ss_empresas SET ${docs.map((t) => TIPOS_DOC_EMPRESA[t] + ' = TRUE').join(', ')} WHERE id = $1`, [s.id_empresa]); cuenta.documentos = docs.length; }
+    for (const tipo of ['reciclador', 'trabajador']) {
+      for (const p of (d[tipo + 'es'] || [])) {
+        const ya = (await client.query('SELECT id FROM ss_personas WHERE id_empresa = $1 AND tipo = $2 AND tipo_doc = $3 AND nro_doc = $4', [s.id_empresa, tipo, p.tipo_doc, p.nro_doc])).rows[0];
+        const cols = Object.keys(p).filter((c) => p[c] !== null && p[c] !== '');
+        if (ya) {
+          if (cols.length) await client.query(`UPDATE ss_personas SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = NOW() WHERE id = $${cols.length + 1}`, [...cols.map((c) => p[c]), ya.id]);
+          cuenta.actualizados++;
+        } else {
+          const all = ['id_empresa', 'tipo', 'estado', 'created_by', ...cols];
+          await client.query(`INSERT INTO ss_personas (${all.join(',')}) VALUES (${all.map((_, i) => '$' + (i + 1)).join(',')})`, [s.id_empresa, tipo, 'Activo', req.user.id, ...cols.map((c) => p[c])]);
+          cuenta.nuevos++;
+        }
+      }
+    }
+    for (const b of (d.beneficiarios || [])) {
+      const tit = (await client.query("SELECT id FROM ss_personas WHERE id_empresa = $1 AND regexp_replace(nro_doc, '[^0-9A-Za-z]', '', 'g') = $2 ORDER BY (tipo = 'trabajador') DESC LIMIT 1", [s.id_empresa, b.titular_nro_doc])).rows[0];
+      if (!tit) { avisos.push('Beneficiario ' + b.nro_doc + ': no se encontró al titular ' + b.titular_nro_doc + '.'); continue; }
+      const cols = Object.keys(b).filter((c) => c !== 'titular_nro_doc' && b[c] !== null && b[c] !== '');
+      const ya = (await client.query('SELECT id FROM ss_beneficiarios WHERE id_persona = $1 AND tipo_doc = $2 AND nro_doc = $3', [tit.id, b.tipo_doc, b.nro_doc])).rows[0];
+      if (ya) await client.query(`UPDATE ss_beneficiarios SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(', ')}, updated_at = NOW() WHERE id = $${cols.length + 1}`, [...cols.map((c) => b[c]), ya.id]);
+      else { const all = ['id_persona', 'created_by', ...cols]; await client.query(`INSERT INTO ss_beneficiarios (${all.join(',')}) VALUES (${all.map((_, i) => '$' + (i + 1)).join(',')})`, [tit.id, req.user.id, ...cols.map((c) => b[c])]); }
+      cuenta.beneficiarios++;
+    }
+    const resultado = `Aplicada: ${cuenta.empresa} dato(s) de la empresa, ${cuenta.documentos} documento(s), ${cuenta.nuevos} persona(s) nueva(s), ${cuenta.actualizados} actualizada(s), ${cuenta.beneficiarios} beneficiario(s).` + (avisos.length ? ' ' + avisos.join(' ') : '');
+    await client.query(`UPDATE ss_solicitudes SET estado = 'Aplicada', resultado = $1, revisado_por = $2, revisado_en = NOW() WHERE id = $3`, [resultado.slice(0, 2000), req.user.id, s.id]);
+    await client.query('COMMIT');
+    await logActivity(req.user.id, 'salud_solicitud_aplicada', { id: s.id, nuevos: cuenta.nuevos, actualizados: cuenta.actualizados }, req.ip);
+    res.json({ ok: true, resultado, avisos });
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+}));
+
+// GET /salud/documentos?id_empresa -> documentos recibidos de la empresa
+router.get('/documentos', asyncRoute(async (req, res) => {
+  const r = await pool.query(`SELECT id, tipo, nombre, id_solicitud, to_char(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Bogota', 'YYYY-MM-DD') AS recibido
+    FROM ss_documentos WHERE id_empresa = $1 ORDER BY created_at DESC`, [parseId(req.query.id_empresa)]);
+  res.json(r.rows);
+}));
+// GET /salud/documentos/:id/descargar -> el servidor lo pide firmado a Cloudinary y lo reenvia
+router.get('/documentos/:id/descargar', asyncRoute(async (req, res) => {
+  const d = (await pool.query('SELECT nombre, archivo_url FROM ss_documentos WHERE id = $1', [parseId(req.params.id)])).rows[0];
+  if (!d) return res.status(404).json({ error: 'Documento no encontrado.' });
+  const m = /\/(image|raw|video)\/upload\/(?:v\d+\/)?(.+)$/.exec(d.archivo_url);
+  if (!m) return res.status(500).json({ error: 'No se pudo ubicar el archivo.' });
+  let publicId = decodeURIComponent(m[2]), formato = '';
+  if (m[1] !== 'raw') { const p = /^(.+)\.([a-z0-9]+)$/i.exec(publicId); if (p) { publicId = p[1]; formato = p[2]; } }
+  const r = await fetch(cloudinary.utils.private_download_url(publicId, formato, { resource_type: m[1], type: 'upload' }));
+  if (!r.ok) return res.status(502).json({ error: 'No se pudo descargar el archivo del almacenamiento.' });
+  const nombre = String(d.nombre || 'documento').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim();
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+  res.setHeader('Content-Type', r.headers.get('content-type') || 'application/octet-stream');
+  res.setHeader('Content-Disposition', `attachment; filename="${nombre.replace(/[^\x20-\x7E]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(nombre)}`);
+  res.send(Buffer.from(await r.arrayBuffer()));
+}));
+
 module.exports = router;
+module.exports.ENT = ENT;
+module.exports.limpiar = limpiar;

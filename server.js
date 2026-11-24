@@ -32,6 +32,7 @@ app.use('/', massBalanceRoutes);
 app.use('/trazabilidad', trazabilidadRoutes);
 app.use('/sistema', require('./routes/sistema'));
 app.use('/salud', require('./routes/salud'));
+app.use('/salud-publico', require('./routes/saludPublico')); // formulario por link unico (sin sesion)
 // Fuera de /trazabilidad a propósito: la página de verificación de un comprobante es pública
 // (sin iniciar sesión), mientras que todo lo de /trazabilidad exige rol 'pro'.
 app.use('/comprobantes', comprobantesRoutes);
