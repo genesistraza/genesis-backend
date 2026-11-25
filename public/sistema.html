@@ -62,6 +62,40 @@
   .tag.vig{ background:#E6F4D7;color:#3C7A12; } .tag.por{ background:#FFF1DA;color:#A35F00; }
   .tag.ven{ background:#FBE3E0;color:#C0392B; } .tag.sin{ background:#EEF0F4;color:#5B6779; }
   /* Modal */
+  /* Hoja tipo Excel (Descarga para validador) */
+  .xl-tools{ display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:0 0 6px;padding:5px 6px;background:#F7F9FC;border:1px solid var(--borde);border-radius:6px;font-size:12px; }
+  .xl-tools .b{ padding:4px 8px;font-size:12px; }
+  .xl-tools input{ font-size:12px;padding:4px 6px;border:1px solid var(--borde);border-radius:5px;font-family:inherit; }
+  .xl-tools label{ display:inline-flex;gap:3px;align-items:center;white-space:nowrap; }
+  .xl-tools .spacer{ flex:1; }
+  .xl-sep{ width:1px;height:20px;background:var(--borde);margin:0 3px; }
+  .xl-wrap{ outline:none; }
+  .xl-wrap:focus{ box-shadow:0 0 0 2px #BFDBFE; }
+  table.xl{ user-select:none; }
+  table.xl th, table.xl td{ border-right:1px solid #E6EBF2; }
+  table.xl td{ cursor:cell;padding:4px 7px; }
+  table.xl td.ro{ color:#5b6b80; }
+  table.xl td.ed{ color:#0F1B2D; }
+  table.xl td.mod{ background:#FEF3C7 !important; }
+  table.xl td.mal{ background:#FDE2E1;color:#B42318;font-weight:600; }
+  table.xl td.sel{ background:#DBEAFE !important; }
+  table.xl td.act{ outline:2px solid #1E6FD6;outline-offset:-2px; }
+  table.xl td.editando{ padding:0;overflow:visible; }
+  table.xl td.editando input, table.xl td.editando select{ width:100%;min-width:110px;box-sizing:border-box;font-size:12px;padding:3px 5px;border:2px solid #1E6FD6;border-radius:0;font-family:inherit; }
+  table.xl th.rn{ position:sticky;left:0;z-index:2;background:#EEF2F8;color:#5b6b80;text-align:right;font-weight:600;min-width:34px;cursor:pointer; }
+  table.xl thead th.rn{ z-index:3; }
+  table.xl th.rn.mod{ background:#FDE68A;color:#92400E; }
+  table.xl tr.xl-err th.rn{ background:#B42318;color:#fff; }
+  table.xl thead th{ cursor:pointer; }
+  .xl-fb{ margin-left:4px;border:1px solid #9DCBF2;background:#fff;border-radius:3px;font-size:10px;line-height:1;padding:1px 3px;cursor:pointer;color:#0B3D80; }
+  .xl-fb.on{ background:#1E6FD6;color:#fff;border-color:#1E6FD6; }
+  .xl-status{ display:flex;flex-wrap:wrap;gap:4px;padding:4px 6px;font-size:12px;color:#334155;background:#F7F9FC;border:1px solid var(--borde);border-top:0;border-radius:0 0 6px 6px; }
+  .xl-status .spacer{ flex:1; }
+  .xl-pop{ display:none;position:fixed;z-index:90;width:250px;background:#fff;border:1px solid var(--borde);border-radius:8px;box-shadow:0 8px 24px rgba(15,27,45,.18);padding:8px;font-size:12px; }
+  .xl-pop.open{ display:block; }
+  .xl-pop .vp-l{ max-height:220px;overflow:auto;border:1px solid #E6EBF2;border-radius:5px;padding:3px; }
+  .xl-pop .vp-i{ display:flex;gap:5px;align-items:center;padding:2px 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+  .xl-pop .vp-i[hidden]{ display:none; }
   .ov{ display:none;position:fixed;inset:0;background:rgba(15,27,45,.45);z-index:100;align-items:flex-start;justify-content:center;padding:40px 12px;overflow:auto; }
   .ov.open{ display:flex; }
   .md{ position:relative;background:#fff;border-radius:10px;width:100%;max-width:640px;padding:14px 16px;box-shadow:0 20px 50px rgba(0,0,0,.25); }
@@ -83,6 +117,9 @@
   .sis-title .yo{ display:flex;align-items:center;gap:8px;cursor:pointer;background:none;border:none;color:inherit;font-family:inherit;padding:0; }
   .perm-t td, .perm-t th{ text-align:center; } .perm-t td:first-child, .perm-t th:first-child{ text-align:left; }
   .bm-grid input{ width:96px;font-size:12px;padding:3px 5px;border:1px solid var(--borde);border-radius:4px;text-align:right; }
+  /* Balance de masas: numeros solo con teclado (sin flechitas para subir/bajar) */
+  .bm-grid input[type=number]{ -moz-appearance:textfield;appearance:textfield; }
+  .bm-grid input[type=number]::-webkit-outer-spin-button, .bm-grid input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none;margin:0; }
   .bm-grid input::placeholder{ color:#8C99A8;font-style:italic; }
   .bm-grid input.bad{ border-color:#C0392B;background:#FDF1EF; }
   .bm-fecha{ font-weight:700;color:var(--blue-deep); }
@@ -201,7 +238,7 @@
     importar: '1) Elige el tipo de archivo · 2) Descarga la plantilla · 3) Llénala en Excel · 4) Súbela con "Importar". Las filas con errores no entran y se listan abajo.',
     documentos_asociaciones: 'Sube cada documento de la asociación con su fecha de vencimiento. El estado avisa cuando está por vencer o vencido.',
     documentos_referencia: 'Normas, formatos y documentos de consulta para todas las asociaciones.',
-    validador_bm: 'Revisa el balance de masas del periodo y descarga el CSV para el validador del SUI. Columnas azules = van al CSV; grises = solo control.',
+    validador_bm: 'Revisa y corrige como en Excel (doble clic o escribir encima, Ctrl+C/Ctrl+V, ▾ para filtrar y ordenar), guarda y descarga el CSV del SUI. Azules = van al CSV; grises = control; amarillo = sin guardar.',
     resumen_masas: 'Elige el rango de fechas y "Ver" para sumar el material recibido por mes, material o familia.',
     colaboradores: 'Personas que entran al sistema. Crea el usuario, asígnale perfil y asociación; para bloquearlo, ponlo en "Bloqueado" con un mensaje.',
     perfiles: 'Cada perfil define qué opciones del menú ve el usuario. Usa "Opciones" para marcarlas.',
@@ -324,6 +361,17 @@
       .catch(function(err){ alert(err.message); })
       .then(function(){ b.disabled = false; b.innerHTML = txt; });
   });
+  // Balance de masas: la rueda del mouse y las flechas no cambian los kilos; las flechas pasan a la fila de arriba/abajo.
+  document.addEventListener('wheel', function(ev){ var t = ev.target; if(t && t.matches && t.matches('.bm-grid input[type=number]') && document.activeElement === t) ev.preventDefault(); }, { passive: false });
+  document.addEventListener('keydown', function(ev){
+    var t = ev.target; if(!(t && t.matches && t.matches('.bm-grid input[type=number]')) || (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown')) return;
+    ev.preventDefault();
+    var tr = t.closest('tr'), td = t.closest('td'), col = Array.prototype.indexOf.call(tr.children, td);
+    var otra = ev.key === 'ArrowUp' ? tr.previousElementSibling : tr.nextElementSibling;
+    while(otra && !(otra.children[col] && otra.children[col].querySelector('input:not([disabled])'))) otra = ev.key === 'ArrowUp' ? otra.previousElementSibling : otra.nextElementSibling;
+    if(otra){ var i = otra.children[col].querySelector('input'); i.focus(); if(i.select) i.select(); }
+  });
+  window.addEventListener('beforeunload', function(ev){ if(SIS.antesDeSalir && SIS.actual === 'validador_bm' && document.querySelector('#vlGuardar:not([disabled])')){ ev.preventDefault(); ev.returnValue = ''; } });
   window.addEventListener('hashchange', function(){
     var h = location.hash.slice(1);
     if(SIS.me && h && h !== SIS.actual) ir(h);
@@ -332,6 +380,7 @@
   function ir(clave){
     if(clave === 'salir'){ gtLogout(); return; }
     if(SIS.actual === 'balance_masas' && clave !== 'balance_masas') guardarYa();
+    if(SIS.antesDeSalir && clave !== SIS.actual){ if(!SIS.antesDeSalir()){ history.replaceState(null, '', '#' + SIS.actual); marcarMenu(SIS.actual); return; } SIS.antesDeSalir = null; }
     SIS.actual = clave;
     if(location.hash.slice(1) !== clave) history.replaceState(null, '', '#' + clave);
     marcarMenu(clave);
@@ -1100,65 +1149,566 @@
 
   // ---------- Resumenes ----------
   // ---------- Descarga para validador (balance de masas en formato SUI) ----------
-  // Se ve todo (19 columnas) y el CSV solo lleva las 11 del formato SUI, separadas por ";" y con
-  // coma decimal, igual al export del sistema original.
+  // Hoja tipo Excel: se ven las 19 columnas, se puede buscar, filtrar, ordenar, editar, copiar/pegar
+  // desde Excel, rellenar, reemplazar y deshacer. "Guardar" escribe lo corregido en el balance de
+  // masas original. El CSV solo lleva las 11 columnas del formato SUI, separadas por ";" y con coma
+  // decimal, igual al export del sistema original.
   var VAL_COLS = [
-    { k: 'nueca', t: 'NUECA' }, { k: 'numacro', t: 'NUMACRO' }, { k: 'semana', t: 'Número de semana' },
-    { k: 'tipo_ident', t: 'Tipo ident.', fijo: 1 }, { k: 'nro_documento', t: 'Nro ident.' }, { k: 'placa', t: 'placa', fijo: '999' },
-    { k: 'toneladas', t: 'toneladas', dec: 4 }, { k: 'tipo_material', t: 'Tipo Material' }, { k: 'toneladas_rechazo', t: 'Toneladas_rechazo', dec: 4 },
+    { k: 'nueca', t: 'NUECA', ed: 'eca' }, { k: 'numacro', t: 'NUMACRO', ed: 'numacro' }, { k: 'semana', t: 'Número de semana', n: true },
+    { k: 'tipo_ident', t: 'Tipo ident.', fijo: 1 }, { k: 'nro_documento', t: 'Nro ident.', ed: 'reciclador' }, { k: 'placa', t: 'placa', fijo: '999' },
+    { k: 'toneladas', t: 'toneladas', dec: 4, ed: 'ton', campo: 'cantidad' }, { k: 'tipo_material', t: 'Tipo Material', ed: 'material' },
+    { k: 'toneladas_rechazo', t: 'Toneladas_rechazo', dec: 4, ed: 'ton', campo: 'cantidad_rechazo' },
     { k: 'tipo_destino', t: 'Tipo de destino ', fijo: 1 }, { k: 'sitio', t: 'Número único del sitio de destino', fijo: '655611001' },
     // Control de la asociacion (no van al CSV)
-    { k: 'asociacion', t: 'Asociación', ctl: true }, { k: 'fecha', t: 'fecha', ctl: true }, { k: 'nombre_completo', t: 'nombre_completo', ctl: true },
-    { k: 'material', t: 'desc_tipo_material_padre', ctl: true }, { k: 'valor_kilogramo', t: 'valor_kilogramo', dec: 2, ctl: true },
-    { k: 'valor_total', t: 'valor_total', dec: 2, ctl: true }, { k: 'cantidad_rechazo', t: 'cantidad_rechazo', dec: 2, ctl: true }, { k: 'cantidad_nosui', t: 'cantidad_nosui', dec: 2, ctl: true }
+    { k: 'asociacion', t: 'Asociación', ctl: true }, { k: 'fecha', t: 'fecha', ctl: true, ed: 'fecha' }, { k: 'nombre_completo', t: 'nombre_completo', ctl: true },
+    { k: 'material', t: 'desc_tipo_material_padre', ctl: true }, { k: 'valor_kilogramo', t: 'valor_kilogramo', dec: 2, ctl: true, ed: 'num', campo: 'valor' },
+    { k: 'valor_total', t: 'valor_total', dec: 2, ctl: true }, { k: 'cantidad_rechazo', t: 'cantidad_rechazo', dec: 2, ctl: true, ed: 'num', campo: 'cantidad_rechazo' },
+    { k: 'cantidad_nosui', t: 'cantidad_nosui', dec: 2, ctl: true, ed: 'num', campo: 'cantidad_nosui' }
   ];
+  var VAL_CAMPOS = ['id_bodega', 'id_numacro', 'id_reciclador', 'id_tipo_material', 'fecha', 'cantidad', 'valor', 'cantidad_rechazo', 'cantidad_nosui'];
+  var VAL_ED_CAMPO = { eca: 'id_bodega', numacro: 'id_numacro', reciclador: 'id_reciclador', material: 'id_tipo_material', fecha: 'fecha' };
+  function valCampo(c){ return c.ed ? (c.campo || VAL_ED_CAMPO[c.ed]) : null; }
   function valorVal(c, x){ var v = c.fijo !== undefined ? c.fijo : x[c.k]; return v === null || v === undefined ? '' : v; }
+  function valDisp(c, x){ var v = valorVal(c, x); return c.dec ? (v === '' ? '' : num(Number(v), c.dec)) : String(v); }
+  function valNorm(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+  // Numero escrito a la colombiana o a la inglesa: "1.234,5" / "1234,5" / "1234.5"
+  function valNum(s){
+    s = String(s == null ? '' : s).replace(/\s|\$/g, '');
+    if(s === '') return null;
+    if(s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.');
+    else if(/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
+    var n = Number(s); return Number.isFinite(n) ? n : NaN;
+  }
+  function valFecha(s){
+    s = String(s || '').trim(); var m;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    if((m = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/.exec(s))) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+    return null;
+  }
+  // Semana del mes empezando en domingo (igual que el servidor). Sin new Date() local: UTC puro.
+  function valSemana(f){ var p = String(f).split('-').map(Number); if(p.length !== 3) return ''; return Math.floor((p[2] - 1 + new Date(Date.UTC(p[0], p[1] - 1, 1)).getUTCDay()) / 7) + 1; }
+
   PANTALLAS.validador_bm = function(main){
     var hoy = SIS.me.hoy || gtTodayCO();
+    var puedeEditar = puedeAcc('balance_masas', 'editar');
+    var B = function(id, txt, tit){ return '<button type="button" class="b" id="' + id + '" title="' + esc(tit) + '">' + txt + '</button>'; };
     main.innerHTML = '<div class="sis-panel"><div class="sis-bar"><h2>' + ic('excel') + ' Descarga para validador</h2>' +
       (SIS.me.todasAsociaciones ? '<select id="vlCentro">' + SIS.me.centros.map(function(c){ return '<option value="' + c.id + '">' + esc(c.nombre) + '</option>'; }).join('') + '</select>' : '') +
       '<span class="muted">Fecha inicial</span><input type="date" id="vlDesde" value="' + hoy.slice(0, 8) + '01"><span class="muted">Fecha final</span><input type="date" id="vlHasta" value="' + hoy + '"><button class="b pri" id="vlVer">Ver</button>' +
-      '<span class="spacer"></span><button class="b nar" id="vlCsv" disabled>' + ic('excel') + ' Descargar CSV para el validador</button></div>' + ayuda('validador_bm') +
-      '<p id="vlMsg" class="msg"></p><div id="vlRes" class="muted" style="padding:2px 4px 8px;font-size:12.5px;"></div><div class="tw" id="vlTabla"></div></div>';
-    var filas = [];
-    var pintar = function(){
-      var faltan = filas.filter(function(x){ return !x.nueca || !x.numacro; });
-      var ton = filas.reduce(function(s, x){ return s + Number(x.toneladas); }, 0);
-      var est = filas.filter(function(x){ return x.rechazo_estimado; }).length;
-      $('vlRes').innerHTML = filas.length ? filas.length + ' fila(s) · ' + num(ton, 4) + ' toneladas' + (est ? ' · ' + est + ' con rechazo estimado (' + esc('1,8 %') + ')' : '') : '';
-      $('vlCsv').disabled = !filas.length || faltan.length > 0;
-      if(faltan.length) setMsg('vlMsg', faltan.length + ' fila(s) no tienen ECA (NUECA) o Numacro (marcadas en rojo). Corrígelas en el Formulario Balance de Masas antes de descargar: el validador las rechazaría.', 'err');
-      else setMsg('vlMsg', filas.length ? 'Listo para descargar. El CSV lleva solo las columnas azules (formato SUI).' : '', filas.length ? 'ok' : '');
-      $('vlTabla').innerHTML = filas.length ? '<table class="t"><thead><tr>' + VAL_COLS.map(function(c, i){
-          return '<th' + (c.dec ? ' class="num"' : '') + ' style="' + (c.ctl ? 'background:#F1F3F6;color:#5b6b80;' : 'background:#DCEBFA;color:#0B3D80;') + '" title="' + (c.ctl ? 'Solo control (no va al CSV)' : 'Va al CSV del validador') + '">' + (i + 1) + '. ' + esc(c.t) + '</th>'; }).join('') + '</tr></thead><tbody>' +
-        filas.slice(0, 3000).map(function(x){
-          return '<tr>' + VAL_COLS.map(function(c){
-            var v = valorVal(c, x), mal = (c.k === 'nueca' || c.k === 'numacro') && !v;
-            var txt = c.dec ? num(Number(v), c.dec) : String(v);
-            if(c.k === 'toneladas_rechazo' && x.rechazo_estimado) txt += ' <span class="muted" title="Rechazo estimado">est.</span>';
-            return '<td' + (c.dec ? ' class="num"' : '') + (mal ? ' style="background:#FDE2E1;color:#B42318;font-weight:600;"' : '') + '>' + (mal ? 'Falta' : (c.k === 'toneladas_rechazo' ? txt : esc(txt))) + '</td>';
-          }).join('') + '</tr>'; }).join('') + '</tbody></table>' + (filas.length > 3000 ? '<p class="muted" style="padding:6px;">Se muestran 3.000 de ' + filas.length + ' filas; el CSV las lleva todas.</p>' : '')
-        : '<p class="muted" style="padding:10px;">Sin registros de balance de masas en esas fechas.</p>';
+      '<span class="spacer"></span>' + B('vlHoja', ic('excel') + ' Exportar hoja', 'Las 19 columnas de las filas visibles (para revisar en Excel)') +
+      '<button class="b nar" id="vlCsv" disabled>' + ic('excel') + ' Descargar CSV para el validador</button></div>' + ayuda('validador_bm') +
+      '<div class="xl-tools">' +
+        '<input id="vlBuscar" placeholder="Buscar en la hoja (Ctrl+F)" style="width:190px;">' +
+        '<label><input type="checkbox" id="vlSoloMod"> Solo modificadas</label><label><input type="checkbox" id="vlSoloFalta"> Solo con faltantes</label>' +
+        B('vlSinFiltros', 'Quitar filtros', 'Quita la búsqueda, los filtros y el orden') + '<span class="xl-sep"></span>' +
+        B('vlDeshacer', '↶ Deshacer', 'Ctrl+Z') + B('vlRehacer', '↷ Rehacer', 'Ctrl+Y') + '<span class="xl-sep"></span>' +
+        B('vlRellenar', '⬇ Rellenar', 'Copia la primera celda seleccionada hacia abajo (Ctrl+D)') + B('vlCopiar', 'Copiar', 'Ctrl+C') + B('vlPegarAyuda', 'Pegar', 'Ctrl+V: pega lo copiado de Excel desde la celda activa') +
+        B('vlReemplazar', 'Buscar y reemplazar', 'Cambia un valor por otro en una columna') + B('vlBorrar', 'Borrar', 'Supr: deja en 0 rechazo o no SUI') + '<span class="xl-sep"></span>' +
+        B('vlArriba', '⤒', 'Ir a la primera fila (Ctrl+Inicio)') + B('vlAbajo', '⤓', 'Ir a la última fila (Ctrl+Fin)') +
+        '<input id="vlIrFila" type="number" min="1" placeholder="Ir a fila" style="width:80px;">' +
+        '<span class="spacer"></span>' + B('vlDescartar', 'Descartar cambios', 'Vuelve a los datos guardados') +
+        '<button type="button" class="b pri" id="vlGuardar" disabled>Guardar</button>' +
+      '</div>' +
+      '<p id="vlMsg" class="msg"></p><div class="tw xl-wrap" id="vlTabla" tabindex="0"></div>' +
+      '<div class="xl-status" id="vlStatus"></div><div id="vlPop" class="xl-pop"></div></div>';
+
+    var filas = [], vis = [], op = { ecas: [], numacros: [], recicladores: [], materiales: [] };
+    var filtros = {}, orden = null, deshacer = [], rehacer = [];
+    var act = { r: 0, c: 0 }, ancla = { r: 0, c: 0 }, arrastrando = false, editor = null, marcadas = [];
+    var MAX = 3000, grid = $('vlTabla');
+
+    // ----- datos -----
+    var mapa = function(lista){ var m = {}; lista.forEach(function(o){ m[o.id] = o; }); return m; };
+    var idx = {};
+    var derivar = function(f){
+      var x = f.x, o = f.orig;
+      var e = idx.ecas[x.id_bodega], n = idx.numacros[x.id_numacro], r = idx.recicladores[x.id_reciclador], m = idx.materiales[x.id_tipo_material];
+      x.nueca = x.id_bodega == o.id_bodega ? o.nueca : (e ? e.cod_bodega : '');
+      x.numacro = x.id_numacro == o.id_numacro ? o.numacro : (n ? n.cod_numacro : '');
+      if(x.id_reciclador == o.id_reciclador){ x.nro_documento = o.nro_documento; x.nombre_completo = o.nombre_completo; }
+      else { x.nro_documento = r ? r.nro_documento : ''; x.nombre_completo = r ? r.nombre_completo : ''; }
+      if(x.id_tipo_material == o.id_tipo_material){ x.tipo_material = o.tipo_material; x.material = o.material; }
+      else { x.tipo_material = m ? m.cod_padre : ''; x.material = m ? m.desc_tipo_material : ''; }
+      x.semana = valSemana(x.fecha);
+      x.toneladas = Math.round(Number(x.cantidad || 0) * 10) / 10000;
+      x.toneladas_rechazo = Math.round(Number(x.cantidad_rechazo || 0) * 10) / 10000;
+      x.valor_kilogramo = Number(x.valor || 0);
+      x.valor_total = Math.round(Number(x.valor || 0) * Number(x.cantidad || 0) * 100) / 100;
     };
-    var cargar = function(){
+    var igual = function(a, b){ return (a === null || a === undefined || a === '' ? '' : String(a)) === (b === null || b === undefined || b === '' ? '' : String(b)); };
+    var celdaMod = function(f, c){ var k = valCampo(c); return k ? !igual(f.x[k], f.orig[k]) : false; };
+    var filaMod = function(f){ return VAL_CAMPOS.some(function(k){ return !igual(f.x[k], f.orig[k]); }); };
+    var faltaEn = function(f, c){ return (c.k === 'nueca' || c.k === 'numacro' || c.k === 'nro_documento' || c.k === 'tipo_material') && !valorVal(c, f.x); };
+    var modificadas = function(){ return filas.filter(filaMod); };
+
+    // ----- filtros y orden -----
+    var pasaFiltros = function(f, salvo){
+      for(var k in filtros){ if(k === salvo || !filtros[k]) continue;
+        var c = VAL_COLS.filter(function(z){ return z.k === k; })[0]; if(!filtros[k].has(valDisp(c, f.x))) return false; }
+      return true;
+    };
+    var recalcVis = function(){
+      var q = valNorm($('vlBuscar').value), sm = $('vlSoloMod').checked, sf = $('vlSoloFalta').checked;
+      vis = filas.filter(function(f){
+        if(sm && !filaMod(f)) return false;
+        if(sf && !VAL_COLS.some(function(c){ return faltaEn(f, c); })) return false;
+        if(!pasaFiltros(f)) return false;
+        if(q && !VAL_COLS.some(function(c){ return valNorm(valDisp(c, f.x)).indexOf(q) >= 0; }) && String(f.n) !== q) return false;
+        return true;
+      });
+      if(orden){
+        var c = VAL_COLS[orden.c], dir = orden.dir;
+        vis.sort(function(a, b){
+          var va = valorVal(c, a.x), vb = valorVal(c, b.x), r;
+          if(c.dec || c.n) r = Number(va || 0) - Number(vb || 0);
+          else r = String(va).localeCompare(String(vb), 'es', { numeric: true, sensitivity: 'base' });
+          return (r || a.n - b.n) * dir;
+        });
+      }
+    };
+
+    // ----- pintar -----
+    var celdaHtml = function(f, c, ci){
+      var cls = [];
+      if(c.dec || c.n) cls.push('num');
+      if(c.ed && puedeEditar) cls.push('ed'); else cls.push('ro');
+      if(c.ctl) cls.push('ctl');
+      if(celdaMod(f, c)) cls.push('mod');
+      var falta = faltaEn(f, c); if(falta) cls.push('mal');
+      var txt = falta ? 'Falta' : esc(valDisp(c, f.x));
+      if(c.k === 'toneladas_rechazo' && f.x.rechazo_estimado && !celdaMod(f, c)) txt += ' <span class="muted" title="Rechazo estimado">est.</span>';
+      return '<td data-c="' + ci + '" class="' + cls.join(' ') + '">' + txt + '</td>';
+    };
+    var filaHtml = function(f, i){
+      return '<tr data-i="' + i + '"' + (f.err ? ' class="xl-err"' : '') + '><th class="rn' + (filaMod(f) ? ' mod' : '') + '" title="' + esc(f.err ? f.err.join(' ') : 'Fila ' + f.n) + '">' + f.n + '</th>' +
+        VAL_COLS.map(function(c, ci){ return celdaHtml(f, c, ci); }).join('') + '</tr>';
+    };
+    var nVis = function(){ return Math.min(vis.length, MAX); };
+    var pintar = function(){
+      cerrarEditor(false);
+      recalcVis();
+      if(!filas.length){ grid.innerHTML = '<p class="muted" style="padding:10px;">Sin registros de balance de masas en esas fechas.</p>'; marcadas = []; resumen(); return; }
+      grid.innerHTML = '<table class="t xl"><thead><tr><th class="rn" title="Seleccionar toda la hoja">#</th>' + VAL_COLS.map(function(c, i){
+          var fil = filtros[c.k] ? ' on' : '', ord = orden && orden.c === i ? (orden.dir > 0 ? ' ▲' : ' ▼') : '';
+          return '<th data-c="' + i + '"' + (c.dec || c.n ? ' class="num"' : '') + ' style="' + (c.ctl ? 'background:#F1F3F6;color:#5b6b80;' : 'background:#DCEBFA;color:#0B3D80;') + '" title="' + (c.ctl ? 'Solo control (no va al CSV)' : 'Va al CSV del validador') + (c.ed ? ' · editable' : '') + '">' +
+            '<span class="xl-h">' + (i + 1) + '. ' + esc(c.t) + ord + '</span><button type="button" class="xl-fb' + fil + '" data-f="' + i + '" title="Filtrar y ordenar">▾</button></th>'; }).join('') + '</tr></thead><tbody>' +
+        vis.slice(0, MAX).map(filaHtml).join('') + '</tbody></table>' +
+        (!vis.length ? '<p class="muted" style="padding:10px;">Ninguna fila coincide con la búsqueda o los filtros.</p>' : '') +
+        (vis.length > MAX ? '<p class="muted" style="padding:6px;">Se muestran ' + num(MAX, 0) + ' de ' + num(vis.length, 0) + ' filas: usa filtros para ver el resto. El CSV las lleva todas.</p>' : '');
+      marcadas = [];
+      limitarSel(); pintarSel(); resumen();
+    };
+    var repintarFila = function(f){
+      var i = vis.indexOf(f); if(i < 0 || i >= MAX) return;
+      var tr = grid.querySelector('tr[data-i="' + i + '"]'); if(!tr) return;
+      var nuevo = document.createElement('tbody'); nuevo.innerHTML = filaHtml(f, i);
+      tr.parentNode.replaceChild(nuevo.firstChild, tr);
+    };
+    var resumen = function(){
+      var faltan = filas.filter(function(f){ return !f.x.nueca || !f.x.numacro; });
+      var mods = modificadas().length;
+      var ton = vis.reduce(function(s, f){ return s + Number(f.x.toneladas || 0); }, 0);
+      var est = filas.filter(function(f){ return f.x.rechazo_estimado; }).length;
+      $('vlGuardar').disabled = !mods || !puedeEditar;
+      $('vlGuardar').textContent = mods ? 'Guardar (' + mods + ')' : 'Guardar';
+      $('vlDescartar').disabled = !mods;
+      $('vlDeshacer').disabled = !deshacer.length; $('vlRehacer').disabled = !rehacer.length;
+      $('vlCsv').disabled = !filas.length || faltan.length > 0 || mods > 0;
+      $('vlCsv').title = mods ? 'Guarda o descarta los cambios antes de descargar' : (faltan.length ? 'Hay filas sin ECA o Numacro' : '');
+      // Barra de estado tipo Excel: recuento, suma y promedio de la seleccion
+      var s = rect(), nums = [], cnt = 0;
+      if(vis.length) for(var r = s.r1; r <= s.r2; r++) for(var c = s.c1; c <= s.c2; c++){
+        var col = VAL_COLS[c], v = valorVal(col, vis[r].x); if(v !== '') cnt++;
+        if((col.dec || col.n) && v !== '') nums.push(Number(v));
+      }
+      var suma = nums.reduce(function(a, b){ return a + b; }, 0);
+      $('vlStatus').innerHTML = (filas.length ? 'Filas: <b>' + num(vis.length, 0) + '</b> de ' + num(filas.length, 0) + ' · ' + num(ton, 4) + ' t visibles' + (est ? ' · ' + est + ' con rechazo estimado (1,8 %)' : '') : '') +
+        (mods ? ' · <b style="color:#B45309;">' + mods + ' fila(s) sin guardar</b>' : '') +
+        (cnt > 1 ? '<span class="spacer"></span>Recuento: <b>' + cnt + '</b>' + (nums.length ? ' · Suma: <b>' + num(suma, 4) + '</b> · Promedio: <b>' + num(suma / nums.length, 4) + '</b>' : '') : '');
+      if(!$('vlMsg').dataset.fijo){
+        if(faltan.length) setMsg('vlMsg', faltan.length + ' fila(s) no tienen ECA (NUECA) o Numacro (en rojo). Corrígelas aquí mismo y guarda: el validador las rechazaría.', 'err');
+        else if(mods) setMsg('vlMsg', 'Tienes cambios sin guardar. Guarda para que queden en el balance de masas y poder descargar el CSV.', '');
+        else setMsg('vlMsg', filas.length ? 'Listo para descargar. El CSV lleva solo las columnas azules (formato SUI).' : '', filas.length ? 'ok' : '');
+      }
+    };
+    var aviso = function(txt, tipo){ setMsg('vlMsg', txt, tipo); $('vlMsg').dataset.fijo = '1'; clearTimeout(aviso.t); aviso.t = setTimeout(function(){ delete $('vlMsg').dataset.fijo; resumen(); }, 6000); };
+
+    // ----- seleccion -----
+    var rect = function(){ return { r1: Math.min(act.r, ancla.r), r2: Math.max(act.r, ancla.r), c1: Math.min(act.c, ancla.c), c2: Math.max(act.c, ancla.c) }; };
+    var limitarSel = function(){
+      var mr = Math.max(nVis() - 1, 0), mc = VAL_COLS.length - 1;
+      act.r = Math.min(Math.max(act.r, 0), mr); ancla.r = Math.min(Math.max(ancla.r, 0), mr);
+      act.c = Math.min(Math.max(act.c, 0), mc); ancla.c = Math.min(Math.max(ancla.c, 0), mc);
+    };
+    var celda = function(r, c){ var tr = grid.querySelector('tbody tr[data-i="' + r + '"]'); return tr ? tr.cells[c + 1] : null; };
+    var pintarSel = function(){
+      marcadas.forEach(function(td){ td.classList.remove('sel', 'act'); }); marcadas = [];
+      if(!nVis()) return;
+      var s = rect();
+      for(var r = s.r1; r <= s.r2 && r < s.r1 + 400; r++) for(var c = s.c1; c <= s.c2; c++){ var td = celda(r, c); if(td){ td.classList.add('sel'); marcadas.push(td); } }
+      var a = celda(act.r, act.c); if(a){ a.classList.add('act'); marcadas.push(a); }
+    };
+    var verActiva = function(){
+      var td = celda(act.r, act.c); if(!td) return;
+      var w = grid, th = grid.querySelector('thead'), hh = th ? th.offsetHeight : 0, rn = 46;
+      if(td.offsetTop - hh < w.scrollTop) w.scrollTop = td.offsetTop - hh;
+      else if(td.offsetTop + td.offsetHeight > w.scrollTop + w.clientHeight) w.scrollTop = td.offsetTop + td.offsetHeight - w.clientHeight;
+      if(td.offsetLeft - rn < w.scrollLeft) w.scrollLeft = td.offsetLeft - rn;
+      else if(td.offsetLeft + td.offsetWidth > w.scrollLeft + w.clientWidth) w.scrollLeft = td.offsetLeft + td.offsetWidth - w.clientWidth;
+    };
+    var mover = function(dr, dc, extender){
+      act.r += dr; act.c += dc; limitarSel();
+      if(!extender){ ancla.r = act.r; ancla.c = act.c; }
+      pintarSel(); verActiva(); resumen();
+    };
+    var irA = function(r, c, extender){ act.r = r; act.c = c; limitarSel(); if(!extender){ ancla.r = act.r; ancla.c = act.c; } pintarSel(); verActiva(); resumen(); };
+
+    // ----- edicion -----
+    // Convierte lo escrito/pegado en el valor del campo, o { error }.
+    var interpretar = function(f, c, texto){
+      var t = String(texto == null ? '' : texto).trim(), n = valNorm(t), cen = f.x.id_centro, l;
+      switch(c.ed){
+        case 'eca': l = op.ecas.filter(function(o){ return o.id_centro == cen && (valNorm(o.cod_bodega) === n || valNorm(o.desc_bodega) === n || String(o.id) === t); });
+          return l.length ? { v: l[0].id } : { error: 'ECA "' + t + '" no existe en la asociación' };
+        case 'numacro': l = op.numacros.filter(function(o){ return o.id_centro == cen && (valNorm(o.cod_numacro) === n || String(o.id) === t); });
+          return l.length ? { v: l[0].id } : { error: 'Numacro "' + t + '" no existe en la asociación' };
+        case 'reciclador': l = op.recicladores.filter(function(o){ return o.id_centro == cen && (valNorm(o.nro_documento) === n || String(o.id) === t || valNorm(o.nombre_completo) === n); });
+          return l.length ? { v: l[0].id } : { error: 'No hay reciclador con documento "' + t + '" en la asociación' };
+        case 'material':
+          l = op.materiales.filter(function(o){ return String(o.id) === t || valNorm(o.cod_tipo_material) === n; });
+          if(!l.length) l = op.materiales.filter(function(o){ return valNorm(o.desc_tipo_material) === n; });
+          if(!l.length) l = op.materiales.filter(function(o){ return valNorm(o.cod_padre) === n; });
+          return l.length ? { v: l[0].id } : { error: 'Material "' + t + '" no existe' };
+        case 'fecha': var d = valFecha(t); return d ? { v: d } : { error: 'Fecha "' + t + '" no válida (usa AAAA-MM-DD o DD/MM/AAAA)' };
+        case 'ton': case 'num':
+          var x = t === '' ? 0 : valNum(t);
+          if(!Number.isFinite(x) || x < 0) return { error: '"' + t + '" no es un número válido' };
+          return { v: c.ed === 'ton' ? Math.round(x * 1000 * 100) / 100 : Math.round(x * 100) / 100 };
+      }
+      return { error: 'Columna no editable' };
+    };
+    var aplicar = function(cambios){ // [{ f, k, v }]
+      var paso = [];
+      cambios.forEach(function(z){ var antes = z.f.x[z.k]; if(igual(antes, z.v)) return; z.f.x[z.k] = z.v; derivar(z.f); z.f.err = null; paso.push({ f: z.f, k: z.k, antes: antes, despues: z.v }); });
+      if(!paso.length) return 0;
+      deshacer.push(paso); if(deshacer.length > 200) deshacer.shift(); rehacer = [];
+      refrescar(paso);
+      return paso.length;
+    };
+    var refrescar = function(paso){
+      var vistas = []; paso.forEach(function(p){ if(vistas.indexOf(p.f) < 0) vistas.push(p.f); });
+      if(vistas.length > 300) pintar(); else { vistas.forEach(repintarFila); marcadas = []; pintarSel(); resumen(); }
+    };
+    var revertir = function(desde, hacia, campo){
+      if(!desde.length) return;
+      var paso = desde.pop();
+      paso.forEach(function(p){ p.f.x[p.k] = p[campo]; derivar(p.f); });
+      hacia.push(paso); refrescar(paso);
+    };
+    var noEditable = function(){ aviso(puedeEditar ? 'Esa columna no se edita: es fija o se calcula sola.' : 'Tu usuario no puede modificar el balance de masas.', 'err'); };
+    var cerrarEditor = function(guardar){
+      if(!editor) return;
+      var e = editor; editor = null;
+      if(guardar){
+        var r = interpretar(e.f, e.c, e.el.value);
+        if(r.error) aviso(r.error + '.', 'err'); else aplicar([{ f: e.f, k: valCampo(e.c), v: r.v }]);
+      }
+      repintarFila(e.f); marcadas = []; pintarSel();
+    };
+    var abrirEditor = function(inicial){
+      if(!nVis()) return;
+      var f = vis[act.r], c = VAL_COLS[act.c];
+      if(!c.ed || !puedeEditar) return noEditable();
+      var td = celda(act.r, act.c); if(!td) return;
+      var cen = f.x.id_centro, html;
+      var opts = function(lista, val, lbl){ return '<option value=""></option>' + lista.map(function(o){ return '<option value="' + o.id + '"' + (o.id == val ? ' selected' : '') + '>' + esc(lbl(o)) + '</option>'; }).join(''); };
+      if(c.ed === 'eca') html = '<select>' + opts(op.ecas.filter(function(o){ return o.id_centro == cen; }), f.x.id_bodega, function(o){ return o.cod_bodega + ' — ' + (o.desc_bodega || ''); }) + '</select>';
+      else if(c.ed === 'numacro') html = '<select>' + opts(op.numacros.filter(function(o){ return o.id_centro == cen; }), f.x.id_numacro, function(o){ return o.cod_numacro; }) + '</select>';
+      else if(c.ed === 'reciclador') html = '<select>' + opts(op.recicladores.filter(function(o){ return o.id_centro == cen; }), f.x.id_reciclador, function(o){ return o.nro_documento + ' — ' + o.nombre_completo; }) + '</select>';
+      else if(c.ed === 'material') html = '<select>' + opts(op.materiales, f.x.id_tipo_material, function(o){ return o.cod_tipo_material + ' — ' + o.desc_tipo_material; }) + '</select>';
+      else if(c.ed === 'fecha') html = '<input type="date">';
+      else html = '<input type="text" inputmode="decimal">';
+      td.innerHTML = html; td.classList.add('editando');
+      var el = td.firstChild;
+      if(el.tagName === 'SELECT'){
+        // El select guarda el id: se interpreta por id
+        el.value = String(f.x[valCampo(c)] || '');
+        el.onchange = function(){ cerrarEditor(true); grid.focus(); };
+      } else if(c.ed === 'fecha'){ el.value = f.x.fecha || ''; }
+      else {
+        var actual = c.ed === 'ton' ? Number(f.x[valCampo(c)] || 0) / 1000 : Number(f.x[valCampo(c)] || 0);
+        el.value = inicial !== undefined ? inicial : String(Math.round(actual * 10000) / 10000).replace('.', ',');
+      }
+      editor = { f: f, c: c, el: el };
+      el.addEventListener('keydown', function(ev){
+        if(ev.key === 'Enter' || ev.key === 'Tab'){ ev.preventDefault(); ev.stopPropagation(); cerrarEditor(true); grid.focus(); if(ev.key === 'Enter') mover(ev.shiftKey ? -1 : 1, 0); else mover(0, ev.shiftKey ? -1 : 1); }
+        else if(ev.key === 'Escape'){ ev.preventDefault(); ev.stopPropagation(); cerrarEditor(false); grid.focus(); }
+        else ev.stopPropagation();
+      });
+      el.addEventListener('blur', function(){ setTimeout(function(){ if(editor && editor.el === el) cerrarEditor(true); }, 0); });
+      el.focus(); if(el.select && el.tagName === 'INPUT' && inicial === undefined) el.select();
+    };
+
+    // Pega una tabla (texto con tabulaciones, como lo copia Excel) desde la celda activa.
+    var pegar = function(texto){
+      if(!puedeEditar) return noEditable();
+      var lineas = String(texto || '').replace(/\r/g, '').split('\n'); if(lineas.length > 1 && lineas[lineas.length - 1] === '') lineas.pop();
+      var tabla = lineas.map(function(l){ return l.split('\t'); });
+      var s = rect(), cambios = [], errores = [], saltadas = 0;
+      var unico = tabla.length === 1 && tabla[0].length === 1;
+      var alto = unico ? s.r2 - s.r1 + 1 : tabla.length, ancho = unico ? s.c2 - s.c1 + 1 : tabla[0].length;
+      for(var i = 0; i < alto; i++){
+        var r = s.r1 + i; if(r >= nVis()) break;
+        for(var j = 0; j < ancho; j++){
+          var ci = s.c1 + j; if(ci >= VAL_COLS.length) break;
+          var c = VAL_COLS[ci], val = unico ? tabla[0][0] : tabla[i][j];
+          if(!c.ed){ saltadas++; continue; }
+          if(String(val == null ? '' : val).trim() === '' && c.ed !== 'ton' && c.ed !== 'num') continue; // celda vacia: no borra ECA, numacro, etc.
+          var res = interpretar(vis[r], c, val);
+          if(res.error){ if(errores.length < 5) errores.push('Fila ' + vis[r].n + ': ' + res.error); continue; }
+          cambios.push({ f: vis[r], k: valCampo(c), v: res.v });
+        }
+      }
+      var n = aplicar(cambios);
+      ancla = { r: s.r1, c: s.c1 }; act = { r: Math.min(s.r1 + alto - 1, nVis() - 1), c: Math.min(s.c1 + ancho - 1, VAL_COLS.length - 1) }; pintarSel(); resumen();
+      aviso(n + ' celda(s) pegadas' + (saltadas ? ' · ' + saltadas + ' en columnas fijas se ignoraron' : '') + (errores.length ? ' · Errores: ' + errores.join('; ') : '') + '.', errores.length ? 'err' : 'ok');
+    };
+    var copiarTexto = function(){
+      var s = rect(), out = [];
+      for(var r = s.r1; r <= s.r2; r++){
+        var fila = [];
+        for(var c = s.c1; c <= s.c2; c++){ var col = VAL_COLS[c], v = valorVal(col, vis[r].x); fila.push(col.dec ? (v === '' ? '' : Number(v).toFixed(col.dec).replace('.', ',')) : String(v)); }
+        out.push(fila.join('\t'));
+      }
+      return out.join('\r\n');
+    };
+    var rellenar = function(){
+      if(!puedeEditar) return noEditable();
+      var s = rect(); if(s.r2 === s.r1) return aviso('Selecciona varias filas (arrastrando o con Shift + flechas): se copia la primera hacia abajo.', 'err');
+      var cambios = [];
+      for(var c = s.c1; c <= s.c2; c++){ var col = VAL_COLS[c], k = valCampo(col); if(!k) continue;
+        for(var r = s.r1 + 1; r <= s.r2; r++){
+          var v = vis[s.r1].x[k];
+          if(col.ed === 'eca' || col.ed === 'numacro' || col.ed === 'reciclador'){ // ids de la asociacion de la fila destino
+            var res = interpretar(vis[r], col, valorVal(col, vis[s.r1].x)); if(res.error) continue; v = res.v;
+          }
+          cambios.push({ f: vis[r], k: k, v: v });
+        } }
+      var n = aplicar(cambios); aviso(n + ' celda(s) rellenadas.', 'ok');
+    };
+    var borrar = function(){
+      if(!puedeEditar) return noEditable();
+      var s = rect(), cambios = [];
+      for(var c = s.c1; c <= s.c2; c++){ var col = VAL_COLS[c]; if(col.campo !== 'cantidad_rechazo' && col.campo !== 'cantidad_nosui') continue;
+        for(var r = s.r1; r <= s.r2; r++) cambios.push({ f: vis[r], k: col.campo, v: 0 }); }
+      if(!cambios.length) return aviso('Solo se puede borrar (dejar en 0) el rechazo y la cantidad no SUI. Lo demás se cambia escribiendo encima.', 'err');
+      aplicar(cambios);
+    };
+
+    // ----- filtro tipo Excel (menu de cada columna) -----
+    var pop = $('vlPop');
+    var cerrarPop = function(){ pop.classList.remove('open'); pop.innerHTML = ''; };
+    var abrirFiltro = function(ci, boton){
+      var c = VAL_COLS[ci], conteo = {};
+      filas.forEach(function(f){ if(!pasaFiltros(f, c.k)) return; var d = valDisp(c, f.x); conteo[d] = (conteo[d] || 0) + 1; });
+      var valores = Object.keys(conteo).sort(function(a, b){ return (c.dec || c.n) ? valNum(a) - valNum(b) : a.localeCompare(b, 'es', { numeric: true }); });
+      var sel = filtros[c.k];
+      pop.innerHTML = '<button type="button" class="md-x" style="top:2px;right:4px;font-size:20px;" id="vpX" title="Cerrar">&times;</button>' +
+        '<div style="font-weight:700;color:#0B3D80;margin:0 22px 6px 0;">' + esc(c.t) + '</div>' +
+        '<button type="button" class="b" id="vpAsc" style="width:100%;margin-bottom:4px;">Ordenar ' + (c.dec || c.n ? 'de menor a mayor' : 'A → Z') + '</button>' +
+        '<button type="button" class="b" id="vpDesc" style="width:100%;margin-bottom:6px;">Ordenar ' + (c.dec || c.n ? 'de mayor a menor' : 'Z → A') + '</button>' +
+        '<input id="vpQ" placeholder="Buscar valor" style="width:100%;box-sizing:border-box;margin-bottom:4px;">' +
+        '<label class="vp-i"><input type="checkbox" id="vpTodo"> <b>(Seleccionar todo)</b></label>' +
+        '<div class="vp-l" id="vpL">' + valores.slice(0, 1000).map(function(v){
+          return '<label class="vp-i" data-v="' + esc(valNorm(v)) + '"><input type="checkbox" value="' + esc(v) + '"' + (!sel || sel.has(v) ? ' checked' : '') + '> ' + (v === '' ? '<i class="muted">(Vacías)</i>' : esc(v)) + ' <span class="muted">(' + conteo[v] + ')</span></label>'; }).join('') + '</div>' +
+        (valores.length > 1000 ? '<p class="muted" style="margin:4px 0;">Hay ' + valores.length + ' valores: busca para ver el resto.</p>' : '') +
+        '<div style="display:flex;gap:6px;margin-top:6px;"><button type="button" class="b pri" id="vpOk">Aceptar</button><button type="button" class="b" id="vpBorrar">Borrar filtro</button></div>';
+      var b = boton.getBoundingClientRect();
+      pop.style.left = Math.max(8, Math.min(b.left - 200, window.innerWidth - 270)) + 'px'; pop.style.top = (b.bottom + 4) + 'px';
+      pop.classList.add('open');
+      var checks = function(){ return Array.prototype.slice.call(pop.querySelectorAll('#vpL label:not([hidden]) input')); };
+      var todo = $('vpTodo'); todo.checked = checks().every(function(x){ return x.checked; });
+      todo.onchange = function(){ checks().forEach(function(x){ x.checked = todo.checked; }); };
+      $('vpQ').oninput = function(){ var q = valNorm(this.value); pop.querySelectorAll('#vpL label').forEach(function(l){ l.hidden = q && l.getAttribute('data-v').indexOf(q) < 0; }); };
+      $('vpX').onclick = cerrarPop;
+      $('vpAsc').onclick = function(){ orden = { c: ci, dir: 1 }; cerrarPop(); pintar(); };
+      $('vpDesc').onclick = function(){ orden = { c: ci, dir: -1 }; cerrarPop(); pintar(); };
+      $('vpBorrar').onclick = function(){ delete filtros[c.k]; cerrarPop(); pintar(); };
+      $('vpOk').onclick = function(){
+        var q = $('vpQ').value.trim(), todos = Array.prototype.slice.call(pop.querySelectorAll('#vpL input'));
+        var elegidos = todos.filter(function(x){ return x.checked && (!q || !x.parentNode.hidden); }).map(function(x){ return x.value; });
+        if(elegidos.length === valores.length) delete filtros[c.k]; else filtros[c.k] = new Set(elegidos);
+        cerrarPop(); act = { r: 0, c: ci }; ancla = { r: 0, c: ci }; pintar();
+      };
+      $('vpQ').focus();
+    };
+
+    // ----- buscar y reemplazar -----
+    $('vlReemplazar').onclick = function(){
+      if(!puedeEditar) return noEditable();
+      var eds = VAL_COLS.map(function(c, i){ return { c: c, i: i }; }).filter(function(z){ return z.c.ed; });
+      var actual = VAL_COLS[act.c].ed ? act.c : eds[0].i;
+      abrirModal('<h3 style="margin:0 0 10px;">Buscar y reemplazar</h3>' +
+        '<div class="form-grid" style="display:grid;gap:8px;">' +
+        '<label>Columna<br><select id="rzCol" style="width:100%;">' + eds.map(function(z){ return '<option value="' + z.i + '"' + (z.i === actual ? ' selected' : '') + '>' + (z.i + 1) + '. ' + esc(z.c.t) + '</option>'; }).join('') + '</select></label>' +
+        '<label>Buscar (valor completo de la celda; vacío = celdas vacías)<br><input id="rzDe" style="width:100%;box-sizing:border-box;"></label>' +
+        '<label>Reemplazar con<br><input id="rzA" style="width:100%;box-sizing:border-box;"></label>' +
+        '<label><input type="checkbox" id="rzVis" checked> Solo en las filas visibles (con la búsqueda y los filtros actuales)</label></div>' +
+        '<p id="rzMsg" class="msg"></p><div style="display:flex;gap:6px;"><button type="button" class="b pri" id="rzOk">Reemplazar todo</button></div>');
+      $('rzOk').onclick = function(){
+        var c = VAL_COLS[Number($('rzCol').value)], de = $('rzDe').value.trim(), a = $('rzA').value;
+        var nd = c.dec ? valNum(de) : null, lista = $('rzVis').checked ? vis : filas, cambios = [], errores = [];
+        lista.forEach(function(f){
+          var v = valorVal(c, f.x), coincide = c.dec ? (de === '' ? v === '' : Math.abs(Number(v) - nd) < 1e-9) : valNorm(v) === valNorm(de);
+          if(!coincide) return;
+          var res = interpretar(f, c, a);
+          if(res.error){ if(errores.length < 3) errores.push('Fila ' + f.n + ': ' + res.error); return; }
+          cambios.push({ f: f, k: valCampo(c), v: res.v });
+        });
+        if(!cambios.length) return setMsg('rzMsg', errores.length ? errores.join('; ') : 'No se encontró ninguna celda con ese valor.', 'err');
+        var n = aplicar(cambios); cerrarModal(); aviso(n + ' celda(s) reemplazadas' + (errores.length ? ' · ' + errores.join('; ') : '') + '. Recuerda guardar.', 'ok');
+      };
+    };
+
+    // ----- eventos de la hoja -----
+    grid.addEventListener('mousedown', function(ev){
+      var fb = ev.target.closest('.xl-fb'); if(fb){ ev.preventDefault(); abrirFiltro(Number(fb.getAttribute('data-f')), fb); return; }
+      if(ev.target.closest('.editando')) return;
+      var th = ev.target.closest('th');
+      if(th && th.parentNode.parentNode.tagName === 'THEAD'){ // encabezado: selecciona la columna (o toda la hoja con #)
+        ev.preventDefault(); grid.focus();
+        if(!nVis()) return;
+        if(th.classList.contains('rn')){ ancla = { r: 0, c: 0 }; act = { r: nVis() - 1, c: VAL_COLS.length - 1 }; }
+        else { var ci = Number(th.getAttribute('data-c')); ancla = { r: 0, c: ci }; act = { r: nVis() - 1, c: ci }; }
+        pintarSel(); resumen(); return;
+      }
+      var tr = ev.target.closest('tbody tr'); if(!tr) return;
+      ev.preventDefault(); grid.focus();
+      var r = Number(tr.getAttribute('data-i'));
+      if(th && th.classList.contains('rn')){ ancla = { r: ev.shiftKey ? ancla.r : r, c: 0 }; act = { r: r, c: VAL_COLS.length - 1 }; pintarSel(); resumen(); return; }
+      var td = ev.target.closest('td'); if(!td) return;
+      cerrarEditor(true);
+      irA(r, Number(td.getAttribute('data-c')), ev.shiftKey); arrastrando = true;
+    });
+    grid.addEventListener('mouseover', function(ev){
+      if(!arrastrando) return;
+      var td = ev.target.closest('td'), tr = ev.target.closest('tbody tr'); if(!td || !tr) return;
+      act = { r: Number(tr.getAttribute('data-i')), c: Number(td.getAttribute('data-c')) }; pintarSel(); resumen();
+    });
+    var soltar = function(){ arrastrando = false; };
+    document.addEventListener('mouseup', soltar);
+    grid.addEventListener('dblclick', function(ev){ if(ev.target.closest('td') && !ev.target.closest('.editando')) abrirEditor(); });
+    grid.addEventListener('keydown', function(ev){
+      if(editor || !nVis()) return;
+      var k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
+      var mapa = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+      if(mapa[k]){ ev.preventDefault();
+        if(ctrl){ if(k === 'ArrowUp') irA(0, act.c, ev.shiftKey); else if(k === 'ArrowDown') irA(nVis() - 1, act.c, ev.shiftKey); else if(k === 'ArrowLeft') irA(act.r, 0, ev.shiftKey); else irA(act.r, VAL_COLS.length - 1, ev.shiftKey); }
+        else mover(mapa[k][0], mapa[k][1], ev.shiftKey); return; }
+      if(k === 'PageDown' || k === 'PageUp'){ ev.preventDefault(); mover(k === 'PageDown' ? 20 : -20, 0, ev.shiftKey); return; }
+      if(k === 'Home'){ ev.preventDefault(); if(ctrl) irA(0, 0, ev.shiftKey); else irA(act.r, 0, ev.shiftKey); return; }
+      if(k === 'End'){ ev.preventDefault(); if(ctrl) irA(nVis() - 1, VAL_COLS.length - 1, ev.shiftKey); else irA(act.r, VAL_COLS.length - 1, ev.shiftKey); return; }
+      if(k === 'Tab'){ ev.preventDefault(); mover(0, ev.shiftKey ? -1 : 1); return; }
+      if(k === 'Enter' || k === 'F2'){ ev.preventDefault(); if(k === 'Enter' && ev.shiftKey) mover(-1, 0); else abrirEditor(); return; }
+      if(k === 'Delete' || k === 'Backspace'){ ev.preventDefault(); borrar(); return; }
+      if(ctrl && (k === 'z' || k === 'Z')){ ev.preventDefault(); revertir(deshacer, rehacer, 'antes'); return; }
+      if(ctrl && (k === 'y' || k === 'Y')){ ev.preventDefault(); revertir(rehacer, deshacer, 'despues'); return; }
+      if(ctrl && (k === 'd' || k === 'D')){ ev.preventDefault(); rellenar(); return; }
+      if(ctrl && (k === 'a' || k === 'A')){ ev.preventDefault(); ancla = { r: 0, c: 0 }; act = { r: nVis() - 1, c: VAL_COLS.length - 1 }; pintarSel(); resumen(); return; }
+      if(ctrl && (k === 'f' || k === 'F')){ ev.preventDefault(); $('vlBuscar').focus(); $('vlBuscar').select(); return; }
+      if(!ctrl && !ev.altKey && k.length === 1){ // escribir encima, como en Excel
+        var c = VAL_COLS[act.c];
+        if(c.ed === 'ton' || c.ed === 'num'){ ev.preventDefault(); abrirEditor(k); }
+        else if(c.ed){ ev.preventDefault(); abrirEditor(); }
+      }
+    });
+    grid.addEventListener('copy', function(ev){ if(editor || !nVis()) return; ev.preventDefault(); ev.clipboardData.setData('text/plain', copiarTexto()); aviso('Copiado: pégalo en Excel o en otra parte de la hoja.', 'ok'); });
+    grid.addEventListener('paste', function(ev){ if(editor || !nVis()) return; ev.preventDefault(); pegar(ev.clipboardData.getData('text/plain')); });
+
+    // ----- barra de herramientas -----
+    var tBuscar; $('vlBuscar').oninput = function(){ clearTimeout(tBuscar); tBuscar = setTimeout(function(){ act = { r: 0, c: act.c }; ancla = { r: 0, c: act.c }; pintar(); }, 250); };
+    $('vlBuscar').onkeydown = function(ev){ if(ev.key === 'Enter' || ev.key === 'Escape'){ if(ev.key === 'Escape') this.value = ''; pintar(); grid.focus(); } };
+    $('vlSoloMod').onchange = $('vlSoloFalta').onchange = function(){ pintar(); };
+    $('vlSinFiltros').onclick = function(){ filtros = {}; orden = null; $('vlBuscar').value = ''; $('vlSoloMod').checked = $('vlSoloFalta').checked = false; pintar(); };
+    $('vlDeshacer').onclick = function(){ revertir(deshacer, rehacer, 'antes'); grid.focus(); };
+    $('vlRehacer').onclick = function(){ revertir(rehacer, deshacer, 'despues'); grid.focus(); };
+    $('vlRellenar').onclick = function(){ rellenar(); grid.focus(); };
+    $('vlBorrar').onclick = function(){ borrar(); grid.focus(); };
+    $('vlCopiar').onclick = function(){
+      if(!nVis()) return;
+      var t = copiarTexto();
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){ aviso('Copiado: pégalo en Excel o en otra parte de la hoja.', 'ok'); }, function(){ aviso('Usa Ctrl+C para copiar.', 'err'); });
+      grid.focus();
+    };
+    $('vlPegarAyuda').onclick = function(){
+      if(navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(pegar, function(){ aviso('Haz clic en la celda donde empieza y presiona Ctrl+V.', 'err'); });
+      else aviso('Haz clic en la celda donde empieza y presiona Ctrl+V.', 'err');
+      grid.focus();
+    };
+    $('vlArriba').onclick = function(){ irA(0, act.c); grid.focus(); };
+    $('vlAbajo').onclick = function(){ irA(nVis() - 1, act.c); grid.focus(); };
+    $('vlIrFila').onkeydown = function(ev){
+      if(ev.key !== 'Enter') return;
+      var n = Number(this.value), i = -1; vis.slice(0, MAX).some(function(f, j){ if(f.n === n){ i = j; return true; } return false; });
+      if(i < 0) return aviso('La fila ' + this.value + ' no está entre las visibles (revisa los filtros).', 'err');
+      irA(i, act.c); grid.focus();
+    };
+    $('vlDescartar').onclick = function(){
+      var n = modificadas().length; if(!n || !confirm('¿Descartar los cambios de ' + n + ' fila(s)? Vuelven los datos guardados.')) return;
+      filas.forEach(function(f){ VAL_CAMPOS.forEach(function(k){ f.x[k] = f.orig[k]; }); derivar(f); f.err = null; });
+      deshacer = []; rehacer = []; pintar();
+    };
+    $('vlGuardar').onclick = function(){
+      var mods = modificadas(); if(!mods.length) return;
+      if(!confirm('Se van a guardar ' + mods.length + ' fila(s) en el balance de masas original de la asociación. ¿Continuar?')) return;
+      var cambios = mods.map(function(f){ var campos = {}; VAL_CAMPOS.forEach(function(k){ if(!igual(f.x[k], f.orig[k])) campos[k] = f.x[k]; }); return { id: f.x.id, campos: campos }; });
+      var b = $('vlGuardar'); b.disabled = true; b.textContent = 'Guardando…';
+      api('/validador/balance', { method: 'PUT', body: JSON.stringify({ cambios: cambios }) }).then(function(r){
+        if(!r.ok){
+          (r.data.filas || []).forEach(function(e){ filas.forEach(function(f){ if(f.x.id === e.id) f.err = e.errores; }); });
+          pintar(); var p = (r.data.filas || []).slice(0, 3).map(function(e){ var f = filas.filter(function(z){ return z.x.id === e.id; })[0]; return 'Fila ' + (f ? f.n : e.id) + ': ' + e.errores.join(' '); });
+          return aviso((r.data.error || 'No se pudo guardar.') + (p.length ? ' ' + p.join(' · ') : '') + (r.data.filas ? ' (filas en rojo; pasa el mouse sobre el número)' : ''), 'err');
+        }
+        deshacer = []; rehacer = []; cargar(r.data.message);
+      });
+    };
+    $('vlHoja').onclick = function(){
+      if(!vis.length) return;
+      exportarCsv(VAL_COLS.map(function(c){ return { label: c.t, get: function(f){ var v = valorVal(c, f.x); return c.dec ? (v === '' ? '' : Number(v).toFixed(c.dec).replace('.', ',')) : v; } }; }),
+        vis, 'hoja_validador_' + $('vlDesde').value + '_a_' + $('vlHasta').value + '.csv');
+    };
+
+    // Salir con cambios sin guardar: se pregunta.
+    SIS.antesDeSalir = function(){ return !modificadas().length || confirm('Tienes ' + modificadas().length + ' fila(s) sin guardar en la hoja del validador. ¿Salir sin guardar?'); };
+
+    var cargar = function(msgOk){
       var d = $('vlDesde').value, h = $('vlHasta').value;
       if(!d || !h) return setMsg('vlMsg', 'Se deben seleccionar fechas de inicio y fin del export.', 'err');
       if(d > h) return setMsg('vlMsg', 'La fecha inicial no puede ser mayor que la final.', 'err');
-      $('vlTabla').innerHTML = '<p class="muted" style="padding:10px;">Cargando…</p>';
-      api('/validador/balance?desde=' + d + '&hasta=' + h + ($('vlCentro') ? '&id_centro=' + $('vlCentro').value : '')).then(function(r){
-        if(!r.ok){ $('vlTabla').innerHTML = ''; return setMsg('vlMsg', r.data.error || 'No se pudo cargar.', 'err'); }
-        filas = r.data; pintar();
+      grid.innerHTML = '<p class="muted" style="padding:10px;">Cargando…</p>';
+      var cen = $('vlCentro') ? '&id_centro=' + $('vlCentro').value : '';
+      Promise.all([api('/validador/balance?desde=' + d + '&hasta=' + h + cen), api('/validador/opciones?x=1' + cen)]).then(function(rs){
+        var r = rs[0];
+        if(!r.ok){ grid.innerHTML = ''; return setMsg('vlMsg', r.data.error || 'No se pudo cargar.', 'err'); }
+        if(rs[1].ok) op = rs[1].data;
+        idx = { ecas: mapa(op.ecas), numacros: mapa(op.numacros), recicladores: mapa(op.recicladores), materiales: mapa(op.materiales) };
+        filas = r.data.map(function(x, i){ var f = { n: i + 1, x: x, orig: {}, err: null }; Object.keys(x).forEach(function(k){ f.orig[k] = x[k]; }); return f; });
+        deshacer = []; rehacer = [];
+        pintar();
+        if(msgOk) aviso(msgOk, 'ok');
+        grid.focus();
       });
     };
-    $('vlVer').onclick = cargar;
+    var pedirCarga = function(){ if(modificadas().length && !confirm('Tienes cambios sin guardar. ¿Volver a cargar y perderlos?')) return; cargar(); };
+    $('vlVer').onclick = pedirCarga;
     $('vlCsv').onclick = function(){
       var sui = VAL_COLS.filter(function(c){ return !c.ctl; });
       // Igual al archivo del sistema original (SheetJS + MySQL FORMAT): BOM UTF-8, ";" entre columnas,
       // salto de linea \n sin linea final, miles con "." y decimales con "," (FORMAT(x,4) -> 1.234,5678),
-      // y comillas solo si el valor trae ; o comillas.
+      // y comillas solo si el valor trae ; o comillas. Siempre con lo guardado (todas las filas, sin filtros).
       var dec = function(v, n){ var p = Number(v).toFixed(n).split('.'); return p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + p[1]; };
       var cel = function(c, x){ var v = valorVal(c, x); v = c.dec ? dec(v, c.dec) : String(v); return /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
-      var txt = [sui.map(function(c){ return c.t; }).join(';')].concat(filas.map(function(x){ return sui.map(function(c){ return cel(c, x); }).join(';'); })).join('\n');
+      var txt = [sui.map(function(c){ return c.t; }).join(';')].concat(filas.map(function(f){ return sui.map(function(c){ return cel(c, f.orig); }).join(';'); })).join('\n');
       descargar('﻿' + txt, 'formulario_de_masas_' + $('vlDesde').value + '_a_' + $('vlHasta').value + '.csv');
     };
     cargar();

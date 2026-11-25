@@ -958,7 +958,8 @@ router.get('/validador/balance', exigir('validador_bm'), guard(async (req, res) 
     ids = [n];
   }
   const r = await pool.query(
-    `SELECT bm.id, bm.fecha, b.cod_bodega AS nueca, nm.cod_numacro AS numacro,
+    `SELECT bm.id, bm.id_centro, bm.id_bodega, bm.id_numacro, bm.id_reciclador, bm.id_tipo_material, ROUND(COALESCE(bm.cantidad, 0), 2)::float AS cantidad, ROUND(COALESCE(bm.valor, 0), 2)::float AS valor,
+            bm.fecha, b.cod_bodega AS nueca, nm.cod_numacro AS numacro,
             ((EXTRACT(DAY FROM bm.fecha)::int - 1 + EXTRACT(DOW FROM date_trunc('month', bm.fecha))::int) / 7) + 1 AS semana,
             r.nro_documento, ROUND(bm.cantidad / 1000.0, 4)::float AS toneladas,
             COALESCE(tm.cod_tipo_material_padre, CASE WHEN length(tm.cod_tipo_material) = 4 THEN left(tm.cod_tipo_material, 3) ELSE tm.cod_tipo_material END) AS tipo_material,
@@ -979,6 +980,74 @@ router.get('/validador/balance', exigir('validador_bm'), guard(async (req, res) 
      ORDER BY bm.fecha, r.nombre_completo, tm.secuencia_orden, bm.id LIMIT 20000`,
     [ids, desde, hasta, req.sis.ecas]);
   res.json(r.rows);
+}));
+
+// GET /sistema/validador/opciones[?id_centro] -> listas para corregir celdas en la hoja del validador
+router.get('/validador/opciones', exigir('validador_bm'), guard(async (req, res) => {
+  let ids = req.sis.idsCentros;
+  if (req.query.id_centro) {
+    const n = Number(req.query.id_centro);
+    if (!ids.includes(n)) return res.status(403).json({ error: 'No tienes acceso a esa asociación.' });
+    ids = [n];
+  }
+  const [ecas, numacros, recicladores, materiales] = await Promise.all([
+    pool.query('SELECT id, id_centro, cod_bodega, desc_bodega FROM tz_bodegas WHERE id_centro = ANY($1::int[]) AND ($2::int[] IS NULL OR id = ANY($2::int[])) ORDER BY cod_bodega', [ids, req.sis.ecas]),
+    pool.query('SELECT id, id_centro, cod_numacro FROM tz_numacros WHERE id_centro = ANY($1::int[]) ORDER BY cod_numacro', [ids]),
+    pool.query('SELECT id, id_centro, nro_documento, nombre_completo FROM tz_recicladores WHERE id_centro = ANY($1::int[]) ORDER BY nombre_completo', [ids]),
+    pool.query(`SELECT id, cod_tipo_material, desc_tipo_material,
+                COALESCE(cod_tipo_material_padre, CASE WHEN length(cod_tipo_material) = 4 THEN left(cod_tipo_material, 3) ELSE cod_tipo_material END) AS cod_padre
+                FROM tz_tipos_material ORDER BY secuencia_orden, cod_tipo_material`)
+  ]);
+  res.json({ ecas: ecas.rows, numacros: numacros.rows, recicladores: recicladores.rows, materiales: materiales.rows });
+}));
+
+// PUT /sistema/validador/balance { cambios: [{ id, campos: {...} }] } -> guarda en el balance de masas
+// original lo corregido en la hoja. Todo o nada: si una fila tiene error no se guarda ninguna.
+const CAMPOS_HOJA = ['id_bodega', 'id_numacro', 'id_reciclador', 'id_tipo_material', 'fecha', 'cantidad', 'valor', 'cantidad_rechazo', 'cantidad_nosui'];
+router.put('/validador/balance', exigir('validador_bm'), guard(async (req, res) => {
+  if (!puede(req, 'balance_masas', 'editar')) return res.status(403).json({ error: NO_PUEDE.editar });
+  const cambios = Array.isArray(req.body && req.body.cambios) ? req.body.cambios : null;
+  if (!cambios || !cambios.length) return res.status(400).json({ error: 'No hay cambios para guardar.' });
+  if (cambios.length > 5000) return res.status(400).json({ error: 'Máximo 5.000 filas por guardado.' });
+  const entity = ENTITIES.balance_masas;
+  const errores = [], listos = [], vistos = new Set();
+  for (const c of cambios) {
+    const id = parseId(c && c.id);
+    if (!id || vistos.has(id)) { errores.push({ id: c && c.id, errores: ['Fila inválida o repetida.'] }); continue; }
+    vistos.add(id);
+    const actual = await filaVisible(req, 'balance_masas', entity, id);
+    if (!actual) { errores.push({ id, errores: ['Registro no encontrado.'] }); continue; }
+    const body = {};
+    CAMPOS_HOJA.forEach((k) => { if (c.campos && own(c.campos, k)) body[k] = c.campos[k]; });
+    if (!Object.keys(body).length) continue;
+    const e = [];
+    if (body.id_bodega !== undefined && req.sis.ecas && !ecaPermitida(req, body.id_bodega)) e.push('Esa ECA no está entre las que tienes asignadas.');
+    const v = await validateRecord(ENTITIES, 'balance_masas', body, { existing: actual, id });
+    e.push(...v.errors);
+    const m = { ...actual, ...v.values };
+    if (!e.length && Number(m.cantidad) > 0 && (!m.id_bodega || !m.id_numacro)) e.push('La ECA (NUECA) y el Numacro son obligatorios.');
+    if (e.length) errores.push({ id, errores: e }); else listos.push({ id, values: v.values, rechazoTocado: own(body, 'cantidad_rechazo') });
+  }
+  if (errores.length) return res.status(400).json({ error: errores.length + ' fila(s) con errores: no se guardó nada.', filas: errores });
+  if (!listos.length) return res.status(400).json({ error: 'No hay cambios para guardar.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const l of listos) {
+      const cols = Object.keys(l.values);
+      if (!cols.length) continue;
+      const vals = cols.map((k) => l.values[k]); vals.push(l.id);
+      // Un rechazo escrito a mano deja de ser "estimado".
+      await client.query(`UPDATE tz_formulario_balance_masas SET ${cols.map((k, i) => `${k} = $${i + 1}`).join(', ')}${l.rechazoTocado ? ', rechazo_estimado = FALSE' : ''}, modificado_en = NOW(), modificado_por = ${Number(req.user.id)} WHERE id = $${vals.length}`, vals);
+    }
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    if (err.code === '23505') return res.status(400).json({ error: 'Dos filas quedarían con el mismo reciclador, día y material. Revisa los cambios.' });
+    throw err;
+  } finally { client.release(); }
+  await logActivity(req.user.id, 'sistema_validador_editado', { filas: listos.length, ids: listos.slice(0, 200).map((l) => l.id) }, req.ip);
+  res.json({ message: listos.length + ' fila(s) guardadas en el balance de masas.', guardadas: listos.length });
 }));
 
 router.get('/resumen-masas', exigir('resumen_masas'), guard(async (req, res) => {

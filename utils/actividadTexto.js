@@ -34,6 +34,7 @@ const ACCIONES = {
   // Registro (sistema de usuarios)
   sistema_creado: (d) => 'Creó un registro' + PANTALLA(d),
   sistema_editado: (d) => 'Modificó un registro' + PANTALLA(d),
+  sistema_validador_editado: (d) => 'Corrigió ' + (d && d.filas) + ' fila(s) del balance de masas desde la hoja del validador',
   sistema_eliminado: (d) => 'Borró un registro' + PANTALLA(d),
   pruebas_balance_masas_dia_guardado: (d) => 'Guardó balance de masas del ' + (d.fecha || '') + ' (' + (d.filas || 0) + ' materiales)',
   pruebas_balance_compra_anexada: (d) => 'Anexó una compra del ' + (d.fecha || '') + ' (' + (d.kg || 0) + ' kg)',
